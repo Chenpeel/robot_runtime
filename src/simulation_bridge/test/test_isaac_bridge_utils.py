@@ -4,11 +4,15 @@ import importlib.util
 from pathlib import Path
 
 try:
-    from websocket_bridge.isaac_bridge_utils import clamp_servo_position
-    from websocket_bridge.isaac_bridge_utils import normalize_servo_type
-    from websocket_bridge.isaac_bridge_utils import normalize_speed
+    from simulation_bridge.isaac_bridge_utils import clamp_servo_position
+    from simulation_bridge.isaac_bridge_utils import normalize_servo_type
+    from simulation_bridge.isaac_bridge_utils import normalize_speed
 except ModuleNotFoundError:
-    module_path = Path(__file__).resolve().parents[1] / 'websocket_bridge' / 'isaac_bridge_utils.py'
+    module_path = (
+        Path(__file__).resolve().parents[1]
+        / 'simulation_bridge'
+        / 'isaac_bridge_utils.py'
+    )
     spec = importlib.util.spec_from_file_location('isaac_bridge_utils', module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

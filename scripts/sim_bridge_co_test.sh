@@ -152,7 +152,7 @@ case "${CMD}" in
         ;;
 
     launch)
-        run_ros_cmd ros2 launch websocket_bridge full_system.launch.py \
+        run_ros_cmd ros2 launch robot_bringup full_system.launch.py \
             enable_sim_cpp_bridge:=true \
             enable_isaac_bridge:=false
         ;;

@@ -165,9 +165,9 @@ LAUNCH_READ_SERVICE_TIMEOUT_SEC=${LAUNCH_READ_SERVICE_TIMEOUT_SEC:-0.35}
 PARALLEL_INSTANCES_FILE=${PARALLEL_INSTANCES_FILE:-/root/ros_ws/src/parallel_3dof_controller/config/parallel_3dof_instances.yaml}
 
 if [ "$LAUNCH_MODE" = "multi" ]; then
-    log_info "Launch mode: websocket_bus_servo + parallel_3dof_multi"
+    log_info "Launch mode: robot_bringup multi-system + parallel_3dof_multi"
     launch_cmd=(
-        ros2 launch websocket_bridge websocket_bus_servo.launch.py
+        ros2 launch robot_bringup parallel_3dof_multi_system.launch.py
         "instances_file:=$PARALLEL_INSTANCES_FILE"
         "debug:=$LAUNCH_DEBUG"
         "bridge_debug:=$LAUNCH_BRIDGE_DEBUG"
@@ -191,7 +191,7 @@ if [ "$LAUNCH_MODE" = "multi" ]; then
 else
     log_info "Launch mode: full_system"
     launch_cmd=(
-        ros2 launch websocket_bridge full_system.launch.py
+        ros2 launch robot_bringup full_system.launch.py
         "debug:=$LAUNCH_DEBUG"
         "bridge_debug:=$LAUNCH_BRIDGE_DEBUG"
         "bus_servo_debug:=$LAUNCH_BUS_SERVO_DEBUG"
