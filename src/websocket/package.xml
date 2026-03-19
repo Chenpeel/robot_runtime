@@ -8,6 +8,7 @@
   <license>MIT</license>
 
   <depend>rclpy</depend>
+  <depend>motion_msgs</depend>
   <depend>servo_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>record_load_action</depend>

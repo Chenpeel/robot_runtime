@@ -9,7 +9,7 @@ WebSocket通信桥接包，用于ROS 2与WebSocket客户端之间的双向通信
 - ✅ **协议转换**: JSON消息 ↔ ROS 2结构化数据
 - ✅ **舵机控制**: 支持总线舵机和PCA舵机
 - ✅ **状态同步**: 实时广播机器人状态
-- ✅ **心跳机制**: 自动检测连接状态
+- ✅ **心跳机制**: 自动检测连接状态，并在 teleop 已申请时续租控制权
 - ✅ **错误处理**: 统一的错误码和异常处理
 - ✅ **日志系统**: 结构化日志记录
 
@@ -39,6 +39,8 @@ class YourNode(Node):
 
         # 注册舵机控制回调
         self.ws_server.set_servo_command_callback(self.handle_servo_command)
+        self.ws_server.set_teleop_claim_callback(self.handle_teleop_claim)
+        self.ws_server.set_teleop_release_callback(self.handle_teleop_release)
 
         # 启动WebSocket服务器
         asyncio.create_task(self.ws_server.start())
@@ -49,6 +51,12 @@ class YourNode(Node):
         servo_id = servo_cmd['servo_id']
         position = servo_cmd['position']
         # 发布到ROS 2话题...
+
+    async def handle_teleop_claim(self):
+        """处理 teleop 控制权申请"""
+
+    async def handle_teleop_release(self):
+        """处理 teleop 控制权释放"""
 ```
 
 ### 3. 独立运行（测试）
@@ -58,16 +66,52 @@ cd src/websocket
 python -m websocket_bridge.ws_server --host 0.0.0.0 --port 9105 --debug
 ```
 
-### 4. Isaac-ROS 桥接节点
+### 4. 默认执行链路
+
+`bridge_node` 会将 WebSocket teleop 控制权请求发布到参数
+`teleop_control_topic` 指定的话题，消息类型为
+`motion_msgs/TeleopControl`，默认值为 `/execution/teleop/control`。
+
+舵机控制请求仍通过参数 `command_topic` 发布到
+`motion_msgs/MotionCommand`，默认值为 `/execution/teleop/command`。
+
+完整系统默认链路如下：
+
+```text
+WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
+          -> bridge_node -> MotionCommand -> /execution/teleop/command
+          -> execution_manager -> ServoCommand -> /servo/command
+```
+
+如需联调时临时直连驱动层，可显式覆盖为 `/servo/command`。
+
+当前 teleop 链路约束如下：
+
+- 客户端先发送 `teleop_claim`，由 `bridge_node` 发布
+  `motion_msgs/TeleopControl(action=\"claim\")`。
+- 控制权生效后，heartbeat 会被桥接为 `keepalive`，用于续租 teleop 控制权。
+- 客户端结束遥控时发送 `teleop_release`，由 `bridge_node` 发布
+  `motion_msgs/TeleopControl(action=\"release\")`。
+- 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
+  `execution_manager` 仲裁。
+
+状态查询与状态广播现在也会携带执行层反馈：
+
+```text
+/execution/state (ExecutionState)
+  -> bridge_node -> WebSocket status_query/status_update
+```
+
+### 5. Isaac-ROS 仿真桥接
 
 用于 Isaac 仿真侧与 ROS 舵机链路直连：
 
 ```bash
 # 仅启动桥接节点
-ros2 run websocket_bridge isaac_bridge_node
+ros2 run simulation_bridge isaac_bridge_node
 
 # 在完整系统中启用（默认已启用）
-ros2 launch websocket_bridge full_system.launch.py enable_isaac_bridge:=true
+ros2 launch robot_bringup full_system.launch.py enable_isaac_bridge:=true
 ```
 
 默认话题映射：
@@ -78,6 +122,34 @@ ros2 launch websocket_bridge full_system.launch.py enable_isaac_bridge:=true
 ## 消息格式
 
 ### Web → ROS（舵机控制）
+
+teleop 控制权:
+
+```json
+{
+  "type": "teleop_claim"
+}
+```
+
+```json
+{
+  "type": "teleop_release"
+}
+```
+
+heartbeat:
+
+```json
+{
+  "type": "heartbeat"
+}
+```
+
+说明：
+
+- heartbeat 始终保留连接保活语义。
+- 当 teleop 控制权已经通过 `teleop_claim` 生效后，`bridge_node` 会将
+  heartbeat 额外桥接成 `TeleopControl(action="keepalive")`，用于续租。
 
 简写格式:
 ```json
@@ -101,6 +173,8 @@ ros2 launch websocket_bridge full_system.launch.py enable_isaac_bridge:=true
 
 ### ROS → Web（状态响应）
 
+其中 `execution_state` 字段来自 `motion_msgs/ExecutionState`：
+
 ```json
 {
   "character_name": "robot",
@@ -111,6 +185,13 @@ ros2 launch websocket_bridge full_system.launch.py enable_isaac_bridge:=true
   "system_state": {
     "movement_active": false,
     "action": "idle"
+  },
+  "execution_state": {
+    "mode": "idle",
+    "active_source": null,
+    "estop_active": false,
+    "teleop_active": false,
+    "motion_active": false
   },
   "timestamp": 1234567890,
   "result_code": 200
@@ -125,6 +206,8 @@ ros2 launch websocket_bridge full_system.launch.py enable_isaac_bridge:=true
 
 - `set_servo_command_callback(callback)` - 注册舵机命令回调
 - `set_heartbeat_callback(callback)` - 注册心跳回调
+- `set_teleop_claim_callback(callback)` - 注册 teleop 控制权申请回调
+- `set_teleop_release_callback(callback)` - 注册 teleop 控制权释放回调
 - `broadcast_status(status_dict)` - 广播状态到所有客户端
 - `start()` - 启动WebSocket服务器
 - `stop()` - 停止服务器

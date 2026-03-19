@@ -15,6 +15,8 @@ class MessageType(Enum):
     """消息类型定义"""
     HEARTBEAT = "heartbeat"
     SERVO_CONTROL = "servo_control"
+    TELEOP_CLAIM = "teleop_claim"
+    TELEOP_RELEASE = "teleop_release"
     BVH_PLAY = "bvh_play"
     BROADCAST = "broadcast"
     PRIVATE = "private"

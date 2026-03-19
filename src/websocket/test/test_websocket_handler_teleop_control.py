@@ -1,0 +1,66 @@
+"""
+WebSocketHandler teleop 控制单元测试
+"""
+
+import asyncio
+import json
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from websocket_bridge.websocket_handler import WebSocketHandler
+
+
+class TestWebSocketHandlerTeleopControl(unittest.TestCase):
+    """测试 teleop 控制权相关 WebSocket 消息。"""
+
+    def setUp(self):
+        self.handler = WebSocketHandler(device_id='test_device', debug=False)
+
+    def test_handle_teleop_claim_message(self):
+        callback_called = False
+
+        async def claim_callback():
+            nonlocal callback_called
+            callback_called = True
+
+        self.handler.register_teleop_claim_handler(claim_callback)
+
+        response = asyncio.run(
+            self.handler.handle_message(json.dumps({"type": "teleop_claim"}))
+        )
+
+        response_data = json.loads(response)
+        self.assertTrue(callback_called)
+        self.assertEqual(response_data["type"], "teleop_claim_ack")
+        self.assertEqual(response_data["status"], "accepted")
+
+    def test_handle_teleop_release_message(self):
+        callback_called = False
+
+        async def release_callback():
+            nonlocal callback_called
+            callback_called = True
+
+        self.handler.register_teleop_release_handler(release_callback)
+
+        response = asyncio.run(
+            self.handler.handle_message(json.dumps({"type": "teleop_release"}))
+        )
+
+        response_data = json.loads(response)
+        self.assertTrue(callback_called)
+        self.assertEqual(response_data["type"], "teleop_release_ack")
+        self.assertEqual(response_data["status"], "accepted")
+
+    def test_supported_commands_include_teleop_control(self):
+        commands = self.handler._get_supported_commands()
+
+        self.assertIn("teleop_claim", commands)
+        self.assertIn("teleop_release", commands)
+
+
+if __name__ == '__main__':
+    unittest.main()

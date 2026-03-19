@@ -79,6 +79,14 @@ class WebSocketBridgeServer:
         """设置心跳回调"""
         self.handler.register_heartbeat_handler(callback)
 
+    def set_teleop_claim_callback(self, callback):
+        """设置 teleop 控制权申请回调。"""
+        self.handler.register_teleop_claim_handler(callback)
+
+    def set_teleop_release_callback(self, callback):
+        """设置 teleop 控制权释放回调。"""
+        self.handler.register_teleop_release_handler(callback)
+
     def set_status_query_callback(self, callback):
         """设置状态查询回调"""
         self.handler.register_status_query_handler(callback)
@@ -313,6 +321,14 @@ class WebSocketBridgeServer:
     def update_system_state(self, **kwargs):
         """更新系统状态"""
         self.handler.update_system_state(**kwargs)
+
+    def update_execution_state(self, execution_state: dict):
+        """更新执行层状态。"""
+        self.handler.update_execution_state(execution_state)
+
+    def get_status_snapshot(self) -> dict:
+        """获取当前状态快照。"""
+        return self.handler.get_status_snapshot()
 
     async def _handle_register(self, websocket: WebSocketServerProtocol, data: dict):
         """

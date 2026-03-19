@@ -41,6 +41,46 @@ class TestWebSocketHandler:
         assert self.handler.last_heartbeat > initial_time
 
     @pytest.mark.asyncio
+    async def test_handle_teleop_claim_message(self):
+        """测试处理 teleop 控制权申请消息"""
+        callback_called = False
+
+        async def claim_callback():
+            nonlocal callback_called
+            callback_called = True
+
+        self.handler.register_teleop_claim_handler(claim_callback)
+
+        raw_message = json.dumps({"type": "teleop_claim"})
+        response = await self.handler.handle_message(raw_message)
+
+        assert callback_called
+        assert response is not None
+        response_data = json.loads(response)
+        assert response_data["type"] == "teleop_claim_ack"
+        assert response_data["status"] == "accepted"
+
+    @pytest.mark.asyncio
+    async def test_handle_teleop_release_message(self):
+        """测试处理 teleop 控制权释放消息"""
+        callback_called = False
+
+        async def release_callback():
+            nonlocal callback_called
+            callback_called = True
+
+        self.handler.register_teleop_release_handler(release_callback)
+
+        raw_message = json.dumps({"type": "teleop_release"})
+        response = await self.handler.handle_message(raw_message)
+
+        assert callback_called
+        assert response is not None
+        response_data = json.loads(response)
+        assert response_data["type"] == "teleop_release_ack"
+        assert response_data["status"] == "accepted"
+
+    @pytest.mark.asyncio
     async def test_handle_servo_control_message(self):
         """测试处理舵机控制消息"""
         raw_message = json.dumps({
@@ -151,6 +191,26 @@ class TestWebSocketHandler:
         response_data = json.loads(response)
         assert response_data["character_name"] == "custom_robot"
         assert response_data["current_status"]["action"] == "walking"
+
+    @pytest.mark.asyncio
+    async def test_status_query_includes_execution_state_snapshot(self):
+        """测试默认状态查询包含 execution_state 快照"""
+        self.handler.update_execution_state({
+            "mode": "teleop_active",
+            "active_source": "teleop",
+            "teleop_active": True,
+            "motion_active": False,
+            "estop_active": False,
+        })
+
+        raw_message = json.dumps({"type": "status_query"})
+        response = await self.handler.handle_message(raw_message)
+
+        response_data = json.loads(response)
+        assert response_data["execution_state"]["mode"] == "teleop_active"
+        assert response_data["current_status"]["movement_active"] is True
+        assert response_data["current_status"]["listening"] is True
+        assert response_data["current_status"]["action"] == "teleop_active"
 
     @pytest.mark.asyncio
     async def test_handle_register_message(self):
@@ -412,6 +472,8 @@ class TestWebSocketHandlerEdgeCases:
         commands = self.handler._get_supported_commands()
 
         assert "servo_control" in commands
+        assert "teleop_claim" in commands
+        assert "teleop_release" in commands
         assert "heartbeat" in commands
         assert "status_query" in commands
         assert isinstance(commands["servo_control"], list)

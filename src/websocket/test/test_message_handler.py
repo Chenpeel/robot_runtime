@@ -44,6 +44,20 @@ class TestMessageHandler:
 
         assert msg_type == MessageType.SERVO_CONTROL
 
+    def test_get_message_type_teleop_claim(self):
+        """测试识别 teleop 控制权申请消息类型"""
+        data = {"type": "teleop_claim"}
+        msg_type = self.handler.get_message_type(data)
+
+        assert msg_type == MessageType.TELEOP_CLAIM
+
+    def test_get_message_type_teleop_release(self):
+        """测试识别 teleop 控制权释放消息类型"""
+        data = {"type": "teleop_release"}
+        msg_type = self.handler.get_message_type(data)
+
+        assert msg_type == MessageType.TELEOP_RELEASE
+
     def test_get_message_type_case_insensitive(self):
         """测试消息类型识别大小写不敏感"""
         data1 = {"type": "HEARTBEAT"}
@@ -336,6 +350,8 @@ class TestMessageType:
         """测试消息类型枚举值"""
         assert MessageType.HEARTBEAT.value == "heartbeat"
         assert MessageType.SERVO_CONTROL.value == "servo_control"
+        assert MessageType.TELEOP_CLAIM.value == "teleop_claim"
+        assert MessageType.TELEOP_RELEASE.value == "teleop_release"
         assert MessageType.BROADCAST.value == "broadcast"
         assert MessageType.PRIVATE.value == "private"
         assert MessageType.REGISTER.value == "register"
@@ -346,6 +362,8 @@ class TestMessageType:
         """测试从字符串创建消息类型"""
         assert MessageType("heartbeat") == MessageType.HEARTBEAT
         assert MessageType("servo_control") == MessageType.SERVO_CONTROL
+        assert MessageType("teleop_claim") == MessageType.TELEOP_CLAIM
+        assert MessageType("teleop_release") == MessageType.TELEOP_RELEASE
 
         with pytest.raises(ValueError):
             MessageType("invalid_type")

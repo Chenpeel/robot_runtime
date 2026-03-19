@@ -2,19 +2,22 @@
 WebSocket桥接节点 - 连接WebSocket服务器和ROS 2舵机驱动
 
 数据流:
-1. WebSocket客户端 -> WebSocket服务器 -> bridge_node -> /servo/command话题 -> 舵机驱动节点
+1. WebSocket客户端 -> WebSocket服务器 -> bridge_node
+   -> /execution/teleop/control + /execution/teleop/command -> execution_manager
 2. 舵机驱动节点 -> /servo/state话题 -> bridge_node -> WebSocket服务器 -> WebSocket客户端
 """
 
 import asyncio
-import json
 import threading
 from typing import Optional
 
+from motion_msgs.msg import ExecutionState
+from motion_msgs.msg import MotionCommand
+from motion_msgs.msg import TeleopControl
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from servo_msgs.msg import ServoCommand, ServoState
+from servo_msgs.msg import ServoState
 
 try:
     from sensor_msgs.msg import ImuData
@@ -26,6 +29,9 @@ except Exception:  # pragma: no cover - optional dependency
 from .ws_server import WebSocketBridgeServer
 from record_load_action.bvh_player import BvhActionPlayer
 from .debug_aggregator import DebugAggregator
+
+DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
+DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
 
 
 class WebSocketROS2Bridge(Node):
@@ -55,6 +61,9 @@ class WebSocketROS2Bridge(Node):
         self.declare_parameter('ws_port', ws_port)
         self.declare_parameter('device_id', device_id)
         self.declare_parameter('debug', debug)
+        self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
+        self.declare_parameter('teleop_control_topic', DEFAULT_TELEOP_CONTROL_TOPIC)
+        self.declare_parameter('execution_state_topic', '/execution/state')
         self.declare_parameter('imu_debug', debug)
         self.declare_parameter('heartbeat_debug', False)
         self.declare_parameter('ws_debug', False)
@@ -68,6 +77,9 @@ class WebSocketROS2Bridge(Node):
         self.ws_port = self.get_parameter('ws_port').value
         self.device_id = self.get_parameter('device_id').value
         self.debug = self.get_parameter('debug').value
+        self.command_topic = self.get_parameter('command_topic').value
+        self.teleop_control_topic = self.get_parameter('teleop_control_topic').value
+        self.execution_state_topic = self.get_parameter('execution_state_topic').value
         self.imu_debug = self.get_parameter('imu_debug').value
         self.heartbeat_debug = self.get_parameter('heartbeat_debug').value
         self.ws_debug = self.get_parameter('ws_debug').value
@@ -90,8 +102,13 @@ class WebSocketROS2Bridge(Node):
         # ROS 2话题
         # 发布舵机命令到驱动节点
         self.servo_command_pub = self.create_publisher(
-            ServoCommand,
-            '/servo/command',
+            MotionCommand,
+            self.command_topic,
+            10
+        )
+        self.teleop_control_pub = self.create_publisher(
+            TeleopControl,
+            self.teleop_control_topic,
             10
         )
 
@@ -102,6 +119,13 @@ class WebSocketROS2Bridge(Node):
             self.servo_state_callback,
             10
         )
+        self.execution_state_sub = self.create_subscription(
+            ExecutionState,
+            self.execution_state_topic,
+            self.execution_state_callback,
+            10
+        )
+        self.latest_execution_state = {}
 
         # 订阅 IMU 传感器数据
         self.imu_data_sub = None
@@ -128,7 +152,10 @@ class WebSocketROS2Bridge(Node):
         self.ws_thread: Optional[threading.Thread] = None
 
         self.get_logger().info(
-            f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}'
+            f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}, '
+            f'command_topic={self.command_topic}, '
+            f'teleop_control_topic={self.teleop_control_topic}, '
+            f'execution_state_topic={self.execution_state_topic}'
         )
 
     def start_websocket_server(self):
@@ -150,6 +177,8 @@ class WebSocketROS2Bridge(Node):
 
             # 注册回调
             self.ws_server.set_servo_command_callback(self.handle_servo_command)
+            self.ws_server.set_teleop_claim_callback(self.handle_teleop_claim)
+            self.ws_server.set_teleop_release_callback(self.handle_teleop_release)
             self.ws_server.set_heartbeat_callback(self.handle_heartbeat)
             self.ws_server.set_status_query_callback(self.handle_status_query)
             self.ws_server.set_bvh_play_callback(self.handle_bvh_play)
@@ -236,8 +265,8 @@ class WebSocketROS2Bridge(Node):
 
             speed = self._coerce_uint16(servo_cmd.get("speed", 100), 100)
 
-            # 转换为ServoCommand消息
-            msg = ServoCommand()
+            # 转换为 MotionCommand 消息
+            msg = MotionCommand()
             msg.servo_type = servo_type
             msg.servo_id = servo_cmd["servo_id"]
             msg.position = position
@@ -262,7 +291,7 @@ class WebSocketROS2Bridge(Node):
 
     def _publish_bvh_command(self, servo_type: str, servo_id: int,
                              position: int, speed: int) -> None:
-        msg = ServoCommand()
+        msg = MotionCommand()
         msg.servo_type = servo_type
         msg.servo_id = int(servo_id)
         msg.position = int(position)
@@ -292,7 +321,19 @@ class WebSocketROS2Bridge(Node):
 
     async def handle_heartbeat(self):
         """处理心跳消息"""
+        if self._teleop_control_is_active():
+            self._publish_teleop_control('keepalive')
         self._debug_log("heartbeat", "received", self.heartbeat_debug)
+
+    async def handle_teleop_claim(self):
+        """处理 teleop 控制权申请。"""
+        self._publish_teleop_control('claim')
+        self._debug_log("teleop_control", "claim", self.debug)
+
+    async def handle_teleop_release(self):
+        """处理 teleop 控制权释放。"""
+        self._publish_teleop_control('release')
+        self._debug_log("teleop_control", "release", self.debug)
 
     async def handle_status_query(self) -> dict:
         """
@@ -301,15 +342,43 @@ class WebSocketROS2Bridge(Node):
         Returns:
             dict: 当前系统状态
         """
-        # 可以扩展为查询实际的系统状态
         now = self.get_clock().now()
-        return {
+        snapshot = (
+            self.ws_server.get_status_snapshot()
+            if self.ws_server
+            else self._build_status_snapshot()
+        )
+        snapshot.update({
             "type": "status_response",
             "device_id": self.device_id,
             "status": "online",
             "ros_nodes": self.get_node_names(),
             "timestamp": now.nanoseconds / 1e9  # 转换为秒（浮点数）
-        }
+        })
+        return snapshot
+
+    def execution_state_callback(self, msg: ExecutionState):
+        """处理 execution_manager 状态反馈。"""
+        try:
+            state = self._execution_state_msg_to_dict(msg)
+            changed = state != self.latest_execution_state
+            self.latest_execution_state = state
+
+            if self.ws_server:
+                self.ws_server.update_execution_state(state)
+
+            if changed and self.ws_server and self.ws_loop and not self.ws_loop.is_closed():
+                if self.ws_loop.is_running():
+                    payload = {
+                        "type": "execution_state",
+                        "execution_state": state,
+                    }
+                    asyncio.run_coroutine_threadsafe(
+                        self.ws_server.broadcast_status(payload),
+                        self.ws_loop
+                    )
+        except Exception as e:
+            self.get_logger().error(f'处理 execution state 回调异常: {e}')
 
     def servo_state_callback(self, msg: ServoState):
         """
@@ -456,6 +525,65 @@ class WebSocketROS2Bridge(Node):
             self.debug_aggregator.record(category, message)
         else:
             self.get_logger().info(message)
+
+    def _build_status_snapshot(self) -> dict:
+        movement_active = bool(
+            self.latest_execution_state.get('teleop_active')
+            or self.latest_execution_state.get('motion_active')
+        )
+        listening = self.latest_execution_state.get('active_source') == 'teleop'
+        action = str(self.latest_execution_state.get('mode') or 'idle')
+        led_state = 'red' if self.latest_execution_state.get('estop_active') else (
+            'green' if movement_active else 'off'
+        )
+        return {
+            "character_name": self.device_id,
+            "bus_servos": {},
+            "pwm_servos": {},
+            "current_status": {
+                "movement_active": movement_active,
+                "listening": listening,
+                "action": action,
+                "led_state": led_state,
+            },
+            "execution_state": dict(self.latest_execution_state),
+            "result_code": 200,
+        }
+
+    def _publish_teleop_control(self, action: str) -> None:
+        msg = TeleopControl()
+        msg.action = str(action).strip().lower()
+        msg.stamp = self.get_clock().now().to_msg()
+        self.teleop_control_pub.publish(msg)
+
+    def _teleop_control_is_active(self) -> bool:
+        return bool(
+            self.latest_execution_state.get('teleop_active')
+            and self.latest_execution_state.get('active_source') == 'teleop'
+        )
+
+    @staticmethod
+    def _execution_state_msg_to_dict(msg: ExecutionState) -> dict:
+        active_source = str(msg.active_source) or None
+        return {
+            'mode': str(msg.mode),
+            'active_source': active_source,
+            'estop_active': bool(msg.estop_active),
+            'teleop_active': bool(msg.teleop_active),
+            'motion_active': bool(msg.motion_active),
+            'teleop_timeout_sec': float(msg.teleop_timeout_sec),
+            'motion_timeout_sec': float(msg.motion_timeout_sec),
+            'accepted_counts': {
+                'teleop': int(msg.teleop_accepted_count),
+                'motion': int(msg.motion_accepted_count),
+            },
+            'rejected_counts': {
+                'teleop': int(msg.teleop_rejected_count),
+                'motion': int(msg.motion_rejected_count),
+            },
+            'last_rejection_reason': str(msg.last_rejection_reason),
+            'stamp': msg.stamp.sec + msg.stamp.nanosec / 1e9,
+        }
 
     def shutdown(self):
         """关闭节点和WebSocket服务器"""

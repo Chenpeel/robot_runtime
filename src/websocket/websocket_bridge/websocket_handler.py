@@ -46,6 +46,8 @@ class WebSocketHandler:
         # ROS 2 相关的回调
         self.on_servo_command = None  # Callable[[dict], None]
         self.on_heartbeat = None  # Callable[[], None]
+        self.on_teleop_claim = None  # Callable[[], None]
+        self.on_teleop_release = None  # Callable[[], None]
         self.on_status_query = None  # Callable[[], None]
         self.on_bvh_play = None  # Callable[[dict], None]
         
@@ -56,6 +58,7 @@ class WebSocketHandler:
             "free_memory": 0,
             "uptime": 0
         }
+        self.execution_state = {}
         self.last_heartbeat = time.time()
 
     def _debug(self, category, message):
@@ -92,6 +95,14 @@ class WebSocketHandler:
             callback: async def callback() -> dict
         """
         self.on_status_query = callback
+
+    def register_teleop_claim_handler(self, callback: Callable):
+        """注册 teleop 控制权申请回调。"""
+        self.on_teleop_claim = callback
+
+    def register_teleop_release_handler(self, callback: Callable):
+        """注册 teleop 控制权释放回调。"""
+        self.on_teleop_release = callback
 
     def register_bvh_play_handler(self, callback: Callable):
         """
@@ -137,6 +148,10 @@ class WebSocketHandler:
             return await self._handle_heartbeat(data)
         elif msg_type == MessageType.SERVO_CONTROL:
             return await self._handle_servo_control(data)
+        elif msg_type == MessageType.TELEOP_CLAIM:
+            return await self._handle_teleop_claim(data)
+        elif msg_type == MessageType.TELEOP_RELEASE:
+            return await self._handle_teleop_release(data)
         elif msg_type == MessageType.BVH_PLAY:
             return await self._handle_bvh_play(data)
         elif msg_type == MessageType.STATUS_QUERY:
@@ -168,8 +183,50 @@ class WebSocketHandler:
         }
         
         self._debug("ws_handler", "发送心跳响应")
-        
+
         return json.dumps(response, ensure_ascii=False)
+
+    async def _handle_teleop_claim(self, data: Dict[str, Any]) -> Optional[str]:
+        """处理 teleop 控制权申请。"""
+        del data
+
+        if self.on_teleop_claim:
+            try:
+                await self.on_teleop_claim()
+            except Exception as e:
+                return ErrorResponse.create(
+                    error_code=ErrorCode.ROS_CALLBACK_FAILED,
+                    message=f"teleop claim failed: {str(e)}",
+                    details={"exception": str(e)},
+                    device_id=self.device_id
+                )
+
+        return SuccessResponse.create(
+            response_type="teleop_claim_ack",
+            data={"status": "accepted"},
+            device_id=self.device_id
+        )
+
+    async def _handle_teleop_release(self, data: Dict[str, Any]) -> Optional[str]:
+        """处理 teleop 控制权释放。"""
+        del data
+
+        if self.on_teleop_release:
+            try:
+                await self.on_teleop_release()
+            except Exception as e:
+                return ErrorResponse.create(
+                    error_code=ErrorCode.ROS_CALLBACK_FAILED,
+                    message=f"teleop release failed: {str(e)}",
+                    details={"exception": str(e)},
+                    device_id=self.device_id
+                )
+
+        return SuccessResponse.create(
+            response_type="teleop_release_ack",
+            data={"status": "accepted"},
+            device_id=self.device_id
+        )
     
     async def _handle_servo_control(self, data: Dict[str, Any]) -> Optional[str]:
         """处理舵机控制命令"""
@@ -312,23 +369,22 @@ class WebSocketHandler:
     
     def _create_status_response(self) -> str:
         """创建状态响应 - 使用标准格式"""
-        import time
+        response = self.get_status_snapshot()
+        return json.dumps(response, ensure_ascii=False)
 
+    def get_status_snapshot(self) -> Dict[str, Any]:
+        """获取当前状态快照。"""
         response = {
             "character_name": "robot",
             "bus_servos": self.servo_state.get("bus_servos", {}),
             "pwm_servos": self.servo_state.get("pwm_servos", {}),
             "time": time.strftime("%Y-%m-%d-%H:%M:%S"),
-            "current_status": {
-                "movement_active": False,
-                "listening": False,
-                "action": "idle",
-                "led_state": "off"
-            },
+            "current_status": self._build_current_status(),
+            "execution_state": dict(self.execution_state),
             "result_code": 200,
             "timestamp": int(time.time())
         }
-        return json.dumps(response, ensure_ascii=False)
+        return response
     
     def _get_supported_commands(self) -> Dict[str, Any]:
         """获取支持的命令列表"""
@@ -340,6 +396,8 @@ class WebSocketHandler:
                 "{servo_type: 'pca', servo_id: 0, position: 90}",
                 "{character_name: 'robot', web_servo: {is_bus_servo: true, servo_id: 1, position: 90, speed: 100}}"
             ],
+            "teleop_claim": ["request teleop control lease"],
+            "teleop_release": ["release teleop control lease"],
             "heartbeat": ["keep connection alive"],
             "status_query": ["request device status"]
         }
@@ -361,6 +419,30 @@ class WebSocketHandler:
             if "pwm_servos" not in self.servo_state:
                 self.servo_state["pwm_servos"] = {}
             self.servo_state["pwm_servos"][f"id_{servo_id}"] = position
+
+    def update_execution_state(self, execution_state: Dict[str, Any]):
+        """更新执行层状态快照。"""
+        if not isinstance(execution_state, dict):
+            return
+        self.execution_state = dict(execution_state)
+
+    def _build_current_status(self) -> Dict[str, Any]:
+        """根据 execution_state 构造当前状态摘要。"""
+        movement_active = bool(
+            self.execution_state.get("teleop_active")
+            or self.execution_state.get("motion_active")
+        )
+        listening = self.execution_state.get("active_source") == "teleop"
+        action = str(self.execution_state.get("mode") or "idle")
+        led_state = "red" if self.execution_state.get("estop_active") else (
+            "green" if movement_active else "off"
+        )
+        return {
+            "movement_active": movement_active,
+            "listening": listening,
+            "action": action,
+            "led_state": led_state,
+        }
     
     def update_system_state(self, **kwargs):
         """
