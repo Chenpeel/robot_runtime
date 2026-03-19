@@ -45,6 +45,12 @@ def generate_launch_description():
         description='配置文件路径'
     )
 
+    command_topic_arg = DeclareLaunchArgument(
+        'command_topic',
+        default_value='/execution/motion/command',
+        description='舵机命令输出话题，默认接入 execution_manager'
+    )
+
     # 3-DOF并联控制器节点
     parallel_3dof_controller_node = Node(
         package='parallel_3dof_controller',
@@ -56,19 +62,17 @@ def generate_launch_description():
             {
                 'ankle_side': LaunchConfiguration('ankle_side'),
                 'debug': LaunchConfiguration('debug'),
+                'command_topic': LaunchConfiguration('command_topic'),
             }
         ],
         output='screen',
         emulate_tty=True,
-        remappings=[
-            # 将私有话题映射到全局话题
-            ('~/servo/command', '/servo/command'),
-        ]
     )
 
     return LaunchDescription([
         ankle_side_arg,
         debug_arg,
         config_file_arg,
+        command_topic_arg,
         parallel_3dof_controller_node,
     ])

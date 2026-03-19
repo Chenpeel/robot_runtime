@@ -7,12 +7,14 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Vector3
-from servo_msgs.msg import ServoCommand
+from motion_msgs.msg import MotionCommand
 from std_msgs.msg import Float32MultiArray
 import numpy as np
 from typing import Optional
 
 from .kinematics_solver import Parallel3DOFKinematicsSolver
+
+DEFAULT_COMMAND_TOPIC = '/execution/motion/command'
 
 
 class Parallel3DOFControllerNode(Node):
@@ -26,7 +28,7 @@ class Parallel3DOFControllerNode(Node):
 
     话题:
     - 订阅: ~/ankle_rpy (Vector3) - 脚踝RPY命令 (度)
-    - 发布: ~/servo/command (ServoCommand) - 舵机控制命令
+    - 发布: command_topic (MotionCommand) - 舵机控制命令
     - 发布: ~/ankle_theta (Float32MultiArray) - Theta角反馈 (度)
 
     参数:
@@ -38,6 +40,7 @@ class Parallel3DOFControllerNode(Node):
     - servo_offsets: 自定义舵机offset列表 (3个元素, 可选)
     - servo_directions: 自定义舵机direction列表 (3个元素, 可选)
     - default_speed: 默认舵机速度 (毫秒, 默认100)
+    - command_topic: 控制命令输出话题 (默认/execution/motion/command)
     - debug: 是否打印调试信息 (默认False)
     """
 
@@ -51,6 +54,7 @@ class Parallel3DOFControllerNode(Node):
         self.declare_parameter('ankle_side', 'right')
         self.declare_parameter('default_speed', 100)
         self.declare_parameter('debug', False)
+        self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
         self.declare_parameter('servo_ids', [])
         self.declare_parameter('servo_offsets', [])
         self.declare_parameter('servo_directions', [])
@@ -62,6 +66,7 @@ class Parallel3DOFControllerNode(Node):
         self.ankle_side = self.get_parameter('ankle_side').value
         self.default_speed = self.get_parameter('default_speed').value
         self.debug = self.get_parameter('debug').value
+        self.command_topic = self.get_parameter('command_topic').value
         servo_ids = self.get_parameter('servo_ids').value
         servo_offsets = self.get_parameter('servo_offsets').value
         servo_directions = self.get_parameter('servo_directions').value
@@ -127,8 +132,8 @@ class Parallel3DOFControllerNode(Node):
 
         # 发布舵机命令
         self.servo_cmd_pub = self.create_publisher(
-            ServoCommand,
-            '~/servo/command',
+            MotionCommand,
+            self.command_topic,
             10
         )
 
@@ -141,7 +146,8 @@ class Parallel3DOFControllerNode(Node):
 
         self.get_logger().info(
             f"3-DOF并联控制器节点已启动 (侧: {self.ankle_side}, "
-            f"l0={l0}m, l1={l1}m, l2={l2}m)"
+            f"l0={l0}m, l1={l1}m, l2={l2}m, "
+            f"command_topic={self.command_topic})"
         )
 
         # 打印工作空间限制
@@ -181,11 +187,12 @@ class Parallel3DOFControllerNode(Node):
 
             # 发布舵机命令
             for cmd in commands:
-                servo_msg = ServoCommand()
+                servo_msg = MotionCommand()
                 servo_msg.servo_type = "bus"  # 总线舵机
                 servo_msg.servo_id = cmd['id']
                 servo_msg.position = cmd['position']
                 servo_msg.speed = cmd['speed']
+                servo_msg.stamp = self.get_clock().now().to_msg()
                 self.servo_cmd_pub.publish(servo_msg)
 
                 if self.debug:

@@ -15,7 +15,7 @@ ROS 2节点集成测试
 import sys
 import os
 import unittest
-from unittest.mock import Mock, MagicMock, patch
+from pathlib import Path
 import numpy as np
 
 # 添加模块路径
@@ -26,18 +26,21 @@ sys.path.insert(0, os.path.join(
 class TestNodeInitialization(unittest.TestCase):
     """测试节点初始化（不需要ROS环境）"""
 
-    @patch('controller_node.rclpy')
-    def test_node_parameters(self, mock_rclpy):
-        """测试节点参数配置"""
-        # 模拟ROS节点
-        from controller_node import Parallel3DOFControllerNode
+    def test_node_parameters(self):
+        """测试节点参数配置定义"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../parallel_3dof_controller/controller_node.py'
+            )
+        ).read_text(encoding='utf-8')
 
-        # 创建mock节点
-        with patch.object(Parallel3DOFControllerNode, '__init__', return_value=None):
-            node = Parallel3DOFControllerNode()
-
-            # 测试会在实际ROS环境中进行
-            # 这里只是提供测试框架
+        assert "self.declare_parameter('l0', 0.02)" in source
+        assert "self.declare_parameter('l1', 0.02)" in source
+        assert "self.declare_parameter('l2', 0.02)" in source
+        assert "self.declare_parameter('ankle_side', 'right')" in source
+        assert "self.declare_parameter('default_speed', 100)" in source
+        assert "self.declare_parameter('debug', False)" in source
 
     def test_default_parameters(self):
         """测试默认参数值"""
@@ -56,6 +59,20 @@ class TestNodeInitialization(unittest.TestCase):
         assert isinstance(expected_params['ankle_side'], str)
         assert isinstance(expected_params['default_speed'], int)
         assert isinstance(expected_params['debug'], bool)
+
+    def test_default_command_topic_constant(self):
+        """测试默认命令输出话题已切到 execution 边界"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../parallel_3dof_controller/controller_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn(
+            "DEFAULT_COMMAND_TOPIC = '/execution/motion/command'",
+            source
+        )
 
 
 class TestMessageConversion(unittest.TestCase):

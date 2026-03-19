@@ -22,8 +22,8 @@ source install/setup.bash
 
 - rclpy
 - geometry_msgs
+- motion_msgs
 - std_msgs
-- servo_msgs
 - numpy
 
 ## 使用方法
@@ -39,6 +39,9 @@ ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py ankle_si
 
 # 启用调试模式
 ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py debug:=true
+
+# 覆盖默认输出话题
+ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py command_topic:=/servo/command
 ```
 
 ### 2. 发送RPY命令
@@ -57,7 +60,10 @@ ros2 topic pub /parallel_3dof_controller/ankle_rpy geometry_msgs/Vector3 "{x: 30
 ### 3. 监控输出
 
 ```bash
-# 查看舵机命令
+# 查看默认执行请求（motion_msgs/MotionCommand，进入 execution_manager）
+ros2 topic echo /execution/motion/command
+
+# 查看 execution_manager 转发后的驱动级命令
 ros2 topic echo /servo/command
 
 # 查看theta角反馈
@@ -76,11 +82,13 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 
 ### 发布
 
-- `~/servo/command` (servo_msgs/ServoCommand)
+- `command_topic` 指定的话题 (motion_msgs/MotionCommand)
   - 舵机控制命令
   - id: 舵机ID
   - position: 位置值（us）
   - speed: 运动时间（毫秒）
+  - 默认值为 `/execution/motion/command`
+  - 当前仍保留 `servo_type`、`servo_id` 等过渡字段
 
 - `~/ankle_theta` (std_msgs/Float32MultiArray)
   - 三个连杆的theta角反馈（单位：度）
@@ -96,6 +104,7 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 | ankle_side | string | 'right' | 控制哪侧脚踝（'right'/'left'） |
 | default_speed | int | 100 | 默认舵机速度（毫秒） |
 | debug | bool | false | 是否打印调试信息 |
+| command_topic | string | `/execution/motion/command` | 执行请求输出话题（`motion_msgs/MotionCommand`） |
 
 ## 工作空间限制
 

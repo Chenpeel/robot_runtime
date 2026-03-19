@@ -14,6 +14,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def _load_instances(context):
     instances_file = LaunchConfiguration('instances_file').perform(context)
+    command_topic = LaunchConfiguration('command_topic').perform(context)
     if not os.path.isfile(instances_file):
         raise RuntimeError(f"instances_file not found: {instances_file}")
 
@@ -37,6 +38,8 @@ def _load_instances(context):
         params = inst.get('params', {}) or {}
         if not isinstance(params, dict):
             raise RuntimeError(f"instance #{index} params must be a dict")
+        params = dict(params)
+        params.setdefault('command_topic', command_topic)
 
         nodes.append(
             Node(
@@ -67,7 +70,14 @@ def generate_launch_description():
         description='YAML file that defines controller instances'
     )
 
+    command_topic_arg = DeclareLaunchArgument(
+        'command_topic',
+        default_value='/execution/motion/command',
+        description='舵机命令输出话题，默认接入 execution_manager'
+    )
+
     return LaunchDescription([
         instances_file_arg,
+        command_topic_arg,
         OpaqueFunction(function=_load_instances),
     ])
