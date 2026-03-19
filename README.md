@@ -9,23 +9,30 @@
 - ✅ **智能ID路由**: 基于Set的O(1)算法，零延迟增加
 - ✅ **协议自动识别**: 支持众灵/幻尔总线舵机，未知ID按需探测并缓存
 - ✅ **双舵机类型**: 支持总线舵机和PCA9685 PWM舵机
-- ✅ **话题统一**: 通过 `bus_protocol_router` 统一入口 `/servo/command` 与出口 `/servo/state`
+- ✅ **执行边界**: 通过 `execution_manager` 将 teleop/motion 请求收敛到 `/servo/command`
+- ✅ **话题统一**: 驱动层统一入口 `/servo/command` 与出口 `/servo/state`
 - ✅ **仿真集成桥接**: 支持 `/sim/servo_command` 与 `/sim/servo_state` 双向转发
 - ✅ **Docker部署**: 支持开发/生产/手动调试三种模式
 - ✅ **实时反馈**: 舵机状态实时反馈到Web客户端
 
 ## 多串口系统架构
 
-```
-Web客户端 → WebSocket(9105) → bridge_node → /servo/command
-    ↓
+```text
+Web客户端 → WebSocket(9105) → bridge_node
+    ├─ /execution/teleop/control
+    └─ /execution/teleop/command
+                ↓
+        execution_manager
+                ↓
+           /servo/command
+                ↓
 bus_protocol_router（协议识别 + ID路由）
     ├─ bus_port_driver_0 → ttyAMA0
     ├─ bus_port_driver_1 → ttyAMA1
     ├─ bus_port_driver_2 → ttyAMA2
-    └─ bus_port_driver_3 → ttyAMA3 
-    ↓
-多个个总线舵机硬件
+    └─ bus_port_driver_3 → ttyAMA3
+                ↓
+         多个总线舵机硬件
 ```
 
 **性能指标**:
@@ -38,6 +45,23 @@ bus_protocol_router（协议识别 + ID路由）
 ---
 
 ## 消息格式
+
+### Web → ROS2 (teleop 控制权)
+
+```json
+{
+  "type": "teleop_claim"
+}
+```
+
+```json
+{
+  "type": "teleop_release"
+}
+```
+
+`heartbeat` 在 teleop 已申请控制权时，会被桥接为
+`motion_msgs/TeleopControl(action="keepalive")` 用于续租。
 
 ### Web → ROS2 (舵机控制)
 
@@ -160,10 +184,10 @@ source install/setup.bash
 
 ```bash
 # 启动完整系统 (默认9105端口，调试关闭)
-ros2 launch websocket_bridge full_system.launch.py
+ros2 launch robot_bringup full_system.launch.py
 
 # 自定义参数启动
-ros2 launch websocket_bridge full_system.launch.py \
+ros2 launch robot_bringup full_system.launch.py \
   ws_host:=0.0.0.0 \
   ws_port:=9105 \
   device_id:=robot \
@@ -181,7 +205,7 @@ bash scripts/init.sh
 # 或手动执行
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 launch websocket_bridge full_system.launch.py
+ros2 launch robot_bringup full_system.launch.py
 ```
 
 ### 方式三: 独立启动节点 (调试用)
@@ -204,7 +228,7 @@ ros2 run servo_hardware bus_protocol_router --ros-args \
 ros2 run servo_hardware pca_servo_driver
 
 # 4. 启动 Isaac 桥接节点（可选，full_system 默认已启用）
-ros2 run websocket_bridge isaac_bridge_node
+ros2 run simulation_bridge isaac_bridge_node
 ```
 
 ---
@@ -215,6 +239,10 @@ ros2 run websocket_bridge isaac_bridge_node
 
 | 话题             | 消息类型       | 说明         |
 | ---------------- | -------------- | ------------ |
+| `/execution/teleop/control` | `TeleopControl` | teleop 控制权申请/释放/续租 |
+| `/execution/teleop/command` | `MotionCommand` | teleop 执行请求 |
+| `/execution/motion/command` | `MotionCommand` | motion 执行请求 |
+| `/execution/state` | `ExecutionState` | 执行层状态反馈 |
 | `/servo/command` | `ServoCommand` | 舵机控制命令 |
 | `/sim/servo_state` | `ServoState` | 仿真侧状态反馈 |
 
@@ -234,10 +262,21 @@ ros2 topic list
 # 查看舵机命令
 ros2 topic echo /servo/command
 
+# 查看执行层状态
+ros2 topic echo /execution/state
+
 # 查看舵机状态
 ros2 topic echo /servo/state
 
-# 发送测试命令
+# 发送 teleop 控制权申请
+ros2 topic pub /execution/teleop/control motion_msgs/msg/TeleopControl \
+  "{action: 'claim'}" --once
+
+# 发送测试命令（推荐走执行边界）
+ros2 topic pub /execution/teleop/command motion_msgs/msg/MotionCommand \
+  "{servo_type: 'bus', servo_id: 1, position: 1500, speed: 100}"
+
+# 发送测试命令（驱动直连，仅调试用）
 ros2 topic pub /servo/command servo_msgs/msg/ServoCommand \
   "{servo_type: 'bus', servo_id: 1, position: 1500, speed: 100}"
 ```
@@ -316,7 +355,7 @@ sudo usermod -a -G i2c $USER
 
 ```bash
 # Launch文件启动时启用
-ros2 launch websocket_bridge full_system.launch.py debug:=true
+ros2 launch robot_bringup full_system.launch.py debug:=true
 
 # 或修改launch文件默认值
 # full_system.launch.py: default_value='true'
@@ -427,7 +466,7 @@ docker compose --profile dev --profile production --profile manual down --remove
 # 使用生产配置启动
 docker compose --profile production up -d ros2_servo_prod
 
-# 生产模式会自动运行full_system.launch.py
+# 生产模式会自动运行 robot_bringup/full_system.launch.py
 ```
 
 ---
@@ -451,6 +490,14 @@ ros/
 │   │   ├── pca_servo_driver     # PCA舵机节点
 │   │   └── package.xml
 │   │
+│   ├── robot_bringup/           # 系统集成与整机启动
+│   │   ├── launch/
+│   │   │   ├── parallel_3dof_multi_system.launch.py
+│   │   │   ├── full_system.launch.py
+│   │   │   ├── hardware.launch.py
+│   │   │   ├── teleop.launch.py
+│   │   │   └── simulation.launch.py
+│   │   └── package.xml
 │   └── websocket_bridge/        # WebSocket桥接
 │       ├── bridge_node.py       # ROS2桥接节点
 │       ├── ws_server.py         # WebSocket服务器
@@ -459,9 +506,6 @@ ros/
 │       │   ├── std_web2ros_stream.json
 │       │   ├── std_ros2web_stream.json
 │       │   └── bus_servo_map.json  # 舵机ID映射配置
-│       ├── launch/
-│       │   ├── full_system.launch.py
-│       │   └── websocket_bus_servo.launch.py
 │       └── package.xml
 ├── scripts/
 │   ├── init.sh                  # 初始化脚本

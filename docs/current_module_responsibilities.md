@@ -17,20 +17,26 @@
 
 ## 2. 当前模块总览
 
-当前仓库大体可以分成六个职责域：
+当前仓库大体可以分成八个职责域：
+
+- 系统集成与场景化启动
+  - `robot_bringup`
 
 - 遥控与调试入口
   - `websocket_bridge`
+- 执行协调与安全仲裁
+  - `execution_manager`
 - 执行器驱动
   - `servo_hardware`
 - 传感器接入
-  - `sensor_hardware` 代码模块，尚未独立成 ROS 包
+  - `sensor_hardware`，已独立成 ROS 包
 - 控制原型
   - `parallel_3dof_controller`
 - 仿真桥接
+  - `simulation_bridge`
   - `sim_servo_bridge_cpp`
-  - `websocket_bridge/isaac_bridge_node`
 - 接口、工具与描述资源
+  - `motion_msgs`
   - `servo_msgs`
   - `record_load_action`
   - `robot_description`
@@ -39,7 +45,36 @@
 
 ## 3. 当前模块职责
 
-### 3.1 `websocket_bridge`
+### 3.1 `robot_bringup`
+
+- 状态
+  - 已实现，处于第一版独立编排层状态。
+- 当前承接位置
+  - ROS 包目录：`src/robot_bringup`
+  - ROS 包名：`robot_bringup`
+- 当前主要职责
+  - 承接整机主入口 `full_system.launch.py`。
+  - 将整机编排拆为 hardware、teleop、simulation 三个子 launch。
+  - 组合 `execution_manager`、`websocket_bridge`、`servo_hardware`、
+    `sensor_hardware` 与 `simulation_bridge` 等运行链路。
+- 当前主要输入
+  - 启动参数
+  - 各职责域包的 launch 与配置引用
+- 当前主要输出
+  - 面向整机运行场景的 launch 入口
+  - 面向硬件、遥控、仿真的分域 launch 组合
+- 当前非职责
+  - 不承接 WebSocket 消息解析。
+  - 不承接执行仲裁本体。
+  - 不承接驱动协议实现。
+- 当前问题
+  - 仍是新引入的编排层，后续还需要继续把更多场景化 launch 从功能包边界
+    收口过来。
+- 与长期规划的关系
+  - 已把系统级编排从 `websocket_bridge` 中拆出。
+  - 是后续继续按硬件、遥控、仿真职责域组织入口的当前承接点。
+
+### 3.2 `websocket_bridge`
 
 - 状态
   - 已实现，且处于明显的过渡态。
@@ -48,34 +83,46 @@
   - ROS 包名：`websocket_bridge`
 - 当前主要职责
   - 提供 WebSocket 服务端接入。
+  - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
+  - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态。
   - 订阅 `/sensor/imu` 并向 WebSocket 客户端广播传感器数据。
-  - 承接心跳、状态查询和调试日志聚合。
+  - 承接心跳续租、状态查询和调试日志聚合。
   - 通过 `record_load_action` 触发 BVH 动作播放。
-  - 包内还直接提供 `isaac_bridge_node`。
-  - 包内 `full_system.launch.py` 还承担整机主 launch 编排。
 - 当前主要输入
   - WebSocket 客户端消息
   - `/servo/state`
+  - `/execution/state`
   - `/sensor/imu`
 - 当前主要输出
-  - `/servo/command`
+  - 通过参数 `teleop_control_topic` 默认输出
+    `motion_msgs/TeleopControl` 到
+    `/execution/teleop/control`
+  - 通过参数 `command_topic` 默认输出
+    `motion_msgs/MotionCommand` 到
+    `/execution/teleop/command`
   - WebSocket 状态广播
+  - WebSocket 执行状态广播与状态查询回包
   - WebSocket IMU 广播
 - 当前非职责
   - 不应该长期承担执行仲裁。
   - 不应该长期承担仿真责任域的主入口。
   - 不应该长期承载 demo/BVH 与系统级 launch 编排。
 - 当前问题
-  - 遥控、调试、状态桥接、BVH、仿真桥和系统编排混在同一个包内。
-  - 直接依赖驱动级 `/servo/command`，没有经过独立执行边界。
+  - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
+  - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，但当前还没有更
+    完整的客户端归属、申请反馈和上层接口约束。
+  - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，但命令字段
+    语义目前仍保留 `servo_type`、`servo_id` 这类过渡定义。
 - 与长期规划的关系
   - 长期上更接近 `teleoperation_bridge` 的前身。
-  - 仿真相关部分应逐步拆到 `simulation_bridge` 责任域。
+  - 整机主 launch 已迁到 `robot_bringup`。
+  - Isaac 仿真桥已经拆到 `simulation_bridge`，后续还需继续收口 demo/BVH
+    等非核心能力。
   - demo/BVH 应降级为可选能力，而不是主运行链路中心。
 
-### 3.2 `servo_hardware`
+### 3.3 `servo_hardware`
 
 - 状态
   - 已实现，核心驱动链路已在使用中，但包边界仍是过渡态。
@@ -98,19 +145,19 @@
   - 不负责执行仲裁。
   - 不负责轨迹规划。
 - 当前问题
-  - 包内同时导出了 `sensor_hardware` 里的 IMU 节点。
-  - “执行器驱动”和“传感器驱动”在 ROS 包层面仍未分开。
+  - 仍需等待上层控制和 teleop 链路继续收敛到 `execution_manager`，减少
+    对驱动级接口的直接假设。
 - 与长期规划的关系
   - 长期应只保留执行器和协议相关能力。
-  - 传感器节点应迁出为独立 `sensor_hardware` 包。
+  - 传感器节点已迁出为独立 `sensor_hardware` 包。
 
-### 3.3 `sensor_hardware`
+### 3.4 `sensor_hardware`
 
 - 状态
-  - 代码已存在，但尚未成为独立 ROS 包。
+  - 已拆分为独立 ROS 包。
 - 当前承接位置
-  - 代码目录：`src/hardware/sensor_hardware`
-  - 当前通过 `servo_hardware` 的 `setup.py` 导出入口点。
+  - ROS 包目录：`src/sensor_hardware`
+  - Python 包目录：`src/sensor_hardware/sensor_hardware`
 - 当前主要职责
   - 提供 IMU 的 I2C 驱动节点。
   - 提供 IMU 的串口驱动节点。
@@ -126,12 +173,11 @@
   - 不负责视觉感知。
   - 不负责执行器协议。
 - 当前问题
-  - 没有独立 `package.xml`、`setup.py` 和安装边界。
-  - 仍然依附在 `servo_hardware` 包里发布和启动。
+  - 仍需继续核对其它 launch 和文档引用是否全部切到新包。
 - 与长期规划的关系
-  - 长期应升级为独立 `sensor_hardware` ROS 包。
+  - 已达到“独立 `sensor_hardware` ROS 包”的阶段目标。
 
-### 3.4 `parallel_3dof_controller`
+### 3.5 `parallel_3dof_controller`
 
 - 状态
   - 已实现，但属于控制原型和过渡方案。
@@ -141,25 +187,98 @@
 - 当前主要职责
   - 订阅脚踝 RPY 姿态命令。
   - 进行 3-DOF 并联机构运动学求解。
-  - 将姿态结果直接转换为 `ServoCommand`。
+  - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
 - 当前主要输出
-  - `~/servo/command`，launch 中会 remap 到 `/servo/command`
+  - 通过参数 `command_topic` 默认输出
+    `motion_msgs/MotionCommand` 到
+    `/execution/motion/command`
   - `~/ankle_theta`
 - 当前非职责
   - 不负责执行仲裁。
   - 不负责任务级调度。
   - 不负责驱动协议本身。
 - 当前问题
-  - 当前直接依赖 `servo_msgs`。
-  - 当前直接面向驱动级命令输出，没有独立执行边界。
+  - 已不再直接依赖 `servo_msgs`，但当前 `motion_msgs/MotionCommand`
+    仍保留驱动风格字段作为过渡接口。
 - 与长期规划的关系
   - 长期更接近 `motion_control` 的前身。
-  - 后续应改成先输出到执行边界，而不是直接发布 `ServoCommand`。
+  - 当前已先输出到执行边界，后续还需继续把过渡消息演进为更稳定的控制语
+    义接口。
 
-### 3.5 `sim_servo_bridge_cpp`
+### 3.6 `execution_manager`
+
+- 状态
+  - 已落地最小可运行实现，处于第一版过渡态。
+- 当前承接位置
+  - 目录：`src/execution_manager`
+  - ROS 包名：`execution_manager`
+- 当前主要职责
+  - 接收 `motion_msgs/TeleopControl`，处理 teleop 控制权的申请、续租与释放。
+  - 接收 teleop 与 motion 两路 `motion_msgs/MotionCommand` 执行请求。
+  - 维护最小控制状态机：`idle`、`motion_active`、`teleop_active`、
+    `estop`。
+  - 只在 teleop 已显式获得控制权时接受 teleop 命令。
+  - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
+  - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
+    `/servo/command`。
+  - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`。
+- 当前主要输入
+  - `/execution/teleop/control`
+  - `/execution/teleop/command`
+  - `/execution/motion/command`
+  - `/execution/estop`
+- 当前主要输出
+  - `/servo/command`
+  - `/execution/state`
+- 当前非职责
+  - 不做任务语义理解。
+  - 不做轨迹生成。
+  - 不做驱动协议实现。
+- 当前问题
+  - `motion_msgs/TeleopControl` 目前只是最小 claim / keepalive / release
+    接口，还没有更完整的控制权反馈、持有者语义和多入口约束。
+  - 当前 `motion_msgs` 已经落地最小接口，但命令字段仍带有明显的
+    servo 风格命名。
+- 与长期规划的关系
+  - 已补出控制层与驱动层之间的最小正式边界。
+  - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
+    到更稳定的内部消息接口和更完整的仲裁规则。
+
+### 3.7 `simulation_bridge`
+
+- 状态
+  - 已落地第一版 Python 仿真桥实现，处于收口中的过渡态。
+- 当前承接位置
+  - 目录：`src/simulation_bridge`
+  - ROS 包名：`simulation_bridge`
+- 当前主要职责
+  - 承接 Isaac 仿真侧与当前舵机链路之间的消息互转。
+  - 将 `/sim/servo_command` 转换为驱动级 `/servo/command`。
+  - 将 `/servo/state` 转换为 `/sim/servo_state`。
+- 当前主要输入
+  - `/sim/servo_command`
+  - `/servo/state`
+- 当前主要输出
+  - `/servo/command`
+  - `/sim/servo_state`
+- 当前非职责
+  - 不负责 teleop 主入口。
+  - 不负责执行仲裁。
+  - 不负责控制算法。
+- 当前问题
+  - 当前只收口了 Python Isaac 桥，`sim_servo_bridge_cpp` 仍是独立 C++ 包。
+  - 整机编排虽已迁到 `robot_bringup`，但仿真域仍是跨
+    `simulation_bridge` 与 `sim_servo_bridge_cpp` 组合。
+  - 当前虽然已有独立 launch，但整机默认链路仍需由 `robot_bringup`
+    include 调起。
+- 与长期规划的关系
+  - 已开始形成 `simulation_bridge` 正式责任域。
+  - 后续需要继续把 C++ 仿真桥与 launch 组织一起收口。
+
+### 3.8 `sim_servo_bridge_cpp`
 
 - 状态
   - 已实现，可选启用，处于过渡态。
@@ -182,11 +301,12 @@
   - 不负责执行仲裁。
 - 当前问题
   - 仍然直接耦合驱动级接口。
-  - 当前通过 `websocket_bridge` 的主 launch 启停，仿真边界不独立。
+  - 当前通过 `robot_bringup` 的整机 launch 启停，仍未完全收口到统一的
+    `simulation_bridge` 包边界。
 - 与长期规划的关系
   - 长期应被纳入统一的 `simulation_bridge` 责任域。
 
-### 3.6 `servo_msgs`
+### 3.9 `servo_msgs`
 
 - 状态
   - 已实现，且是当前相对稳定的驱动级接口边界。
@@ -197,7 +317,7 @@
   - 提供舵机命令、状态和相关服务定义。
   - 作为当前硬件链路的正式接口。
 - 当前主要输入输出
-  - 被 `servo_hardware`、`parallel_3dof_controller`、`websocket_bridge`、
+  - 被 `servo_hardware`、`execution_manager`、`simulation_bridge`、
     `sim_servo_bridge_cpp` 等包共同使用。
 - 当前非职责
   - 不表达任务语义。
@@ -209,7 +329,7 @@
   - 长期应继续保留为驱动级边界。
   - 上层模块应逐步减少对它的长期直接依赖。
 
-### 3.7 `record_load_action`
+### 3.10 `record_load_action`
 
 - 状态
   - 已实现，但更适合作为工具/演示包。
@@ -232,7 +352,7 @@
 - 与长期规划的关系
   - 长期应保留为可选工具/演示资源，而不是正式主链路核心。
 
-### 3.8 `robot_description`
+### 3.11 `robot_description`
 
 - 状态
   - 已实现，职责边界相对清晰。
@@ -252,7 +372,7 @@
 - 与长期规划的关系
   - 长期继续作为描述资源域存在即可。
 
-### 3.9 `mjc_viewer`
+### 3.12 `mjc_viewer`
 
 - 状态
   - 已实现，属于展示与仿真辅助模块。
@@ -277,18 +397,12 @@
 
 下列名称出现在长期规划文档中，但当前仓库里还没有对应的正式落地包：
 
-- `execution_manager`
-  - 当前不存在独立实现。
 - `motion_control`
   - 当前只有原型 `parallel_3dof_controller`，还不能等同于正式
     `motion_control`。
 - `teleoperation_bridge`
   - 当前只有混合职责的 `websocket_bridge`，还不能直接等同于正式
     `teleoperation_bridge`。
-- `simulation_bridge`
-  - 当前只有 `isaac_bridge_node` 和 `sim_servo_bridge_cpp` 这类分散实现。
-- `motion_msgs`
-  - 当前不存在独立消息包。
 - `task_service_bridge`
   - 当前不存在独立实现。
 - `task_api_msgs`
@@ -304,27 +418,37 @@
 为了避免长期规划与当前事实之间断层，现阶段可以按下面的方式理解映射关系：
 
 - `websocket_bridge`
-  - 当前事实：teleop/debug/status/demo/sim 的混合包
+  - 当前事实：teleop/debug/status/demo 的混合包
   - 长期去向：以 `teleoperation_bridge` 为主，仿真相关拆到
     `simulation_bridge`
 - `parallel_3dof_controller`
-  - 当前事实：直接输出驱动级舵机命令的控制原型
+  - 当前事实：已经输出到执行边界的控制原型
   - 长期去向：演进为 `motion_control`
+- `execution_manager`
+  - 当前事实：最小执行仲裁层已经落地，统一接 teleop 与 motion 两路命令，
+    并开始通过显式 teleop 控制话题处理 claim / keepalive / release
+  - 长期去向：演进为正式执行边界，并逐步替换上层对 `servo_msgs` 的直接依
+    赖
+- `simulation_bridge`
+  - 当前事实：Isaac 仿真桥已独立成 Python 包，但 C++ 仿真桥和整机编排仍
+    未完全收口
+  - 长期去向：形成统一的仿真责任域
 - `servo_hardware`
-  - 当前事实：执行器驱动包，同时挂着传感器入口
+  - 当前事实：执行器驱动包，IMU 入口已不再由它导出
   - 长期去向：保留执行器与协议能力
 - `sensor_hardware`
-  - 当前事实：代码模块已存在，但包未独立
+  - 当前事实：已独立成 ROS 包
   - 长期去向：独立成 `sensor_hardware` ROS 包
-- `sim_servo_bridge_cpp` 与 `isaac_bridge_node`
-  - 当前事实：分散的仿真桥实现
-  - 长期去向：收口到 `simulation_bridge`
+- `sim_servo_bridge_cpp`
+  - 当前事实：仍是独立 C++ 仿真桥
+  - 长期去向：继续向 `simulation_bridge` 责任域收口
 
 
 ## 6. 简短结论
 
 当前仓库已经有可运行的遥控、驱动、传感器、仿真和控制原型，但模块边界明显
-还处于过渡态。最重要的不是把未来名字提前套到现有代码上，而是先承认当前现
-实：`websocket_bridge` 过大、`parallel_3dof_controller` 直连驱动、
-`sensor_hardware` 还没独立、仿真桥还未收口。长期规划应继续保留，当前事实
-则由本文负责单独记录。
+还处于过渡态。当前已经完成了两步关键改造：`sensor_hardware` 已独立成包，
+`execution_manager` 也已补出最小执行边界，`simulation_bridge` 已开始承
+接 Isaac 仿真桥。但整体上仍然需要继续面对这些现实问题：`websocket_bridge`
+仍偏大、`parallel_3dof_controller` 仍直接构造驱动级命令、C++ 仿真桥与整
+机编排还未完全收口。长期规划应继续保留，当前事实则由本文负责单独记录。

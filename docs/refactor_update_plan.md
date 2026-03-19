@@ -22,18 +22,19 @@
 
 ## 2. 当前基线
 
-当前仓库最重要的现实约束有五点：
+当前仓库最重要的现实约束有六点：
 
 1. `websocket_bridge` 目前是混合职责包。
-   - 它同时承担 WebSocket 接入、人工遥控、状态回传、IMU 上行、BVH 播
-     放、Isaac 仿真桥，以及整机主 launch 编排。
-2. `parallel_3dof_controller` 目前仍然直接发布 `servo_msgs/ServoCommand`。
-3. `servo_hardware` 与 `sensor_hardware` 虽然在代码目录上已分开，但在
-   ROS 包层面仍然混在 `src/hardware` 里。
-4. `sim_servo_bridge_cpp` 当前是驱动级双向桥，直接接 `/servo/command` 和
-   `/servo/state`，还没有独立的高层仿真边界。
-5. 当前仓库里还没有正式落地的 `execution_manager`、`motion_msgs`、
-   `task_service_bridge`、`task_api_msgs`。
+   - 它仍同时承担 WebSocket 接入、人工遥控、状态回传、IMU 上行与 BVH 播
+     放等多类职责。
+2. `motion_msgs` 已经落地最小接口，但字段语义仍保留明显的过渡态。
+3. `robot_bringup` 已经独立承接整机主 launch，并开始按硬件、遥控、仿真拆
+   分启动入口。
+4. `sensor_hardware` 已经独立成 ROS 包，主 launch 也已切到新包。
+5. `simulation_bridge` 已经独立承接 Isaac 仿真桥，但 `sim_servo_bridge_cpp`
+   仍是单独的 C++ 仿真桥，仿真域还没有完全收口。
+6. `execution_manager` 已经落地最小可运行实现，并切到 `motion_msgs`，但
+   还没有 `task_service_bridge`、`task_api_msgs` 等更正式的上层入口。
 
 这意味着当前阶段的关键不是补齐所有远期模块，而是先把已有链路的边界理顺。
 
@@ -44,7 +45,7 @@
 
 1. 把“当前事实”和“长期目标”从文档层彻底拆开，避免误导后续开发。
 2. 把当前运行链路中的 teleop、控制、驱动、仿真边界重新梳理清楚。
-3. 为 `execution_manager` 和 `sensor_hardware` 拆包创造落地条件。
+3. 继续收敛 `execution_manager` 与 `sensor_hardware` 落地后的遗留问题。
 4. 在不破坏现有 `colcon build` 和主 launch 的前提下推进重构。
 
 本轮不追求：
@@ -78,6 +79,12 @@
 
 - 在保持现有包名和构建方式不变的前提下，先把边界和接线说清楚、理顺。
 
+当前状态：
+
+- `robot_bringup` 包已创建，并承接整机主入口 `full_system.launch.py`。
+- 整机入口已拆为 hardware、teleop、simulation 三个子 launch 再组合。
+- `websocket_bridge` 不再默认承接系统级编排。
+
 动作：
 
 1. 将 `websocket_bridge` 内部职责拆成四类看待：
@@ -104,13 +111,39 @@
 - 新建最小可用的 `execution_manager`，把控制层和驱动层之间补上一道正式边
   界。
 
+当前状态：
+
+- `execution_manager` 包已创建并接入 `robot_bringup` 的
+  `full_system.launch.py`。
+- `motion_msgs` 包已创建，提供最小 `MotionCommand` 与 `ExecutionState`
+  接口。
+- `motion_msgs` 已继续补充最小 `TeleopControl`，用于 teleop 显式申请、
+  续租和释放控制权。
+- `websocket_bridge` 节点默认通过参数 `command_topic` 输出
+  `motion_msgs/MotionCommand` 到
+  `/execution/teleop/command`。
+- `websocket_bridge` 节点默认通过参数 `teleop_control_topic` 输出
+  `motion_msgs/TeleopControl` 到
+  `/execution/teleop/control`，并把心跳接成 teleop keepalive。
+- `websocket_bridge` 已通过 `teleop_claim` / `teleop_release` 这组显式
+  WebSocket 消息接入 teleop 控制权链，不再把“发命令即抢占”当成当前事实。
+- `parallel_3dof_controller` 节点默认通过参数 `command_topic` 输出
+  `motion_msgs/MotionCommand` 到
+  `/execution/motion/command`。
+- `execution_manager` 已改为接收 `motion_msgs/MotionCommand`，发布
+  `motion_msgs/ExecutionState`，仅对驱动层输出 `servo_msgs/ServoCommand`。
+- `execution_manager` 已开始通过独立控制话题处理 teleop claim / release /
+  keepalive，并拒绝未持有 teleop 控制权的 teleop 命令。
+- `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
+  态上行到 WebSocket 状态查询/广播链路。
+
 动作：
 
-1. 定义最小执行请求与执行反馈接口。
-2. 优先让 `parallel_3dof_controller` 通过执行边界下发，而不是继续直接发
-   `ServoCommand`。
-3. 再把 teleop 入口改成通过执行边界申请控制权和下发命令。
-4. 在 `execution_manager` 中实现最小控制权状态机、急停和超时保护。
+1. 继续稳定最小执行请求与执行反馈接口。
+2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留。
+3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
+   明确哪些行为是正式入口，哪些仍是过渡态。
+4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：
 
@@ -124,11 +157,16 @@
 
 - 将已经存在的 `sensor_hardware` 代码从“包内子模块”提升为独立 ROS 包。
 
+当前状态：
+
+- 独立包已创建，主 launch 已切到新包。
+- 旧的 `src/hardware/sensor_hardware` 副本已清理。
+- 后续重点从“拆出来”转为“补测试与继续核对引用”。
+
 动作：
 
-1. 新建独立的 `sensor_hardware/package.xml`、`setup.py` 和入口点。
-2. 从 `servo_hardware` 的导出列表中移除 IMU 节点。
-3. 更新 launch、依赖和构建清单。
+1. 继续核对 launch、依赖和构建清单是否全部切到新包。
+2. 补充必要测试，确保独立包单独构建和启动稳定。
 
 完成标准：
 
@@ -141,11 +179,19 @@
 
 - 将 Isaac 桥与 `sim_servo_bridge_cpp` 这类逻辑从 teleop 包边界中抽离出来。
 
+当前状态：
+
+- `simulation_bridge` 包已创建，并承接了 Isaac 仿真桥。
+- `robot_bringup/full_system.launch.py` 已切到 include
+  `simulation_bridge` 自己的仿真 launch。
+- `sim_servo_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界。
+
 动作：
 
 1. 明确哪一部分保留 Python，哪一部分保留 C++。
-2. 把仿真桥接节点及其 launch 开关归并到统一的 simulation 责任域。
-3. 避免后续继续由 `websocket_bridge` 持有仿真主入口。
+2. 继续把仿真桥接节点、测试和 launch 开关归并到统一的 simulation 责任
+   域。
+3. 避免后续重新让 `websocket_bridge` 持有仿真主入口和整机仿真编排。
 
 完成标准：
 
@@ -181,11 +227,9 @@
    - 先补事实文档，停止让规划文档承载当前状态。
 2. 执行边界
    - 这是控制层和桥接层解耦的前提。
-3. `sensor_hardware` 拆包
-   - 这是硬件边界清晰化的最低成本改造。
-4. 仿真收口
+3. 仿真收口
    - 这是 `websocket_bridge` 降职责的关键一步。
-5. 正式命名收敛
+4. 正式命名收敛
    - 只有在前面四步稳定后才值得做。
 
 
@@ -204,5 +248,6 @@
 
 长期规划文档仍然有效，但当前仓库离那套目标架构还有几步关键过渡工作。
 因此更合理的做法不是去覆盖旧规划，而是补充一层“当前事实 + 近期执行顺序”
-文档：先把边界整理清楚，再补执行层、拆硬件包、收口仿真域，最后再做正式命
-名和远期模块落地。
+文档：先把边界整理清楚。当前整机主 launch 已从 `websocket_bridge` 拆到
+`robot_bringup`，下一步继续围绕执行层、硬件包与仿真域做收口，最后再做正
+式命名和远期模块落地。
