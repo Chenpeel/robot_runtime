@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>execution_manager</name>
+  <version>0.0.0</version>
+  <description>执行协调与安全仲裁节点，位于 teleop/motion 与 servo_hardware 之间</description>
+  <maintainer email="chenpeel@foxmail.com">chenpeel</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>motion_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>servo_msgs</depend>
+  <depend>std_msgs</depend>
+  <exec_depend>ament_index_python</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

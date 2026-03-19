@@ -1,0 +1,204 @@
+"""执行层纯逻辑仲裁器。"""
+
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass(frozen=True)
+class CommandFrame:
+    """与 ROS 无关的舵机命令快照。"""
+
+    servo_type: str
+    servo_id: int
+    position: int
+    speed: int
+
+
+@dataclass(frozen=True)
+class ArbitrationResult:
+    """单次命令仲裁结果。"""
+
+    accepted: bool
+    mode: str
+    reason: str
+    active_source: Optional[str]
+
+
+class CommandArbitrator:
+    """最小执行仲裁器。"""
+
+    TELEOP_CONTROL_ACTIONS = {'claim', 'keepalive', 'release'}
+
+    def __init__(
+        self,
+        teleop_timeout_sec: float = 0.8,
+        motion_timeout_sec: float = 0.5,
+    ) -> None:
+        self.teleop_timeout_sec = max(float(teleop_timeout_sec), 0.0)
+        self.motion_timeout_sec = max(float(motion_timeout_sec), 0.0)
+
+        self.mode = 'idle'
+        self.active_source: Optional[str] = None
+        self.estop_active = False
+
+        self.last_teleop_control_time: Optional[float] = None
+        self.last_motion_time: Optional[float] = None
+
+        self.accepted_counts = {'teleop': 0, 'motion': 0}
+        self.rejected_counts = {'teleop': 0, 'motion': 0}
+        self.last_rejection_reason = ''
+
+    def receive_command(
+        self,
+        source: str,
+        command: CommandFrame,
+        now_sec: float,
+    ) -> ArbitrationResult:
+        """处理一条执行请求。"""
+        del command
+
+        self._validate_source(source)
+        self._refresh_mode(now_sec)
+
+        if self.estop_active:
+            return self._reject(source, 'estop')
+
+        if source == 'teleop' and not self._is_teleop_control_active(now_sec):
+            return self._reject(source, 'teleop_control_not_granted')
+
+        if source == 'motion' and self._is_source_active('teleop', now_sec):
+            return self._reject(source, 'teleop_active')
+
+        if source == 'motion':
+            self.last_motion_time = now_sec
+
+        self.accepted_counts[source] += 1
+        self._refresh_mode(now_sec)
+        return ArbitrationResult(
+            accepted=True,
+            mode=self.mode,
+            reason='accepted',
+            active_source=self.active_source,
+        )
+
+    def receive_teleop_control(
+        self,
+        action: str,
+        now_sec: float,
+    ) -> ArbitrationResult:
+        """处理 teleop 控制权动作。"""
+        normalized_action = str(action).strip().lower()
+        self._refresh_mode(now_sec)
+
+        if normalized_action not in self.TELEOP_CONTROL_ACTIONS:
+            return self._reject('teleop', 'unsupported_teleop_control_action')
+
+        if normalized_action == 'claim':
+            if self.estop_active:
+                return self._reject('teleop', 'estop')
+            self.last_teleop_control_time = now_sec
+            self._refresh_mode(now_sec)
+            return ArbitrationResult(
+                accepted=True,
+                mode=self.mode,
+                reason='accepted',
+                active_source=self.active_source,
+            )
+
+        if normalized_action == 'keepalive':
+            if not self._is_teleop_control_active(now_sec):
+                return self._reject('teleop', 'teleop_control_not_granted')
+            self.last_teleop_control_time = now_sec
+            self._refresh_mode(now_sec)
+            return ArbitrationResult(
+                accepted=True,
+                mode=self.mode,
+                reason='accepted',
+                active_source=self.active_source,
+            )
+
+        if normalized_action == 'release':
+            self.last_teleop_control_time = None
+            self._refresh_mode(now_sec)
+            return ArbitrationResult(
+                accepted=True,
+                mode=self.mode,
+                reason='accepted',
+                active_source=self.active_source,
+            )
+
+    def set_estop(self, active: bool, now_sec: float) -> dict:
+        """设置急停状态。"""
+        self.estop_active = bool(active)
+        self._refresh_mode(now_sec)
+        return self.snapshot(now_sec)
+
+    def tick(self, now_sec: float) -> dict:
+        """周期性刷新模式。"""
+        self._refresh_mode(now_sec)
+        return self.snapshot(now_sec)
+
+    def snapshot(self, now_sec: float) -> dict:
+        """获取当前状态快照。"""
+        self._refresh_mode(now_sec)
+        return {
+            'mode': self.mode,
+            'active_source': self.active_source,
+            'estop_active': self.estop_active,
+            'teleop_active': self._is_source_active('teleop', now_sec),
+            'motion_active': self._is_source_active('motion', now_sec),
+            'teleop_timeout_sec': self.teleop_timeout_sec,
+            'motion_timeout_sec': self.motion_timeout_sec,
+            'accepted_counts': dict(self.accepted_counts),
+            'rejected_counts': dict(self.rejected_counts),
+            'last_rejection_reason': self.last_rejection_reason,
+        }
+
+    def _reject(self, source: str, reason: str) -> ArbitrationResult:
+        self.rejected_counts[source] += 1
+        self.last_rejection_reason = reason
+        return ArbitrationResult(
+            accepted=False,
+            mode=self.mode,
+            reason=reason,
+            active_source=self.active_source,
+        )
+
+    def _refresh_mode(self, now_sec: float) -> None:
+        if self.estop_active:
+            self.mode = 'estop'
+            self.active_source = None
+            return
+
+        if self._is_teleop_control_active(now_sec):
+            self.mode = 'teleop_active'
+            self.active_source = 'teleop'
+            return
+
+        if self._is_source_active('motion', now_sec):
+            self.mode = 'motion_active'
+            self.active_source = 'motion'
+            return
+
+        self.mode = 'idle'
+        self.active_source = None
+
+    def _is_source_active(self, source: str, now_sec: float) -> bool:
+        if source == 'teleop':
+            last_time = self.last_teleop_control_time
+            timeout_sec = self.teleop_timeout_sec
+        else:
+            last_time = self.last_motion_time
+            timeout_sec = self.motion_timeout_sec
+
+        if last_time is None:
+            return False
+        return (now_sec - last_time) <= timeout_sec
+
+    def _is_teleop_control_active(self, now_sec: float) -> bool:
+        return self._is_source_active('teleop', now_sec)
+
+    @staticmethod
+    def _validate_source(source: str) -> None:
+        if source not in ('teleop', 'motion'):
+            raise ValueError(f'unsupported source: {source}')
