@@ -1,14 +1,16 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>servo_hardware</name>
+  <name>sensor_hardware</name>
   <version>0.0.0</version>
-  <description>舵机硬件接口包，提供底层硬件驱动</description>
+  <description>传感器硬件接口包，提供 IMU 等底层传感器驱动</description>
   <maintainer email="chenpeel@foxmail.com">chenpeel</maintainer>
   <license>MIT</license>
 
+  <buildtool_depend>ament_python</buildtool_depend>
+
   <depend>rclpy</depend>
-  <depend>servo_msgs</depend>
+  <depend>sensor_msgs</depend>
   <exec_depend>ament_index_python</exec_depend>
 
   <test_depend>ament_copyright</test_depend>

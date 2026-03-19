@@ -5,7 +5,7 @@ package_name = 'servo_hardware'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=find_packages(include=[package_name, package_name + '.*']),
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -39,8 +39,6 @@ setup(
             'bus_protocol_router = servo_hardware.bus_protocol_router:main',
             'pca_servo_driver = servo_hardware.pca_servo:main',
             'servo_router = servo_hardware.servo_router:main',
-            'imu_driver = sensor_hardware.imu_driver:main',  # I2C 版本
-            'imu_serial_driver = sensor_hardware.imu_serial_driver:main',  # 串口版本
         ],
     },
 )
