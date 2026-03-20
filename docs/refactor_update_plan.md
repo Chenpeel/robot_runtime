@@ -138,6 +138,8 @@
   最近一次控制动作结果与控制动作计数。
 - WebSocket teleop 链路已开始透传连接级 `requester_id`，执行层也已开始维
   护最小 `teleop_holder_id` 语义，用于约束 claim / keepalive / release。
+- `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
+  setpoint 语义，再继续仲裁并转发到驱动层。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 
@@ -145,7 +147,9 @@
 
 1. 继续稳定最小执行请求与执行反馈接口，尤其是刚补上的 teleop 控制权反馈语
    义。
-2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留。
+2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留；
+   当前已先在 `execution_manager` 内部补上中性适配层，下一步可考虑给消息
+   增量补充更明确的时长和编码语义。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略和跨入口约束。

@@ -227,6 +227,8 @@
   - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
   - 按 `requester_id` 维护当前 teleop holder，并限制 keepalive / release
     只能由当前 holder 发起。
+  - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
+    setpoint 语义，再继续仲裁并转发到驱动层。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
@@ -248,8 +250,9 @@
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
     release 接口。虽然 `ExecutionState` 已补上最小控制权反馈与 holder 标
     识，但还没有更正式的 lease token、持有者抢占规则和多入口约束。
-  - 当前 `motion_msgs` 已经落地最小接口，但命令字段仍带有明显的
-    servo 风格命名。
+  - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
+    先补上一层中性 setpoint 适配，但外部命令字段仍带有明显的 servo 风格命
+    名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进

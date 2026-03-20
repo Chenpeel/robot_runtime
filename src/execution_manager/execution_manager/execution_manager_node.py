@@ -10,6 +10,8 @@ from std_msgs.msg import Bool
 
 from .arbitrator import CommandArbitrator
 from .arbitrator import CommandFrame
+from .command_adapter import motion_command_to_setpoint
+from .command_adapter import setpoint_to_servo_fields
 
 
 class ExecutionManagerNode(Node):
@@ -97,24 +99,26 @@ class ExecutionManagerNode(Node):
 
     def _handle_command(self, source: str, msg: MotionCommand) -> None:
         now_sec = self._now_sec()
+        setpoint = motion_command_to_setpoint(msg)
         frame = CommandFrame(
-            servo_type=str(msg.servo_type),
-            servo_id=int(msg.servo_id),
-            position=int(msg.position),
-            speed=int(msg.speed),
+            servo_type=setpoint.actuator_type,
+            servo_id=setpoint.actuator_id,
+            position=setpoint.target_raw,
+            speed=setpoint.duration_ms,
         )
         result = self.arbitrator.receive_command(source, frame, now_sec)
         if result.accepted:
-            self.output_command_pub.publish(self._to_servo_command(msg))
+            self.output_command_pub.publish(self._to_servo_command(setpoint, msg))
             if self.debug:
                 self.get_logger().info(
-                    f'接受 {source} 命令: type={msg.servo_type} '
-                    f'id={msg.servo_id} pos={msg.position} speed={msg.speed}'
+                    f'接受 {source} 命令: type={setpoint.actuator_type} '
+                    f'id={setpoint.actuator_id} target_raw={setpoint.target_raw} '
+                    f'duration_ms={setpoint.duration_ms}'
                 )
         else:
             self.get_logger().warn(
                 f'拒绝 {source} 命令: reason={result.reason} '
-                f'id={msg.servo_id} pos={msg.position}'
+                f'id={setpoint.actuator_id} target_raw={setpoint.target_raw}'
             )
 
         self._publish_state(now_sec)
@@ -193,12 +197,13 @@ class ExecutionManagerNode(Node):
         return self.get_clock().now().nanoseconds / 1_000_000_000.0
 
     @staticmethod
-    def _to_servo_command(msg: MotionCommand) -> ServoCommand:
+    def _to_servo_command(setpoint, msg: MotionCommand) -> ServoCommand:
+        servo_fields = setpoint_to_servo_fields(setpoint)
         output_msg = ServoCommand()
-        output_msg.servo_type = str(msg.servo_type)
-        output_msg.servo_id = int(msg.servo_id)
-        output_msg.position = int(msg.position)
-        output_msg.speed = int(msg.speed)
+        output_msg.servo_type = servo_fields['servo_type']
+        output_msg.servo_id = servo_fields['servo_id']
+        output_msg.position = servo_fields['position']
+        output_msg.speed = servo_fields['speed']
         output_msg.stamp = msg.stamp
         return output_msg
 
