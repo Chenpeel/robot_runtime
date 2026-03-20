@@ -48,6 +48,18 @@ class TestBridgeNodeTopics(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("'teleop_control_remaining_sec'", source)
+        self.assertIn("'teleop_holder_id'", source)
         self.assertIn("'last_teleop_control_action'", source)
         self.assertIn("'last_teleop_control_accepted'", source)
         self.assertIn("'last_teleop_control_reason'", source)
+
+    def test_teleop_control_publish_includes_requester_id(self):
+        """teleop 控制话题发布应包含 requester_id"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("msg.requester_id", source)

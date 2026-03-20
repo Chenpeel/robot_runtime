@@ -319,21 +319,32 @@ class WebSocketROS2Bridge(Node):
             frame_ms=frame_ms
         )
 
-    async def handle_heartbeat(self):
+    async def handle_heartbeat(self, context: dict | None = None):
         """处理心跳消息"""
+        requester_id = self._extract_requester_id(context)
         if self._teleop_control_is_active():
-            self._publish_teleop_control('keepalive')
+            self._publish_teleop_control('keepalive', requester_id=requester_id)
         self._debug_log("heartbeat", "received", self.heartbeat_debug)
 
-    async def handle_teleop_claim(self):
+    async def handle_teleop_claim(self, context: dict | None = None):
         """处理 teleop 控制权申请。"""
-        self._publish_teleop_control('claim')
-        self._debug_log("teleop_control", "claim", self.debug)
+        requester_id = self._extract_requester_id(context)
+        self._publish_teleop_control('claim', requester_id=requester_id)
+        self._debug_log(
+            "teleop_control",
+            f"claim requester_id={requester_id}",
+            self.debug
+        )
 
-    async def handle_teleop_release(self):
+    async def handle_teleop_release(self, context: dict | None = None):
         """处理 teleop 控制权释放。"""
-        self._publish_teleop_control('release')
-        self._debug_log("teleop_control", "release", self.debug)
+        requester_id = self._extract_requester_id(context)
+        self._publish_teleop_control('release', requester_id=requester_id)
+        self._debug_log(
+            "teleop_control",
+            f"release requester_id={requester_id}",
+            self.debug
+        )
 
     async def handle_status_query(self) -> dict:
         """
@@ -550,11 +561,22 @@ class WebSocketROS2Bridge(Node):
             "result_code": 200,
         }
 
-    def _publish_teleop_control(self, action: str) -> None:
+    def _publish_teleop_control(
+        self,
+        action: str,
+        requester_id: str | None = None,
+    ) -> None:
         msg = TeleopControl()
         msg.action = str(action).strip().lower()
+        msg.requester_id = str(requester_id or '').strip()
         msg.stamp = self.get_clock().now().to_msg()
         self.teleop_control_pub.publish(msg)
+
+    @staticmethod
+    def _extract_requester_id(context: dict | None) -> str:
+        if not isinstance(context, dict):
+            return ''
+        return str(context.get('requester_id') or '').strip()
 
     def _teleop_control_is_active(self) -> bool:
         return bool(
@@ -568,6 +590,7 @@ class WebSocketROS2Bridge(Node):
         return {
             'mode': str(msg.mode),
             'active_source': active_source,
+            'teleop_holder_id': str(msg.teleop_holder_id or ''),
             'estop_active': bool(msg.estop_active),
             'teleop_active': bool(msg.teleop_active),
             'motion_active': bool(msg.motion_active),

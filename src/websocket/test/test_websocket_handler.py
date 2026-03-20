@@ -44,17 +44,23 @@ class TestWebSocketHandler:
     async def test_handle_teleop_claim_message(self):
         """测试处理 teleop 控制权申请消息"""
         callback_called = False
+        received_context = None
 
-        async def claim_callback():
-            nonlocal callback_called
+        async def claim_callback(context):
+            nonlocal callback_called, received_context
             callback_called = True
+            received_context = context
 
         self.handler.register_teleop_claim_handler(claim_callback)
 
         raw_message = json.dumps({"type": "teleop_claim"})
-        response = await self.handler.handle_message(raw_message)
+        response = await self.handler.handle_message(
+            raw_message,
+            context={"requester_id": "client-a"},
+        )
 
         assert callback_called
+        assert received_context["requester_id"] == "client-a"
         assert response is not None
         response_data = json.loads(response)
         assert response_data["type"] == "teleop_claim_ack"
@@ -64,17 +70,23 @@ class TestWebSocketHandler:
     async def test_handle_teleop_release_message(self):
         """测试处理 teleop 控制权释放消息"""
         callback_called = False
+        received_context = None
 
-        async def release_callback():
-            nonlocal callback_called
+        async def release_callback(context):
+            nonlocal callback_called, received_context
             callback_called = True
+            received_context = context
 
         self.handler.register_teleop_release_handler(release_callback)
 
         raw_message = json.dumps({"type": "teleop_release"})
-        response = await self.handler.handle_message(raw_message)
+        response = await self.handler.handle_message(
+            raw_message,
+            context={"requester_id": "client-a"},
+        )
 
         assert callback_called
+        assert received_context["requester_id"] == "client-a"
         assert response is not None
         response_data = json.loads(response)
         assert response_data["type"] == "teleop_release_ack"
@@ -198,6 +210,7 @@ class TestWebSocketHandler:
         self.handler.update_execution_state({
             "mode": "teleop_active",
             "active_source": "teleop",
+            "teleop_holder_id": "client-a",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -214,6 +227,7 @@ class TestWebSocketHandler:
 
         response_data = json.loads(response)
         assert response_data["execution_state"]["mode"] == "teleop_active"
+        assert response_data["execution_state"]["teleop_holder_id"] == "client-a"
         assert response_data["execution_state"]["teleop_control_remaining_sec"] == 0.42
         assert response_data["execution_state"]["last_teleop_control_action"] == "claim"
         assert response_data["execution_state"]["last_teleop_control_accepted"] is True

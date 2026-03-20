@@ -40,6 +40,7 @@ class CommandArbitrator:
         self.mode = 'idle'
         self.active_source: Optional[str] = None
         self.estop_active = False
+        self.teleop_holder_id = ''
 
         self.last_teleop_control_time: Optional[float] = None
         self.last_motion_time: Optional[float] = None
@@ -91,9 +92,11 @@ class CommandArbitrator:
         self,
         action: str,
         now_sec: float,
+        requester_id: str = '',
     ) -> ArbitrationResult:
         """处理 teleop 控制权动作。"""
         normalized_action = str(action).strip().lower()
+        normalized_requester_id = str(requester_id).strip()
         self.last_teleop_control_action = normalized_action
         self._refresh_mode(now_sec)
 
@@ -106,8 +109,20 @@ class CommandArbitrator:
         if normalized_action == 'claim':
             if self.estop_active:
                 return self._reject_teleop_control(normalized_action, 'estop')
+            if self._is_teleop_control_active(now_sec) and not self._is_holder(
+                normalized_requester_id
+            ):
+                return self._reject_teleop_control(
+                    normalized_action,
+                    'teleop_control_held_by_other',
+                )
+            self.teleop_holder_id = normalized_requester_id
             self.last_teleop_control_time = now_sec
-            return self._accept_teleop_control(normalized_action, now_sec)
+            return self._accept_teleop_control(
+                normalized_action,
+                now_sec,
+                holder_id=normalized_requester_id,
+            )
 
         if normalized_action == 'keepalive':
             if not self._is_teleop_control_active(now_sec):
@@ -115,11 +130,35 @@ class CommandArbitrator:
                     normalized_action,
                     'teleop_control_not_granted',
                 )
+            if not self._is_holder(normalized_requester_id):
+                return self._reject_teleop_control(
+                    normalized_action,
+                    'teleop_control_not_holder',
+                )
             self.last_teleop_control_time = now_sec
-            return self._accept_teleop_control(normalized_action, now_sec)
+            return self._accept_teleop_control(
+                normalized_action,
+                now_sec,
+                holder_id=normalized_requester_id,
+            )
 
+        if not self._is_teleop_control_active(now_sec):
+            return self._reject_teleop_control(
+                normalized_action,
+                'teleop_control_not_granted',
+            )
+        if not self._is_holder(normalized_requester_id):
+            return self._reject_teleop_control(
+                normalized_action,
+                'teleop_control_not_holder',
+            )
+        self.teleop_holder_id = ''
         self.last_teleop_control_time = None
-        return self._accept_teleop_control(normalized_action, now_sec)
+        return self._accept_teleop_control(
+            normalized_action,
+            now_sec,
+            holder_id='',
+        )
 
     def set_estop(self, active: bool, now_sec: float) -> dict:
         """设置急停状态。"""
@@ -138,6 +177,7 @@ class CommandArbitrator:
         return {
             'mode': self.mode,
             'active_source': self.active_source,
+            'teleop_holder_id': self.teleop_holder_id,
             'estop_active': self.estop_active,
             'teleop_active': self._is_source_active('teleop', now_sec),
             'motion_active': self._is_source_active('motion', now_sec),
@@ -170,11 +210,13 @@ class CommandArbitrator:
         self,
         action: str,
         now_sec: float,
+        holder_id: str,
     ) -> ArbitrationResult:
         self.teleop_control_accepted_count += 1
         self.last_teleop_control_action = action
         self.last_teleop_control_accepted = True
         self.last_teleop_control_reason = 'accepted'
+        self.teleop_holder_id = str(holder_id)
         self._refresh_mode(now_sec)
         return ArbitrationResult(
             accepted=True,
@@ -195,6 +237,8 @@ class CommandArbitrator:
         return self._reject('teleop', reason)
 
     def _refresh_mode(self, now_sec: float) -> None:
+        self._clear_expired_teleop_control(now_sec)
+
         if self.estop_active:
             self.mode = 'estop'
             self.active_source = None
@@ -227,6 +271,17 @@ class CommandArbitrator:
 
     def _is_teleop_control_active(self, now_sec: float) -> bool:
         return self._is_source_active('teleop', now_sec)
+
+    def _is_holder(self, requester_id: str) -> bool:
+        return str(requester_id).strip() == self.teleop_holder_id
+
+    def _clear_expired_teleop_control(self, now_sec: float) -> None:
+        if self.last_teleop_control_time is None:
+            return
+        if (now_sec - self.last_teleop_control_time) <= self.teleop_timeout_sec:
+            return
+        self.last_teleop_control_time = None
+        self.teleop_holder_id = ''
 
     def _teleop_control_remaining_sec(self, now_sec: float) -> float:
         if self.last_teleop_control_time is None:

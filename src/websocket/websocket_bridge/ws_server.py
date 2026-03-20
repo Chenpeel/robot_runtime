@@ -7,6 +7,7 @@ import asyncio
 import json
 import time
 import sys
+import uuid
 from typing import Set, Optional
 from websockets.server import serve, WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
@@ -141,8 +142,12 @@ class WebSocketBridgeServer:
         """
         client_addr = websocket.remote_address
         self.clients.add(websocket)
+        client_info = self._get_or_create_client_info(websocket)
 
-        print(f"[WebSocketServer] 客户端连接: {client_addr}")
+        print(
+            f"[WebSocketServer] 客户端连接: {client_addr}, "
+            f"session={client_info['id']}"
+        )
 
         try:
             async for message in websocket:
@@ -204,7 +209,10 @@ class WebSocketBridgeServer:
             except json.JSONDecodeError:
                 pass
 
-            response = await self.handler.handle_message(message)
+            response = await self.handler.handle_message(
+                message,
+                context=self._build_client_context(websocket),
+            )
 
             if response:
                 await websocket.send(response)
@@ -338,16 +346,10 @@ class WebSocketBridgeServer:
             websocket: 客户端连接
             data: 注册消息 {"type": "register", "name": "客户端名称"}
         """
-        import uuid
-
-        client_name = data.get("name", f"client_{len(self.client_info) + 1}")
-        client_id = str(uuid.uuid4())
-
-        # 保存客户端信息
-        self.client_info[websocket] = {
-            "id": client_id,
-            "name": client_name
-        }
+        client_info = self._get_or_create_client_info(websocket)
+        client_name = data.get("name", client_info["name"])
+        client_info["name"] = client_name
+        client_id = client_info["id"]
 
         # 获取在线用户列表
         online_users = self.get_online_users()
@@ -407,6 +409,25 @@ class WebSocketBridgeServer:
         await asyncio.gather(*tasks, return_exceptions=True)
 
         self._debug("ws_user_list", f"广播用户列表: {len(online_users)} 个在线用户")
+
+    def _get_or_create_client_info(self, websocket: WebSocketServerProtocol) -> dict:
+        client_info = self.client_info.get(websocket)
+        if client_info is not None:
+            return client_info
+
+        client_info = {
+            "id": str(uuid.uuid4()),
+            "name": f"client_{len(self.client_info) + 1}",
+        }
+        self.client_info[websocket] = client_info
+        return client_info
+
+    def _build_client_context(self, websocket: WebSocketServerProtocol) -> dict:
+        client_info = self._get_or_create_client_info(websocket)
+        return {
+            "requester_id": client_info["id"],
+            "client_name": client_info["name"],
+        }
 
     async def _handle_private_to_robot(self, websocket: WebSocketServerProtocol, data: dict):
         """

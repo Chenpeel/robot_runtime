@@ -84,6 +84,7 @@
 - 当前主要职责
   - 提供 WebSocket 服务端接入。
   - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
+  - 将 WebSocket 连接级 session id 作为 teleop requester 向执行层下发。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
@@ -113,8 +114,8 @@
 - 当前问题
   - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
-    已补上最小控制权反馈，但当前还没有更完整的客户端归属、持有者语义和上
-    层接口约束。
+    已补上最小控制权反馈与连接级 holder 语义，但当前还没有更正式的 lease
+    token、抢占策略和上层接口约束。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，但命令字段
     语义目前仍保留 `servo_type`、`servo_id` 这类过渡定义。
 - 与长期规划的关系
@@ -224,11 +225,13 @@
     `estop`。
   - 只在 teleop 已显式获得控制权时接受 teleop 命令。
   - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
+  - 按 `requester_id` 维护当前 teleop holder，并限制 keepalive / release
+    只能由当前 holder 发起。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
-    teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果和控制动作计
-    数。
+    teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果、控制动作计
+    数与当前 holder 标识。
 - 当前主要输入
   - `/execution/teleop/control`
   - `/execution/teleop/command`
@@ -243,8 +246,8 @@
   - 不做驱动协议实现。
 - 当前问题
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
-    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈，但还没有更
-    完整的持有者语义和多入口约束。
+    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈与 holder 标
+    识，但还没有更正式的 lease token、持有者抢占规则和多入口约束。
   - 当前 `motion_msgs` 已经落地最小接口，但命令字段仍带有明显的
     servo 风格命名。
 - 与长期规划的关系

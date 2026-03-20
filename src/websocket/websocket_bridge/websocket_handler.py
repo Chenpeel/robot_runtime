@@ -2,6 +2,7 @@
 WebSocket 处理器 - 与 ROS 2 集成
 """
 
+import inspect
 import json
 import time
 import asyncio
@@ -45,9 +46,9 @@ class WebSocketHandler:
         
         # ROS 2 相关的回调
         self.on_servo_command = None  # Callable[[dict], None]
-        self.on_heartbeat = None  # Callable[[], None]
-        self.on_teleop_claim = None  # Callable[[], None]
-        self.on_teleop_release = None  # Callable[[], None]
+        self.on_heartbeat = None  # Callable[[dict], None]
+        self.on_teleop_claim = None  # Callable[[dict], None]
+        self.on_teleop_release = None  # Callable[[dict], None]
         self.on_status_query = None  # Callable[[], None]
         self.on_bvh_play = None  # Callable[[dict], None]
         
@@ -123,7 +124,11 @@ class WebSocketHandler:
         """
         self.message_handler.register_handler(msg_type, callback)
     
-    async def handle_message(self, raw_message: str) -> Optional[str]:
+    async def handle_message(
+        self,
+        raw_message: str,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """
         处理接收到的 WebSocket 消息
         
@@ -145,13 +150,13 @@ class WebSocketHandler:
         
         # 根据消息类型分发
         if msg_type == MessageType.HEARTBEAT:
-            return await self._handle_heartbeat(data)
+            return await self._handle_heartbeat(data, context)
         elif msg_type == MessageType.SERVO_CONTROL:
             return await self._handle_servo_control(data)
         elif msg_type == MessageType.TELEOP_CLAIM:
-            return await self._handle_teleop_claim(data)
+            return await self._handle_teleop_claim(data, context)
         elif msg_type == MessageType.TELEOP_RELEASE:
-            return await self._handle_teleop_release(data)
+            return await self._handle_teleop_release(data, context)
         elif msg_type == MessageType.BVH_PLAY:
             return await self._handle_bvh_play(data)
         elif msg_type == MessageType.STATUS_QUERY:
@@ -165,13 +170,17 @@ class WebSocketHandler:
         else:
             return None
     
-    async def _handle_heartbeat(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_heartbeat(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理心跳消息"""
         self.last_heartbeat = time.time()
         
         if self.on_heartbeat:
             try:
-                await self.on_heartbeat()
+                await self._invoke_callback(self.on_heartbeat, context)
             except Exception as e:
                 print(f"[WebSocketHandler] 心跳回调失败: {e}")
         
@@ -186,13 +195,17 @@ class WebSocketHandler:
 
         return json.dumps(response, ensure_ascii=False)
 
-    async def _handle_teleop_claim(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_teleop_claim(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理 teleop 控制权申请。"""
         del data
 
         if self.on_teleop_claim:
             try:
-                await self.on_teleop_claim()
+                await self._invoke_callback(self.on_teleop_claim, context)
             except Exception as e:
                 return ErrorResponse.create(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
@@ -207,13 +220,17 @@ class WebSocketHandler:
             device_id=self.device_id
         )
 
-    async def _handle_teleop_release(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_teleop_release(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理 teleop 控制权释放。"""
         del data
 
         if self.on_teleop_release:
             try:
-                await self.on_teleop_release()
+                await self._invoke_callback(self.on_teleop_release, context)
             except Exception as e:
                 return ErrorResponse.create(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
@@ -425,6 +442,16 @@ class WebSocketHandler:
         if not isinstance(execution_state, dict):
             return
         self.execution_state = dict(execution_state)
+
+    async def _invoke_callback(
+        self,
+        callback: Callable,
+        payload: Optional[Dict[str, Any]] = None,
+    ):
+        payload = dict(payload or {})
+        if len(inspect.signature(callback).parameters) == 0:
+            return await callback()
+        return await callback(payload)
 
     def _build_current_status(self) -> Dict[str, Any]:
         """根据 execution_state 构造当前状态摘要。"""

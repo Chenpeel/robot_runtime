@@ -21,37 +21,49 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
 
     def test_handle_teleop_claim_message(self):
         callback_called = False
+        received_context = None
 
-        async def claim_callback():
-            nonlocal callback_called
+        async def claim_callback(context):
+            nonlocal callback_called, received_context
             callback_called = True
+            received_context = context
 
         self.handler.register_teleop_claim_handler(claim_callback)
 
         response = asyncio.run(
-            self.handler.handle_message(json.dumps({"type": "teleop_claim"}))
+            self.handler.handle_message(
+                json.dumps({"type": "teleop_claim"}),
+                context={"requester_id": "client-a"},
+            )
         )
 
         response_data = json.loads(response)
         self.assertTrue(callback_called)
+        self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(response_data["type"], "teleop_claim_ack")
         self.assertEqual(response_data["status"], "accepted")
 
     def test_handle_teleop_release_message(self):
         callback_called = False
+        received_context = None
 
-        async def release_callback():
-            nonlocal callback_called
+        async def release_callback(context):
+            nonlocal callback_called, received_context
             callback_called = True
+            received_context = context
 
         self.handler.register_teleop_release_handler(release_callback)
 
         response = asyncio.run(
-            self.handler.handle_message(json.dumps({"type": "teleop_release"}))
+            self.handler.handle_message(
+                json.dumps({"type": "teleop_release"}),
+                context={"requester_id": "client-a"},
+            )
         )
 
         response_data = json.loads(response)
         self.assertTrue(callback_called)
+        self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(response_data["type"], "teleop_release_ack")
         self.assertEqual(response_data["status"], "accepted")
 

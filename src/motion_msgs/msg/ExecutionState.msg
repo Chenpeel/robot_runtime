@@ -6,6 +6,9 @@ string mode
 # 当前持有控制权的来源，空字符串表示无
 string active_source
 
+# 当前 teleop 控制权持有者，空字符串表示无
+string teleop_holder_id
+
 # 急停状态
 bool estop_active
 

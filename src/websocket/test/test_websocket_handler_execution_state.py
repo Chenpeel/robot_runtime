@@ -21,6 +21,7 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         handler.update_execution_state({
             "mode": "teleop_active",
             "active_source": "teleop",
+            "teleop_holder_id": "client-a",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -44,6 +45,10 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         self.assertEqual(
             response_data["execution_state"]["last_teleop_control_action"],
             "claim",
+        )
+        self.assertEqual(
+            response_data["execution_state"]["teleop_holder_id"],
+            "client-a",
         )
         self.assertAlmostEqual(
             response_data["execution_state"]["teleop_control_remaining_sec"],

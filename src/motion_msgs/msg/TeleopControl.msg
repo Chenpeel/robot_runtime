@@ -6,5 +6,10 @@
 # release: 主动释放 teleop 控制权
 string action
 
+# 请求方标识
+# WebSocket 链路默认使用连接级 session id
+# 为空时表示匿名请求方，用于兼容过渡期旧入口
+string requester_id
+
 # 时间戳
 builtin_interfaces/Time stamp

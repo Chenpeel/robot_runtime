@@ -136,6 +136,8 @@
   keepalive，并拒绝未持有 teleop 控制权的 teleop 命令。
 - `ExecutionState` 已开始提供第一版 teleop 控制权反馈，包括剩余租约时间、
   最近一次控制动作结果与控制动作计数。
+- WebSocket teleop 链路已开始透传连接级 `requester_id`，执行层也已开始维
+  护最小 `teleop_holder_id` 语义，用于约束 claim / keepalive / release。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 
@@ -145,8 +147,8 @@
    义。
 2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
-   明确哪些行为是正式入口，哪些仍是过渡态；当前仍缺客户端归属和持有者语
-   义。
+   明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
+   但仍缺更正式的 lease token、抢占策略和跨入口约束。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

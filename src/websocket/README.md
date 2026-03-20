@@ -89,6 +89,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 
 - 客户端先发送 `teleop_claim`，由 `bridge_node` 发布
   `motion_msgs/TeleopControl(action=\"claim\")`。
+- `bridge_node` 会使用当前 WebSocket 连接的 session id 填充
+  `TeleopControl.requester_id`，作为当前 teleop holder 的最小标识。
 - 控制权生效后，heartbeat 会被桥接为 `keepalive`，用于续租 teleop 控制权。
 - 客户端结束遥控时发送 `teleop_release`，由 `bridge_node` 发布
   `motion_msgs/TeleopControl(action=\"release\")`。
@@ -105,6 +107,7 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 当前 `execution_state` 中除了 `mode` / `active_source` 之外，还会携带
 teleop 控制权的最小反馈信息，例如：
 
+- `teleop_holder_id`
 - `teleop_control_remaining_sec`
 - `last_teleop_control_action`
 - `last_teleop_control_accepted`
@@ -197,6 +200,7 @@ heartbeat:
   "execution_state": {
     "mode": "idle",
     "active_source": null,
+    "teleop_holder_id": "",
     "estop_active": false,
     "teleop_active": false,
     "motion_active": false,
