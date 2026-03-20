@@ -270,6 +270,8 @@ class WebSocketROS2Bridge(Node):
             msg.servo_type = servo_type
             msg.servo_id = servo_cmd["servo_id"]
             msg.position = position
+            msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
+            msg.duration_ms = speed
             msg.speed = speed  # 默认速度100ms
             msg.stamp = self.get_clock().now().to_msg()
 
@@ -295,6 +297,8 @@ class WebSocketROS2Bridge(Node):
         msg.servo_type = servo_type
         msg.servo_id = int(servo_id)
         msg.position = int(position)
+        msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
+        msg.duration_ms = int(speed)
         msg.speed = int(speed)
         msg.stamp = self.get_clock().now().to_msg()
         self.servo_command_pub.publish(msg)
@@ -577,6 +581,15 @@ class WebSocketROS2Bridge(Node):
         if not isinstance(context, dict):
             return ''
         return str(context.get('requester_id') or '').strip()
+
+    @staticmethod
+    def _motion_value_encoding_for_servo_type(servo_type: str) -> str:
+        normalized_type = str(servo_type).strip().lower()
+        if normalized_type == 'bus':
+            return 'bus_pulse_us'
+        if normalized_type == 'pca':
+            return 'pca_tick'
+        return ''
 
     def _teleop_control_is_active(self) -> bool:
         return bool(

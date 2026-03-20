@@ -191,6 +191,8 @@ class Parallel3DOFControllerNode(Node):
                 servo_msg.servo_type = "bus"  # 总线舵机
                 servo_msg.servo_id = cmd['id']
                 servo_msg.position = cmd['position']
+                servo_msg.value_encoding = 'bus_pulse_us'
+                servo_msg.duration_ms = cmd['speed']
                 servo_msg.speed = cmd['speed']
                 servo_msg.stamp = self.get_clock().now().to_msg()
                 self.servo_cmd_pub.publish(servo_msg)

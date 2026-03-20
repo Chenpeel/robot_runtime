@@ -96,6 +96,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   `motion_msgs/TeleopControl(action=\"release\")`。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
+- 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：
+  - 兼容字段：`position`、`speed`
+  - 增量语义字段：`value_encoding`、`duration_ms`
 
 状态查询与状态广播现在也会携带执行层反馈：
 

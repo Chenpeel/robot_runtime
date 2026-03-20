@@ -63,3 +63,15 @@ class TestBridgeNodeTopics(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("msg.requester_id", source)
+
+    def test_motion_command_publish_includes_explicit_semantic_fields(self):
+        """MotionCommand 发布应双写新语义字段"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("msg.value_encoding", source)
+        self.assertIn("msg.duration_ms", source)

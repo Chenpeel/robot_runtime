@@ -112,7 +112,8 @@ class ExecutionManagerNode(Node):
             if self.debug:
                 self.get_logger().info(
                     f'接受 {source} 命令: type={setpoint.actuator_type} '
-                    f'id={setpoint.actuator_id} target_raw={setpoint.target_raw} '
+                    f'id={setpoint.actuator_id} encoding={setpoint.value_encoding} '
+                    f'target_raw={setpoint.target_raw} '
                     f'duration_ms={setpoint.duration_ms}'
                 )
         else:

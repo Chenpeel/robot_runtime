@@ -116,8 +116,9 @@
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈与连接级 holder 语义，但当前还没有更正式的 lease
     token、抢占策略和上层接口约束。
-  - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，但命令字段
-    语义目前仍保留 `servo_type`、`servo_id` 这类过渡定义。
+  - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
+    双写 `duration_ms` 与 `value_encoding`，但外部消息仍保留
+    `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。
 - 与长期规划的关系
   - 长期上更接近 `teleoperation_bridge` 的前身。
   - 整机主 launch 已迁到 `robot_bringup`。
@@ -191,6 +192,7 @@
   - 订阅脚踝 RPY 姿态命令。
   - 进行 3-DOF 并联机构运动学求解。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
+  - 在输出 `MotionCommand` 时开始双写 `duration_ms` 与 `value_encoding`。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
@@ -204,8 +206,8 @@
   - 不负责任务级调度。
   - 不负责驱动协议本身。
 - 当前问题
-  - 已不再直接依赖 `servo_msgs`，但当前 `motion_msgs/MotionCommand`
-    仍保留驱动风格字段作为过渡接口。
+  - 已不再直接依赖 `servo_msgs`。当前 `MotionCommand` 也已开始补充更明确的
+    时长与编码语义，但外部接口仍保留驱动风格字段作为过渡接口。
 - 与长期规划的关系
   - 长期更接近 `motion_control` 的前身。
   - 当前已先输出到执行边界，后续还需继续把过渡消息演进为更稳定的控制语
@@ -229,6 +231,8 @@
     只能由当前 holder 发起。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
+  - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
+    兼容旧字段语义。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
@@ -251,8 +255,8 @@
     release 接口。虽然 `ExecutionState` 已补上最小控制权反馈与 holder 标
     识，但还没有更正式的 lease token、持有者抢占规则和多入口约束。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
-    先补上一层中性 setpoint 适配，但外部命令字段仍带有明显的 servo 风格命
-    名。
+    先补上一层中性 setpoint 适配，且 producer 也开始双写更明确的时长与编
+    码字段，但外部命令字段仍带有明显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
