@@ -201,6 +201,12 @@ class TestWebSocketHandler:
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
+            "teleop_control_remaining_sec": 0.42,
+            "last_teleop_control_action": "claim",
+            "last_teleop_control_accepted": True,
+            "last_teleop_control_reason": "accepted",
+            "teleop_control_accepted_count": 1,
+            "teleop_control_rejected_count": 0,
         })
 
         raw_message = json.dumps({"type": "status_query"})
@@ -208,6 +214,10 @@ class TestWebSocketHandler:
 
         response_data = json.loads(response)
         assert response_data["execution_state"]["mode"] == "teleop_active"
+        assert response_data["execution_state"]["teleop_control_remaining_sec"] == 0.42
+        assert response_data["execution_state"]["last_teleop_control_action"] == "claim"
+        assert response_data["execution_state"]["last_teleop_control_accepted"] is True
+        assert response_data["execution_state"]["last_teleop_control_reason"] == "accepted"
         assert response_data["current_status"]["movement_active"] is True
         assert response_data["current_status"]["listening"] is True
         assert response_data["current_status"]["action"] == "teleop_active"

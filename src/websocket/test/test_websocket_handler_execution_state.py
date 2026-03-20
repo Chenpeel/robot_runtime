@@ -24,6 +24,12 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
+            "teleop_control_remaining_sec": 0.42,
+            "last_teleop_control_action": "claim",
+            "last_teleop_control_accepted": True,
+            "last_teleop_control_reason": "accepted",
+            "teleop_control_accepted_count": 1,
+            "teleop_control_rejected_count": 0,
         })
 
         response = asyncio.run(
@@ -34,6 +40,17 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         self.assertEqual(
             response_data["execution_state"]["mode"],
             "teleop_active",
+        )
+        self.assertEqual(
+            response_data["execution_state"]["last_teleop_control_action"],
+            "claim",
+        )
+        self.assertAlmostEqual(
+            response_data["execution_state"]["teleop_control_remaining_sec"],
+            0.42,
+        )
+        self.assertTrue(
+            response_data["execution_state"]["last_teleop_control_accepted"]
         )
         self.assertTrue(response_data["current_status"]["movement_active"])
         self.assertTrue(response_data["current_status"]["listening"])

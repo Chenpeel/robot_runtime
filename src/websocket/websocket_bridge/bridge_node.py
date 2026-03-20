@@ -573,6 +573,20 @@ class WebSocketROS2Bridge(Node):
             'motion_active': bool(msg.motion_active),
             'teleop_timeout_sec': float(msg.teleop_timeout_sec),
             'motion_timeout_sec': float(msg.motion_timeout_sec),
+            'teleop_control_remaining_sec': float(
+                msg.teleop_control_remaining_sec
+            ),
+            'last_teleop_control_action': str(msg.last_teleop_control_action),
+            'last_teleop_control_accepted': bool(
+                msg.last_teleop_control_accepted
+            ),
+            'last_teleop_control_reason': str(msg.last_teleop_control_reason),
+            'teleop_control_accepted_count': int(
+                msg.teleop_control_accepted_count
+            ),
+            'teleop_control_rejected_count': int(
+                msg.teleop_control_rejected_count
+            ),
             'accepted_counts': {
                 'teleop': int(msg.teleop_accepted_count),
                 'motion': int(msg.motion_accepted_count),

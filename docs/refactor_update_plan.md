@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文是截至 2026-03-19 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-03-20 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -134,15 +134,19 @@
   `motion_msgs/ExecutionState`，仅对驱动层输出 `servo_msgs/ServoCommand`。
 - `execution_manager` 已开始通过独立控制话题处理 teleop claim / release /
   keepalive，并拒绝未持有 teleop 控制权的 teleop 命令。
+- `ExecutionState` 已开始提供第一版 teleop 控制权反馈，包括剩余租约时间、
+  最近一次控制动作结果与控制动作计数。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 
 动作：
 
-1. 继续稳定最小执行请求与执行反馈接口。
+1. 继续稳定最小执行请求与执行反馈接口，尤其是刚补上的 teleop 控制权反馈语
+   义。
 2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
-   明确哪些行为是正式入口，哪些仍是过渡态。
+   明确哪些行为是正式入口，哪些仍是过渡态；当前仍缺客户端归属和持有者语
+   义。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

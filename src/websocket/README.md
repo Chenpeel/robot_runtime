@@ -102,6 +102,14 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   -> bridge_node -> WebSocket status_query/status_update
 ```
 
+当前 `execution_state` 中除了 `mode` / `active_source` 之外，还会携带
+teleop 控制权的最小反馈信息，例如：
+
+- `teleop_control_remaining_sec`
+- `last_teleop_control_action`
+- `last_teleop_control_accepted`
+- `last_teleop_control_reason`
+
 ### 5. Isaac-ROS 仿真桥接
 
 用于 Isaac 仿真侧与 ROS 舵机链路直连：
@@ -191,7 +199,13 @@ heartbeat:
     "active_source": null,
     "estop_active": false,
     "teleop_active": false,
-    "motion_active": false
+    "motion_active": false,
+    "teleop_control_remaining_sec": 0.0,
+    "last_teleop_control_action": "",
+    "last_teleop_control_accepted": false,
+    "last_teleop_control_reason": "",
+    "teleop_control_accepted_count": 0,
+    "teleop_control_rejected_count": 0
   },
   "timestamp": 1234567890,
   "result_code": 200

@@ -37,3 +37,17 @@ class TestBridgeNodeTopics(unittest.TestCase):
             "DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'",
             source
         )
+
+    def test_execution_state_mapping_includes_teleop_control_feedback(self):
+        """execution_state 映射应包含 teleop 控制权反馈字段"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("'teleop_control_remaining_sec'", source)
+        self.assertIn("'last_teleop_control_action'", source)
+        self.assertIn("'last_teleop_control_accepted'", source)
+        self.assertIn("'last_teleop_control_reason'", source)

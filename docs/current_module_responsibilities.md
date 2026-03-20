@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文记录截至 2026-03-19 的仓库当前事实，用于补充说明现有模块到底已经承担了
+本文记录截至 2026-03-20 的仓库当前事实，用于补充说明现有模块到底已经承担了
 什么职责。
 
 它与长期规划文档的关系如下：
@@ -86,7 +86,8 @@
   - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
-  - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态。
+  - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
+    teleop 控制权反馈。
   - 订阅 `/sensor/imu` 并向 WebSocket 客户端广播传感器数据。
   - 承接心跳续租、状态查询和调试日志聚合。
   - 通过 `record_load_action` 触发 BVH 动作播放。
@@ -111,8 +112,9 @@
   - 不应该长期承载 demo/BVH 与系统级 launch 编排。
 - 当前问题
   - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
-  - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，但当前还没有更
-    完整的客户端归属、申请反馈和上层接口约束。
+  - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
+    已补上最小控制权反馈，但当前还没有更完整的客户端归属、持有者语义和上
+    层接口约束。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，但命令字段
     语义目前仍保留 `servo_type`、`servo_id` 这类过渡定义。
 - 与长期规划的关系
@@ -224,7 +226,9 @@
   - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
-  - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`。
+  - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
+    teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果和控制动作计
+    数。
 - 当前主要输入
   - `/execution/teleop/control`
   - `/execution/teleop/command`
@@ -238,8 +242,9 @@
   - 不做轨迹生成。
   - 不做驱动协议实现。
 - 当前问题
-  - `motion_msgs/TeleopControl` 目前只是最小 claim / keepalive / release
-    接口，还没有更完整的控制权反馈、持有者语义和多入口约束。
+  - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
+    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈，但还没有更
+    完整的持有者语义和多入口约束。
   - 当前 `motion_msgs` 已经落地最小接口，但命令字段仍带有明显的
     servo 风格命名。
 - 与长期规划的关系

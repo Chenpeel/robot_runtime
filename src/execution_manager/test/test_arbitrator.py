@@ -3,6 +3,8 @@
 import os
 import sys
 
+import pytest
+
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../execution_manager'))
 
@@ -107,6 +109,14 @@ def test_keepalive_extends_claim_window_and_release_clears_lease():
     state_after_keepalive = arbitrator.tick(0.8)
     assert state_after_keepalive['teleop_active'] is True
     assert state_after_keepalive['active_source'] == 'teleop'
+    assert state_after_keepalive['last_teleop_control_action'] == 'keepalive'
+    assert state_after_keepalive['last_teleop_control_accepted'] is True
+    assert state_after_keepalive['last_teleop_control_reason'] == 'accepted'
+    assert state_after_keepalive['teleop_control_accepted_count'] == 2
+    assert state_after_keepalive['teleop_control_rejected_count'] == 1
+    assert state_after_keepalive['teleop_control_remaining_sec'] == pytest.approx(
+        0.1
+    )
 
     release_result = arbitrator.receive_teleop_control('release', 0.81)
     assert release_result.accepted is True
@@ -115,3 +125,25 @@ def test_keepalive_extends_claim_window_and_release_clears_lease():
     state = arbitrator.tick(0.82)
     assert state['teleop_active'] is False
     assert state['active_source'] is None
+    assert state['last_teleop_control_action'] == 'release'
+    assert state['last_teleop_control_accepted'] is True
+    assert state['last_teleop_control_reason'] == 'accepted'
+    assert state['teleop_control_accepted_count'] == 3
+    assert state['teleop_control_remaining_sec'] == 0.0
+
+
+def test_teleop_control_feedback_tracks_rejections():
+    arbitrator = CommandArbitrator(teleop_timeout_sec=0.5)
+
+    result = arbitrator.receive_teleop_control('unsupported', 0.0)
+
+    assert result.accepted is False
+    assert result.reason == 'unsupported_teleop_control_action'
+
+    state = arbitrator.snapshot(0.0)
+    assert state['last_teleop_control_action'] == 'unsupported'
+    assert state['last_teleop_control_accepted'] is False
+    assert state['last_teleop_control_reason'] == 'unsupported_teleop_control_action'
+    assert state['teleop_control_accepted_count'] == 0
+    assert state['teleop_control_rejected_count'] == 1
+    assert state['last_rejection_reason'] == 'unsupported_teleop_control_action'

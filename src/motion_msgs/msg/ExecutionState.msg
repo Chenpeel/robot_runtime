@@ -17,6 +17,14 @@ bool motion_active
 float32 teleop_timeout_sec
 float32 motion_timeout_sec
 
+# teleop 控制权反馈
+float32 teleop_control_remaining_sec
+string last_teleop_control_action
+bool last_teleop_control_accepted
+string last_teleop_control_reason
+uint32 teleop_control_accepted_count
+uint32 teleop_control_rejected_count
+
 # 计数器
 uint32 teleop_accepted_count
 uint32 motion_accepted_count

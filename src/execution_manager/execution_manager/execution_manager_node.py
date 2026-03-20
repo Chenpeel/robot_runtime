@@ -157,6 +157,24 @@ class ExecutionManagerNode(Node):
         state_msg.motion_active = bool(snapshot['motion_active'])
         state_msg.teleop_timeout_sec = float(snapshot['teleop_timeout_sec'])
         state_msg.motion_timeout_sec = float(snapshot['motion_timeout_sec'])
+        state_msg.teleop_control_remaining_sec = float(
+            snapshot['teleop_control_remaining_sec']
+        )
+        state_msg.last_teleop_control_action = str(
+            snapshot['last_teleop_control_action']
+        )
+        state_msg.last_teleop_control_accepted = bool(
+            snapshot['last_teleop_control_accepted']
+        )
+        state_msg.last_teleop_control_reason = str(
+            snapshot['last_teleop_control_reason']
+        )
+        state_msg.teleop_control_accepted_count = int(
+            snapshot['teleop_control_accepted_count']
+        )
+        state_msg.teleop_control_rejected_count = int(
+            snapshot['teleop_control_rejected_count']
+        )
         state_msg.teleop_accepted_count = int(snapshot['accepted_counts']['teleop'])
         state_msg.motion_accepted_count = int(snapshot['accepted_counts']['motion'])
         state_msg.teleop_rejected_count = int(snapshot['rejected_counts']['teleop'])
