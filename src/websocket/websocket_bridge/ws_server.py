@@ -158,6 +158,7 @@ class WebSocketBridgeServer:
         except Exception as e:
             print(f"[WebSocketServer] 客户端异常: {e}")
         finally:
+            await self._release_teleop_for_client(websocket)
             self.clients.discard(websocket)
             # 清理客户端信息
             if websocket in self.client_info:
@@ -428,6 +429,26 @@ class WebSocketBridgeServer:
             "requester_id": client_info["id"],
             "client_name": client_info["name"],
         }
+
+    async def _release_teleop_for_client(
+        self,
+        websocket: WebSocketServerProtocol,
+    ) -> None:
+        callback = getattr(self.handler, 'on_teleop_release', None)
+        if callback is None or websocket not in self.client_info:
+            return
+
+        try:
+            await self.handler._invoke_callback(
+                callback,
+                self._build_client_context(websocket),
+            )
+            self._debug(
+                "ws_teleop_release",
+                f"连接断开，已尝试释放 teleop: {self.client_info[websocket]['id']}",
+            )
+        except Exception as e:
+            self._debug("ws_teleop_release", f"断连释放 teleop 失败: {e}")
 
     async def _handle_private_to_robot(self, websocket: WebSocketServerProtocol, data: dict):
         """

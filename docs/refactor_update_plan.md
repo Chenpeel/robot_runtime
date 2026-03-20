@@ -138,6 +138,8 @@
   最近一次控制动作结果与控制动作计数。
 - WebSocket teleop 链路已开始透传连接级 `requester_id`，执行层也已开始维
   护最小 `teleop_holder_id` 语义，用于约束 claim / keepalive / release。
+- `ws_server` 已开始在连接断开时按同一 `requester_id` 尝试自动释放 teleop
+  holder，减少旧租约拖到超时窗口后才清空的问题。
 - `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
   setpoint 语义，再继续仲裁并转发到驱动层。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，

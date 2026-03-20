@@ -85,6 +85,7 @@
   - 提供 WebSocket 服务端接入。
   - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
   - 将 WebSocket 连接级 session id 作为 teleop requester 向执行层下发。
+  - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与

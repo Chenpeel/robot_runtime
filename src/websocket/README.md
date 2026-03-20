@@ -94,6 +94,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - 控制权生效后，heartbeat 会被桥接为 `keepalive`，用于续租 teleop 控制权。
 - 客户端结束遥控时发送 `teleop_release`，由 `bridge_node` 发布
   `motion_msgs/TeleopControl(action=\"release\")`。
+- 当 WebSocket 连接断开时，`ws_server` 也会按同一 session id 尝试自动释放
+  当前 teleop holder。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
 - 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：
