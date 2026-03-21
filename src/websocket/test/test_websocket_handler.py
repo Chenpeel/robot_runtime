@@ -200,18 +200,26 @@ class TestWebSocketHandler:
     async def test_handle_status_query_message(self):
         """测试处理状态查询消息"""
         raw_message = json.dumps({"type": "status_query"})
-        response = await self.handler.handle_message(raw_message)
+        response = await self.handler.handle_message(
+            raw_message,
+            context={"requester_id": "client-a"},
+        )
 
         assert response is not None
         response_data = json.loads(response)
         assert "character_name" in response_data
         assert "current_status" in response_data
         assert response_data["result_code"] == 200
+        assert response_data["requester_id"] == "client-a"
 
     @pytest.mark.asyncio
     async def test_handle_status_query_with_callback(self):
         """测试状态查询消息调用回调函数"""
-        async def status_callback():
+        callback_context = None
+
+        async def status_callback(context):
+            nonlocal callback_context
+            callback_context = context
             return {
                 "character_name": "custom_robot",
                 "current_status": {"action": "walking"},
@@ -221,11 +229,19 @@ class TestWebSocketHandler:
         self.handler.register_status_query_handler(status_callback)
 
         raw_message = json.dumps({"type": "status_query"})
-        response = await self.handler.handle_message(raw_message)
+        response = await self.handler.handle_message(
+            raw_message,
+            context={"requester_id": "client-a"},
+        )
 
         response_data = json.loads(response)
+        assert callback_context["requester_id"] == "client-a"
         assert response_data["character_name"] == "custom_robot"
         assert response_data["current_status"]["action"] == "walking"
+        assert response_data["requester_id"] == "client-a"
+        assert response_data["known_holder_matches"] is False
+        assert response_data["known_teleop_active"] is False
+        assert response_data["control_confirmed"] is False
 
     @pytest.mark.asyncio
     async def test_status_query_includes_execution_state_snapshot(self):
@@ -246,7 +262,10 @@ class TestWebSocketHandler:
         })
 
         raw_message = json.dumps({"type": "status_query"})
-        response = await self.handler.handle_message(raw_message)
+        response = await self.handler.handle_message(
+            raw_message,
+            context={"requester_id": "client-a"},
+        )
 
         response_data = json.loads(response)
         assert response_data["execution_state"]["mode"] == "teleop_active"
@@ -258,6 +277,11 @@ class TestWebSocketHandler:
         assert response_data["current_status"]["movement_active"] is True
         assert response_data["current_status"]["listening"] is True
         assert response_data["current_status"]["action"] == "teleop_active"
+        assert response_data["requester_id"] == "client-a"
+        assert response_data["known_holder_matches"] is True
+        assert response_data["known_teleop_active"] is True
+        assert response_data["control_confirmed"] is True
+        assert response_data["confirmation_source"] == "execution_state"
 
     @pytest.mark.asyncio
     async def test_handle_register_message(self):

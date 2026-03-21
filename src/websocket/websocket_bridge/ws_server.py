@@ -359,6 +359,8 @@ class WebSocketBridgeServer:
         response = {
             "type": "connected",            # 前端期待的类型！
             "clientName": client_name,
+            "clientId": client_id,
+            "requester_id": client_id,
             "onlineClients": online_users,  # 在线用户列表
             "device_id": self.device_id,
             "timestamp": int(time.time())

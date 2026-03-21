@@ -49,7 +49,7 @@ class WebSocketHandler:
         self.on_heartbeat = None  # Callable[[dict], None]
         self.on_teleop_claim = None  # Callable[[dict], None]
         self.on_teleop_release = None  # Callable[[dict], None]
-        self.on_status_query = None  # Callable[[], None]
+        self.on_status_query = None  # Callable[[dict], None]
         self.on_bvh_play = None  # Callable[[dict], None]
         
         # 状态管理
@@ -160,7 +160,7 @@ class WebSocketHandler:
         elif msg_type == MessageType.BVH_PLAY:
             return await self._handle_bvh_play(data)
         elif msg_type == MessageType.STATUS_QUERY:
-            return await self._handle_status_query(data)
+            return await self._handle_status_query(data, context)
         elif msg_type == MessageType.REGISTER:
             return await self._handle_register(data)
         elif msg_type == MessageType.BROADCAST:
@@ -327,17 +327,25 @@ class WebSocketHandler:
             device_id=self.device_id
         )
     
-    async def _handle_status_query(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_status_query(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理状态查询"""
+        del data
         if self.on_status_query:
             try:
-                status = await self.on_status_query()
+                status = await self._invoke_callback(self.on_status_query, context)
                 if status:
-                    return json.dumps(status, ensure_ascii=False)
+                    return json.dumps(
+                        self._augment_status_snapshot(status, context),
+                        ensure_ascii=False,
+                    )
             except Exception as e:
                 print(f"[WebSocketHandler] 状态查询失败: {e}")
-        
-        return self._create_status_response()
+
+        return self._create_status_response(context)
     
     async def _handle_register(self, data: Dict[str, Any]) -> Optional[str]:
         """处理设备注册"""
@@ -396,12 +404,18 @@ class WebSocketHandler:
         
         return None
     
-    def _create_status_response(self) -> str:
+    def _create_status_response(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """创建状态响应 - 使用标准格式"""
-        response = self.get_status_snapshot()
+        response = self.get_status_snapshot(context)
         return json.dumps(response, ensure_ascii=False)
 
-    def get_status_snapshot(self) -> Dict[str, Any]:
+    def get_status_snapshot(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """获取当前状态快照。"""
         response = {
             "character_name": "robot",
@@ -413,7 +427,7 @@ class WebSocketHandler:
             "result_code": 200,
             "timestamp": int(time.time())
         }
-        return response
+        return self._augment_status_snapshot(response, context)
     
     def _get_supported_commands(self) -> Dict[str, Any]:
         """获取支持的命令列表"""
@@ -455,6 +469,28 @@ class WebSocketHandler:
             return
         self.execution_state = dict(execution_state)
 
+    def get_requester_teleop_status(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """根据当前 execution_state 生成连接级 teleop 控制权视图。"""
+        requester_id = self._extract_requester_id(context)
+        holder_id = str(self.execution_state.get("teleop_holder_id") or "")
+        teleop_active = bool(self.execution_state.get("teleop_active"))
+        holder_matches = bool(requester_id) and holder_id == requester_id
+        control_confirmed = bool(
+            holder_matches
+            and teleop_active
+            and self.execution_state.get("active_source") == "teleop"
+        )
+        return {
+            "requester_id": requester_id,
+            "known_holder_matches": holder_matches,
+            "known_teleop_active": teleop_active,
+            "control_confirmed": control_confirmed,
+            "confirmation_source": "execution_state",
+        }
+
     async def _invoke_callback(
         self,
         callback: Callable,
@@ -469,9 +505,7 @@ class WebSocketHandler:
     def _default_teleop_ack_payload(
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        requester_id = ''
-        if isinstance(context, dict):
-            requester_id = str(context.get('requester_id') or '').strip()
+        requester_id = WebSocketHandler._extract_requester_id(context)
 
         return {
             'status': 'requested',
@@ -480,6 +514,23 @@ class WebSocketHandler:
             'known_holder_matches': False,
             'known_teleop_active': False,
         }
+
+    def _augment_status_snapshot(
+        self,
+        snapshot: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        response = dict(snapshot)
+        response.update(self.get_requester_teleop_status(context))
+        return response
+
+    @staticmethod
+    def _extract_requester_id(
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        if not isinstance(context, dict):
+            return ""
+        return str(context.get("requester_id") or "").strip()
 
     def _build_current_status(self) -> Dict[str, Any]:
         """根据 execution_state 构造当前状态摘要。"""

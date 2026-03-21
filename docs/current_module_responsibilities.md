@@ -83,11 +83,14 @@
   - ROS 包名：`websocket_bridge`
 - 当前主要职责
   - 提供 WebSocket 服务端接入。
+  - 在客户端 `register` 时显式回传当前连接的 `requester_id` / `clientId`。
   - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
   - 将 WebSocket 连接级 session id 作为 teleop requester 向执行层下发。
   - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 将 `teleop_claim_ack` / `teleop_release_ack` 收紧为“请求已转发”语义，
     并附带当前已知执行状态快照，不再把 ack 当成控制权已经生效。
+  - 在 `status_query` 回包中提供连接级 requester 视角的 teleop 控制权确认
+    字段，便于客户端将当前连接与执行层 holder 状态对齐。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
@@ -121,6 +124,8 @@
     token、抢占策略和上层接口约束。
   - 当前 ack 语义虽然已经和执行层状态分离，但上层客户端仍需要继续从
     `execution_state` 角度完成更正式的控制权确认与超时处理。
+  - 当前连接级确认语义主要体现在 register / status_query 这类单播回包里，
+    广播链路本身仍没有 requester 视角的个性化确认字段。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
     双写 `duration_ms` 与 `value_encoding`，但外部消息仍保留
     `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。

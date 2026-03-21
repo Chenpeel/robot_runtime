@@ -34,7 +34,10 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         })
 
         response = asyncio.run(
-            handler.handle_message(json.dumps({"type": "status_query"}))
+            handler.handle_message(
+                json.dumps({"type": "status_query"}),
+                context={"requester_id": "client-a"},
+            )
         )
 
         response_data = json.loads(response)
@@ -62,6 +65,14 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         self.assertEqual(
             response_data["current_status"]["action"],
             "teleop_active",
+        )
+        self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_teleop_active"])
+        self.assertTrue(response_data["control_confirmed"])
+        self.assertEqual(
+            response_data["confirmation_source"],
+            "execution_state",
         )
 
 

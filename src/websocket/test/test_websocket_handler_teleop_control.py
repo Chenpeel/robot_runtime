@@ -99,6 +99,33 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         self.assertIn("teleop_claim", commands)
         self.assertIn("teleop_release", commands)
 
+    def test_status_query_includes_requester_scoped_teleop_status(self):
+        self.handler.update_execution_state({
+            "mode": "teleop_active",
+            "active_source": "teleop",
+            "teleop_holder_id": "client-a",
+            "teleop_active": True,
+            "motion_active": False,
+            "estop_active": False,
+        })
+
+        response = asyncio.run(
+            self.handler.handle_message(
+                json.dumps({"type": "status_query"}),
+                context={"requester_id": "client-a"},
+            )
+        )
+
+        response_data = json.loads(response)
+        self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_teleop_active"])
+        self.assertTrue(response_data["control_confirmed"])
+        self.assertEqual(
+            response_data["confirmation_source"],
+            "execution_state",
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
