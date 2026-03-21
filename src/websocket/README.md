@@ -96,6 +96,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   `motion_msgs/TeleopControl(action=\"release\")`。
 - 当 WebSocket 连接断开时，`ws_server` 也会按同一 session id 尝试自动释放
   当前 teleop holder。
+- `teleop_claim_ack` / `teleop_release_ack` 当前只表示“请求已转发到执行层”，
+  会附带当前已知的 `execution_state` 快照；控制权是否真正生效，仍以随后到达
+  的 `execution_state` 广播为准。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
 - 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：

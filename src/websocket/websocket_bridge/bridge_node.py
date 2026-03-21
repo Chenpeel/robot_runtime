@@ -339,6 +339,7 @@ class WebSocketROS2Bridge(Node):
             f"claim requester_id={requester_id}",
             self.debug
         )
+        return self._build_teleop_ack_payload(requester_id)
 
     async def handle_teleop_release(self, context: dict | None = None):
         """处理 teleop 控制权释放。"""
@@ -349,6 +350,7 @@ class WebSocketROS2Bridge(Node):
             f"release requester_id={requester_id}",
             self.debug
         )
+        return self._build_teleop_ack_payload(requester_id)
 
     async def handle_status_query(self) -> dict:
         """
@@ -575,6 +577,19 @@ class WebSocketROS2Bridge(Node):
         msg.requester_id = str(requester_id or '').strip()
         msg.stamp = self.get_clock().now().to_msg()
         self.teleop_control_pub.publish(msg)
+
+    def _build_teleop_ack_payload(self, requester_id: str) -> dict:
+        execution_state = dict(self.latest_execution_state)
+        holder_id = str(execution_state.get('teleop_holder_id') or '')
+        teleop_active = bool(execution_state.get('teleop_active'))
+        holder_matches = bool(requester_id) and holder_id == requester_id
+        return {
+            'status': 'requested',
+            'requester_id': requester_id,
+            'execution_state': execution_state,
+            'known_holder_matches': holder_matches,
+            'known_teleop_active': teleop_active,
+        }
 
     @staticmethod
     def _extract_requester_id(context: dict | None) -> str:

@@ -50,6 +50,14 @@ class TestWebSocketHandler:
             nonlocal callback_called, received_context
             callback_called = True
             received_context = context
+            return {
+                "execution_state": {
+                    "teleop_holder_id": "client-a",
+                    "teleop_active": True,
+                },
+                "known_holder_matches": True,
+                "known_teleop_active": True,
+            }
 
         self.handler.register_teleop_claim_handler(claim_callback)
 
@@ -64,7 +72,11 @@ class TestWebSocketHandler:
         assert response is not None
         response_data = json.loads(response)
         assert response_data["type"] == "teleop_claim_ack"
-        assert response_data["status"] == "accepted"
+        assert response_data["status"] == "requested"
+        assert response_data["requester_id"] == "client-a"
+        assert response_data["known_holder_matches"] is True
+        assert response_data["known_teleop_active"] is True
+        assert response_data["execution_state"]["teleop_holder_id"] == "client-a"
 
     @pytest.mark.asyncio
     async def test_handle_teleop_release_message(self):
@@ -76,6 +88,14 @@ class TestWebSocketHandler:
             nonlocal callback_called, received_context
             callback_called = True
             received_context = context
+            return {
+                "execution_state": {
+                    "teleop_holder_id": "client-a",
+                    "teleop_active": True,
+                },
+                "known_holder_matches": True,
+                "known_teleop_active": True,
+            }
 
         self.handler.register_teleop_release_handler(release_callback)
 
@@ -90,7 +110,10 @@ class TestWebSocketHandler:
         assert response is not None
         response_data = json.loads(response)
         assert response_data["type"] == "teleop_release_ack"
-        assert response_data["status"] == "accepted"
+        assert response_data["status"] == "requested"
+        assert response_data["requester_id"] == "client-a"
+        assert response_data["known_holder_matches"] is True
+        assert response_data["known_teleop_active"] is True
 
     @pytest.mark.asyncio
     async def test_handle_servo_control_message(self):

@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文是截至 2026-03-20 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-03-21 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -140,6 +140,9 @@
   护最小 `teleop_holder_id` 语义，用于约束 claim / keepalive / release。
 - `ws_server` 已开始在连接断开时按同一 `requester_id` 尝试自动释放 teleop
   holder，减少旧租约拖到超时窗口后才清空的问题。
+- `teleop_claim_ack` / `teleop_release_ack` 已开始只表达“请求已转发到执行
+  层”，并附带当前已知 `execution_state` 快照，不再把 ack 本身当成控制权
+  已生效的最终确认。
 - `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
   setpoint 语义，再继续仲裁并转发到驱动层。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
@@ -158,7 +161,8 @@
    段的优先级，逐步弱化旧字段的歧义。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
-   但仍缺更正式的 lease token、抢占策略和跨入口约束。
+   但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
+   侧控制权确认流程。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

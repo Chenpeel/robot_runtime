@@ -75,3 +75,17 @@ class TestBridgeNodeTopics(unittest.TestCase):
 
         self.assertIn("msg.value_encoding", source)
         self.assertIn("msg.duration_ms", source)
+
+    def test_teleop_ack_payload_includes_execution_snapshot(self):
+        """teleop ack 应携带当前 execution_state 快照语义"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("def _build_teleop_ack_payload", source)
+        self.assertIn("'execution_state': execution_state", source)
+        self.assertIn("'known_holder_matches': holder_matches", source)
+        self.assertIn("'known_teleop_active': teleop_active", source)

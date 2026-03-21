@@ -202,10 +202,16 @@ class WebSocketHandler:
     ) -> Optional[str]:
         """处理 teleop 控制权申请。"""
         del data
+        ack_payload = self._default_teleop_ack_payload(context)
 
         if self.on_teleop_claim:
             try:
-                await self._invoke_callback(self.on_teleop_claim, context)
+                callback_payload = await self._invoke_callback(
+                    self.on_teleop_claim,
+                    context,
+                )
+                if isinstance(callback_payload, dict):
+                    ack_payload.update(callback_payload)
             except Exception as e:
                 return ErrorResponse.create(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
@@ -216,7 +222,7 @@ class WebSocketHandler:
 
         return SuccessResponse.create(
             response_type="teleop_claim_ack",
-            data={"status": "accepted"},
+            data=ack_payload,
             device_id=self.device_id
         )
 
@@ -227,10 +233,16 @@ class WebSocketHandler:
     ) -> Optional[str]:
         """处理 teleop 控制权释放。"""
         del data
+        ack_payload = self._default_teleop_ack_payload(context)
 
         if self.on_teleop_release:
             try:
-                await self._invoke_callback(self.on_teleop_release, context)
+                callback_payload = await self._invoke_callback(
+                    self.on_teleop_release,
+                    context,
+                )
+                if isinstance(callback_payload, dict):
+                    ack_payload.update(callback_payload)
             except Exception as e:
                 return ErrorResponse.create(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
@@ -241,7 +253,7 @@ class WebSocketHandler:
 
         return SuccessResponse.create(
             response_type="teleop_release_ack",
-            data={"status": "accepted"},
+            data=ack_payload,
             device_id=self.device_id
         )
     
@@ -452,6 +464,22 @@ class WebSocketHandler:
         if len(inspect.signature(callback).parameters) == 0:
             return await callback()
         return await callback(payload)
+
+    @staticmethod
+    def _default_teleop_ack_payload(
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        requester_id = ''
+        if isinstance(context, dict):
+            requester_id = str(context.get('requester_id') or '').strip()
+
+        return {
+            'status': 'requested',
+            'requester_id': requester_id,
+            'execution_state': {},
+            'known_holder_matches': False,
+            'known_teleop_active': False,
+        }
 
     def _build_current_status(self) -> Dict[str, Any]:
         """根据 execution_state 构造当前状态摘要。"""

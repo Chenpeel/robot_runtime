@@ -27,6 +27,14 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
             nonlocal callback_called, received_context
             callback_called = True
             received_context = context
+            return {
+                "execution_state": {
+                    "teleop_holder_id": "client-a",
+                    "teleop_active": True,
+                },
+                "known_holder_matches": True,
+                "known_teleop_active": True,
+            }
 
         self.handler.register_teleop_claim_handler(claim_callback)
 
@@ -41,7 +49,14 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         self.assertTrue(callback_called)
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(response_data["type"], "teleop_claim_ack")
-        self.assertEqual(response_data["status"], "accepted")
+        self.assertEqual(response_data["status"], "requested")
+        self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_teleop_active"])
+        self.assertEqual(
+            response_data["execution_state"]["teleop_holder_id"],
+            "client-a",
+        )
 
     def test_handle_teleop_release_message(self):
         callback_called = False
@@ -51,6 +66,14 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
             nonlocal callback_called, received_context
             callback_called = True
             received_context = context
+            return {
+                "execution_state": {
+                    "teleop_holder_id": "client-a",
+                    "teleop_active": True,
+                },
+                "known_holder_matches": True,
+                "known_teleop_active": True,
+            }
 
         self.handler.register_teleop_release_handler(release_callback)
 
@@ -65,7 +88,10 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         self.assertTrue(callback_called)
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(response_data["type"], "teleop_release_ack")
-        self.assertEqual(response_data["status"], "accepted")
+        self.assertEqual(response_data["status"], "requested")
+        self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_teleop_active"])
 
     def test_supported_commands_include_teleop_control(self):
         commands = self.handler._get_supported_commands()
