@@ -278,15 +278,21 @@ class WebSocketBridgeServer:
             return
 
         try:
-            message = json.dumps({
-                "type": "status_update",
-                "device_id": self.device_id,
-                "data": status_dict,
-                "timestamp": int(time.time())
-            }, ensure_ascii=False)
-
             tasks = [
-                client.send(message)
+                client.send(
+                    json.dumps(
+                        {
+                            "type": "status_update",
+                            "device_id": self.device_id,
+                            "data": self._build_broadcast_payload(
+                                client,
+                                status_dict,
+                            ),
+                            "timestamp": int(time.time()),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
                 for client in self.clients
             ]
 
@@ -338,6 +344,22 @@ class WebSocketBridgeServer:
     def get_status_snapshot(self) -> dict:
         """获取当前状态快照。"""
         return self.handler.get_status_snapshot()
+
+    def _build_broadcast_payload(
+        self,
+        websocket: WebSocketServerProtocol,
+        status_dict: dict,
+    ) -> dict:
+        payload = dict(status_dict)
+        if payload.get("type") != "execution_state":
+            return payload
+
+        payload.update(
+            self.handler.get_requester_teleop_status(
+                self._build_client_context(websocket),
+            )
+        )
+        return payload
 
     async def _handle_register(self, websocket: WebSocketServerProtocol, data: dict):
         """

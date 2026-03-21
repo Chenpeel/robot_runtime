@@ -64,6 +64,42 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(response_data["requester_id"])
 
+    async def test_execution_state_broadcast_is_requester_scoped(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket_a = _FakeWebSocket()
+        websocket_b = _FakeWebSocket()
+        server.clients.update({websocket_a, websocket_b})
+        server.client_info[websocket_a] = {"id": "client-a", "name": "a"}
+        server.client_info[websocket_b] = {"id": "client-b", "name": "b"}
+        server.update_execution_state({
+            "mode": "teleop_active",
+            "active_source": "teleop",
+            "teleop_holder_id": "client-a",
+            "teleop_active": True,
+            "motion_active": False,
+            "estop_active": False,
+        })
+
+        await server.broadcast_status({
+            "type": "execution_state",
+            "execution_state": {
+                "teleop_holder_id": "client-a",
+                "teleop_active": True,
+            },
+        })
+
+        data_a = websocket_a.sent_messages[0]["data"]
+        data_b = websocket_b.sent_messages[0]["data"]
+
+        self.assertEqual(data_a["requester_id"], "client-a")
+        self.assertTrue(data_a["known_holder_matches"])
+        self.assertTrue(data_a["known_teleop_active"])
+        self.assertTrue(data_a["control_confirmed"])
+        self.assertEqual(data_b["requester_id"], "client-b")
+        self.assertFalse(data_b["known_holder_matches"])
+        self.assertTrue(data_b["known_teleop_active"])
+        self.assertFalse(data_b["control_confirmed"])
+
 
 if __name__ == '__main__':
     unittest.main()

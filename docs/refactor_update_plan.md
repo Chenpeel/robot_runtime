@@ -148,6 +148,9 @@
 - `status_query` 已开始补充连接级 requester 视角的 teleop 控制确认字段，
   例如 `known_holder_matches`、`known_teleop_active` 与
   `control_confirmed`，用于把当前连接与执行层 holder 语义对齐。
+- `execution_state` 对应的 WebSocket `status_update` 广播也已开始按连接补充同
+  一组 requester 视角字段，减少客户端必须主动轮询 `status_query` 才能确认
+  控制权的耦合。
 - `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
   setpoint 语义，再继续仲裁并转发到驱动层。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
@@ -167,8 +170,9 @@
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
-   侧控制权确认流程。当前虽已在 register / status_query 这类单播回包中显式
-   暴露 requester 视角，但广播链路仍缺更正式的 requester 级确认约束。
+   侧控制权确认流程。当前虽已在 register / status_query / execution_state
+   广播中显式暴露 requester 视角，但仍缺更正式的 lease token、抢占策略和跨
+   入口统一约束。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

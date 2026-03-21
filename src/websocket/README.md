@@ -101,7 +101,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - `teleop_claim_ack` / `teleop_release_ack` 当前只表示“请求已转发到执行层”，
   会附带当前已知的 `execution_state` 快照；控制权是否真正生效，仍以随后到达
   的 `execution_state` 广播为准。
-- `status_query` 响应会补充连接级 `requester_id`、`known_holder_matches`、
+- `status_query` 响应，以及 `status_update.data.type == "execution_state"` 的
+  广播 payload，都会补充连接级 `requester_id`、`known_holder_matches`、
   `known_teleop_active`、`control_confirmed`，用于把当前连接和执行层 holder
   语义对齐。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
@@ -125,6 +126,14 @@ teleop 控制权的最小反馈信息，例如：
 - `last_teleop_control_action`
 - `last_teleop_control_accepted`
 - `last_teleop_control_reason`
+
+当该状态通过 WebSocket `status_update` 广播给客户端时，如果
+`data.type == "execution_state"`，还会额外补当前连接视角的：
+
+- `requester_id`
+- `known_holder_matches`
+- `known_teleop_active`
+- `control_confirmed`
 
 ### 5. Isaac-ROS 仿真桥接
 
