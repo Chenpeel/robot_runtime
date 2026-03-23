@@ -48,8 +48,15 @@ def test_teleop_preempts_motion_until_timeout():
     )
     assert claim_result.accepted is True
     assert claim_result.mode == 'teleop_active'
+    lease_id = arbitrator.snapshot(0.1)['teleop_lease_id']
 
-    teleop_result = arbitrator.receive_command('teleop', _command(), 0.11)
+    teleop_result = arbitrator.receive_command(
+        'teleop',
+        _command(),
+        0.11,
+        requester_id='client-a',
+        lease_id=lease_id,
+    )
     assert teleop_result.accepted is True
     assert teleop_result.mode == 'teleop_active'
 
@@ -140,7 +147,7 @@ def test_teleop_command_rejects_other_holder_or_wrong_lease_when_provided():
     assert wrong_lease.reason == 'teleop_control_lease_mismatch'
 
 
-def test_teleop_command_allows_transition_when_identity_fields_are_missing():
+def test_teleop_command_requires_requester_and_lease_identity():
     arbitrator = CommandArbitrator(
         lease_id_factory=_lease_id_factory(),
     )
@@ -150,12 +157,22 @@ def test_teleop_command_allows_transition_when_identity_fields_are_missing():
         requester_id='client-a',
     )
 
-    result = arbitrator.receive_command(
+    missing_requester = arbitrator.receive_command(
         'teleop',
         _command(),
         0.1,
     )
-    assert result.accepted is True
+    assert missing_requester.accepted is False
+    assert missing_requester.reason == 'teleop_requester_id_required'
+
+    missing_lease = arbitrator.receive_command(
+        'teleop',
+        _command(),
+        0.2,
+        requester_id='client-a',
+    )
+    assert missing_lease.accepted is False
+    assert missing_lease.reason == 'teleop_control_lease_required'
 
 
 def test_keepalive_extends_claim_window_and_release_clears_lease():

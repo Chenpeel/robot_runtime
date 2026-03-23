@@ -645,9 +645,6 @@ class WebSocketROS2Bridge(Node):
         requester_id: str,
         lease_id: str,
     ) -> None:
-        if not requester_id and not lease_id:
-            return
-
         execution_state = dict(self.latest_execution_state)
         holder_id = str(execution_state.get('teleop_holder_id') or '')
         current_lease_id = str(execution_state.get('teleop_lease_id') or '')
@@ -657,9 +654,13 @@ class WebSocketROS2Bridge(Node):
         rejection_reason = ''
         if not teleop_active or active_source != 'teleop':
             rejection_reason = 'teleop_control_not_granted'
-        elif requester_id and holder_id != requester_id:
+        elif not requester_id:
+            rejection_reason = 'teleop_requester_id_required'
+        elif holder_id != requester_id:
             rejection_reason = 'teleop_control_not_holder'
-        elif lease_id and current_lease_id != lease_id:
+        elif current_lease_id and not lease_id:
+            rejection_reason = 'teleop_control_lease_required'
+        elif current_lease_id and current_lease_id != lease_id:
             rejection_reason = 'teleop_control_lease_mismatch'
 
         if not rejection_reason:

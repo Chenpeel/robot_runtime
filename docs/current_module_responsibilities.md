@@ -89,9 +89,11 @@
   - 在 teleop 控制权确认后缓存当前连接对应的 `teleop_lease_id`，并在
     keepalive / release 时优先继续透传。
   - 在 `servo_control` 等 teleop 命令链路中，开始把当前连接的
-    `requester_id` / `lease_id` 一并透传到 `MotionCommand`。
+    `requester_id` / `lease_id` 一并透传到 `MotionCommand`，作为当前 teleop
+    执行命令的显式身份字段。
   - 在将 teleop 命令下发到执行层前，先基于最新 `execution_state` 做一层
-    holder / lease 预校验；若当前连接尚未确认控制权，会直接返回错误回包。
+    holder / lease 预校验；若当前连接缺少 requester / lease 或尚未确认控制
+    权，会直接返回错误回包。
   - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 将 `teleop_claim_ack` / `teleop_release_ack` 收紧为“请求已转发”语义，
     并附带当前已知执行状态快照，不再把 ack 当成控制权已经生效。
@@ -133,8 +135,9 @@
     `execution_state` 角度完成更正式的控制权确认与超时处理。
   - 当前 requester 视角的确认语义虽然已覆盖 register / status_query /
     `execution_state` 广播，但它仍属于 WebSocket 出站层派生逻辑，还不是更
-    正式的跨入口统一约束；同时 keepalive / release 虽已优先透传 lease，
-    但执行层对空 lease 仍保留兼容回退。
+    正式的跨入口统一约束。当前 teleop `MotionCommand` 虽已收紧为必须带
+    requester，并在已有活跃 lease 时必须带 lease，但 keepalive / release
+    对空 lease 仍保留过渡兼容。
   - 当前 teleop 命令预校验依赖 `websocket_bridge` 持有的最新
     `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
@@ -252,9 +255,9 @@
     只能由当前 holder 发起。
   - 为当前活跃控制权生成第一版 `teleop_lease_id`，并在 keepalive /
     release 时优先按 lease 校验，空 lease 仍兼容回退到 holder 语义。
-  - 当 teleop `MotionCommand` 携带 `requester_id` / `lease_id` 时，优先按
-    holder / lease 校验命令归属，减少“只要 teleop_active 就可发命令”的歧
-    义。
+  - teleop `MotionCommand` 当前必须携带 `requester_id`；当当前
+    `teleop_lease_id` 非空时也必须携带匹配的 `lease_id`，并按 holder /
+    lease 校验命令归属，减少“只要 teleop_active 就可发命令”的歧义。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
   - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
@@ -280,8 +283,10 @@
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
     release 接口。虽然 `ExecutionState` 已补上最小控制权反馈、holder 标
     识与第一版 lease 标识，但还没有更正式的持有者抢占规则和多入口约束。
-  - teleop `MotionCommand` 虽已开始增量补 requester / lease 字段，但当前
-    仍对空字段保留兼容回退，尚未形成真正强制的跨入口统一约束。
+  - teleop `MotionCommand` 虽已收紧为必须带 requester / lease（在已有活
+    跃 lease 时），但这套约束仍主要落在当前 teleop 入口与执行层组合上，尚
+    未演进成更正式的跨入口统一准入协议；另外 keepalive / release 对空
+    lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，且 producer 也开始双写更明确的时长与编
     码字段，但外部命令字段仍带有明显的 servo 风格命名。

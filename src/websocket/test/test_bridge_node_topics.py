@@ -107,5 +107,7 @@ class TestBridgeNodeTopics(unittest.TestCase):
 
         self.assertIn("self._ensure_teleop_command_allowed(", source)
         self.assertIn("TeleopControlRejectedException", source)
+        self.assertIn("'teleop_requester_id_required'", source)
         self.assertIn("'teleop_control_not_holder'", source)
+        self.assertIn("'teleop_control_lease_required'", source)
         self.assertIn("'teleop_control_lease_mismatch'", source)

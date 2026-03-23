@@ -215,6 +215,42 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
             "teleop_control_not_holder",
         )
 
+    async def test_direct_servo_command_surfaces_lease_required_reason(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket = _FakeWebSocket()
+        server.client_info[websocket] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": '',
+        }
+
+        async def servo_callback(command, context):
+            del command, context
+            raise TeleopControlRejectedException(
+                message='teleop command rejected: teleop_control_lease_required',
+                details={'reason': 'teleop_control_lease_required'},
+            )
+
+        server.handler.register_servo_command_handler(servo_callback)
+
+        error_response = await server._handle_servo_control_direct(
+            {
+                "servo_type": "bus",
+                "servo_id": 1,
+                "position": 1500,
+                "speed": 100,
+            },
+            context=server._build_client_context(websocket),
+        )
+
+        response_data = json.loads(error_response)
+        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["error_name"], "TELEOP_CONTROL_REJECTED")
+        self.assertEqual(
+            response_data["details"]["reason"],
+            "teleop_control_lease_required",
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -81,14 +81,16 @@ class CommandArbitrator:
         if source == 'teleop' and not self._is_teleop_control_active(now_sec):
             return self._reject(source, 'teleop_control_not_granted')
 
-        if source == 'teleop' and normalized_requester_id and not self._is_holder(
-            normalized_requester_id
-        ):
+        if source == 'teleop' and not normalized_requester_id:
+            return self._reject(source, 'teleop_requester_id_required')
+
+        if source == 'teleop' and not self._is_holder(normalized_requester_id):
             return self._reject(source, 'teleop_control_not_holder')
 
-        if source == 'teleop' and normalized_lease_id and not self._is_lease_holder(
-            normalized_lease_id
-        ):
+        if source == 'teleop' and self.teleop_lease_id and not normalized_lease_id:
+            return self._reject(source, 'teleop_control_lease_required')
+
+        if source == 'teleop' and not self._is_lease_holder(normalized_lease_id):
             return self._reject(source, 'teleop_control_lease_mismatch')
 
         if source == 'motion' and self._is_source_active('teleop', now_sec):

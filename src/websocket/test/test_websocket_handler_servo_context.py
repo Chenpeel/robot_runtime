@@ -82,6 +82,36 @@ class TestWebSocketHandlerServoContext(unittest.TestCase):
             "teleop_control_not_granted",
         )
 
+    def test_servo_control_surfaces_identity_required_reason(self):
+        async def servo_callback(command, context):
+            del command, context
+            raise TeleopControlRejectedException(
+                message='teleop command rejected: teleop_requester_id_required',
+                details={'reason': 'teleop_requester_id_required'},
+            )
+
+        self.handler.register_servo_command_handler(servo_callback)
+
+        response = asyncio.run(
+            self.handler.handle_message(
+                json.dumps({
+                    "type": "servo_control",
+                    "servo_type": "bus",
+                    "servo_id": 1,
+                    "position": 10,
+                    "speed": 120,
+                }),
+            )
+        )
+
+        response_data = json.loads(response)
+        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["error_name"], "TELEOP_CONTROL_REJECTED")
+        self.assertEqual(
+            response_data["details"]["reason"],
+            "teleop_requester_id_required",
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
