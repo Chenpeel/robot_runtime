@@ -229,7 +229,11 @@ class WebSocketROS2Bridge(Node):
         pulse = max(500.0, min(2500.0, float(pulse)))
         return (pulse - 500.0) * (180.0 / 2000.0) - 90.0
 
-    async def handle_servo_command(self, servo_cmd: dict):
+    async def handle_servo_command(
+        self,
+        servo_cmd: dict,
+        context: dict | None = None,
+    ):
         """
         处理来自WebSocket的舵机控制命令
 
@@ -264,6 +268,8 @@ class WebSocketROS2Bridge(Node):
                 position = self._coerce_uint16(position_val, 0)
 
             speed = self._coerce_uint16(servo_cmd.get("speed", 100), 100)
+            requester_id = self._extract_requester_id(context)
+            lease_id = self._extract_lease_id(context)
 
             # 转换为 MotionCommand 消息
             msg = MotionCommand()
@@ -273,6 +279,8 @@ class WebSocketROS2Bridge(Node):
             msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
             msg.duration_ms = speed
             msg.speed = speed  # 默认速度100ms
+            msg.requester_id = requester_id
+            msg.lease_id = lease_id
             msg.stamp = self.get_clock().now().to_msg()
 
             # 发布到ROS 2话题
@@ -282,7 +290,8 @@ class WebSocketROS2Bridge(Node):
                 "servo_command",
                 (
                     f"{msg.servo_type} ID={msg.servo_id} "
-                    f"POS={msg.position} SPEED={msg.speed}"
+                    f"POS={msg.position} SPEED={msg.speed} "
+                    f"requester_id={requester_id} lease_id={lease_id}"
                 ),
                 self.debug
             )
@@ -300,6 +309,8 @@ class WebSocketROS2Bridge(Node):
         msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
         msg.duration_ms = int(speed)
         msg.speed = int(speed)
+        msg.requester_id = ''
+        msg.lease_id = ''
         msg.stamp = self.get_clock().now().to_msg()
         self.servo_command_pub.publish(msg)
 

@@ -77,6 +77,8 @@ class TestBridgeNodeTopics(unittest.TestCase):
 
         self.assertIn("msg.value_encoding", source)
         self.assertIn("msg.duration_ms", source)
+        self.assertIn("msg.requester_id", source)
+        self.assertIn("msg.lease_id", source)
 
     def test_teleop_ack_payload_includes_execution_snapshot(self):
         """teleop ack 应携带当前 execution_state 快照语义"""

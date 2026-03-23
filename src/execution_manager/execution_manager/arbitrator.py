@@ -64,18 +64,32 @@ class CommandArbitrator:
         source: str,
         command: CommandFrame,
         now_sec: float,
+        requester_id: str = '',
+        lease_id: str = '',
     ) -> ArbitrationResult:
         """处理一条执行请求。"""
         del command
 
         self._validate_source(source)
         self._refresh_mode(now_sec)
+        normalized_requester_id = str(requester_id).strip()
+        normalized_lease_id = str(lease_id).strip()
 
         if self.estop_active:
             return self._reject(source, 'estop')
 
         if source == 'teleop' and not self._is_teleop_control_active(now_sec):
             return self._reject(source, 'teleop_control_not_granted')
+
+        if source == 'teleop' and normalized_requester_id and not self._is_holder(
+            normalized_requester_id
+        ):
+            return self._reject(source, 'teleop_control_not_holder')
+
+        if source == 'teleop' and normalized_lease_id and not self._is_lease_holder(
+            normalized_lease_id
+        ):
+            return self._reject(source, 'teleop_control_lease_mismatch')
 
         if source == 'motion' and self._is_source_active('teleop', now_sec):
             return self._reject(source, 'teleop_active')

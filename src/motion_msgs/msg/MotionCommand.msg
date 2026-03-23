@@ -22,5 +22,15 @@ string value_encoding
 # 为 0 时，consumer 应回退读取 speed
 uint16 duration_ms
 
+# 请求方标识
+# teleop 链路可透传当前连接 requester，用于执行层做更严格的控制权校验
+# 为空时表示未提供身份，consumer 可按过渡兼容语义处理
+string requester_id
+
+# 当前已确认的 teleop lease 标识
+# teleop 链路可透传当前 lease，用于执行层做更严格的控制权校验
+# 为空时表示未提供 lease，consumer 可按过渡兼容语义处理
+string lease_id
+
 # 时间戳
 builtin_interfaces/Time stamp

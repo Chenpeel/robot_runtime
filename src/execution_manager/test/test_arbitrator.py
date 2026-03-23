@@ -110,6 +110,54 @@ def test_teleop_command_requires_explicit_claim():
     assert teleop_result.reason == 'teleop_control_not_granted'
 
 
+def test_teleop_command_rejects_other_holder_or_wrong_lease_when_provided():
+    arbitrator = CommandArbitrator(
+        lease_id_factory=_lease_id_factory(),
+    )
+    arbitrator.receive_teleop_control(
+        'claim',
+        0.0,
+        requester_id='client-a',
+    )
+
+    wrong_holder = arbitrator.receive_command(
+        'teleop',
+        _command(),
+        0.1,
+        requester_id='client-b',
+    )
+    assert wrong_holder.accepted is False
+    assert wrong_holder.reason == 'teleop_control_not_holder'
+
+    wrong_lease = arbitrator.receive_command(
+        'teleop',
+        _command(),
+        0.2,
+        requester_id='client-a',
+        lease_id='wrong-lease',
+    )
+    assert wrong_lease.accepted is False
+    assert wrong_lease.reason == 'teleop_control_lease_mismatch'
+
+
+def test_teleop_command_allows_transition_when_identity_fields_are_missing():
+    arbitrator = CommandArbitrator(
+        lease_id_factory=_lease_id_factory(),
+    )
+    arbitrator.receive_teleop_control(
+        'claim',
+        0.0,
+        requester_id='client-a',
+    )
+
+    result = arbitrator.receive_command(
+        'teleop',
+        _command(),
+        0.1,
+    )
+    assert result.accepted is True
+
+
 def test_keepalive_extends_claim_window_and_release_clears_lease():
     arbitrator = CommandArbitrator(
         teleop_timeout_sec=0.5,

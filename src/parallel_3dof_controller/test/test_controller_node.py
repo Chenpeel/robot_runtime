@@ -74,6 +74,18 @@ class TestNodeInitialization(unittest.TestCase):
             source
         )
 
+    def test_motion_command_sets_identity_fields_empty(self):
+        """motion 控制输出应显式清空 teleop 身份字段"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../parallel_3dof_controller/controller_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("servo_msg.requester_id = ''", source)
+        self.assertIn("servo_msg.lease_id = ''", source)
+
 
 class TestMessageConversion(unittest.TestCase):
     """测试消息格式转换（不需要ROS环境）"""

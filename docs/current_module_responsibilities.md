@@ -88,6 +88,8 @@
   - 将 WebSocket 连接级 session id 作为 teleop requester 向执行层下发。
   - 在 teleop 控制权确认后缓存当前连接对应的 `teleop_lease_id`，并在
     keepalive / release 时优先继续透传。
+  - 在 `servo_control` 等 teleop 命令链路中，开始把当前连接的
+    `requester_id` / `lease_id` 一并透传到 `MotionCommand`。
   - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 将 `teleop_claim_ack` / `teleop_release_ack` 收紧为“请求已转发”语义，
     并附带当前已知执行状态快照，不再把 ack 当成控制权已经生效。
@@ -246,6 +248,9 @@
     只能由当前 holder 发起。
   - 为当前活跃控制权生成第一版 `teleop_lease_id`，并在 keepalive /
     release 时优先按 lease 校验，空 lease 仍兼容回退到 holder 语义。
+  - 当 teleop `MotionCommand` 携带 `requester_id` / `lease_id` 时，优先按
+    holder / lease 校验命令归属，减少“只要 teleop_active 就可发命令”的歧
+    义。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
   - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
@@ -271,6 +276,8 @@
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
     release 接口。虽然 `ExecutionState` 已补上最小控制权反馈、holder 标
     识与第一版 lease 标识，但还没有更正式的持有者抢占规则和多入口约束。
+  - teleop `MotionCommand` 虽已开始增量补 requester / lease 字段，但当前
+    仍对空字段保留兼容回退，尚未形成真正强制的跨入口统一约束。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，且 producer 也开始双写更明确的时长与编
     码字段，但外部命令字段仍带有明显的 servo 风格命名。

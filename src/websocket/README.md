@@ -109,11 +109,15 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   广播 payload，都会补充连接级 `requester_id`、`teleop_lease_id`、
   `known_holder_matches`、`known_lease_matches`、`known_teleop_active`、
   `control_confirmed`，用于把当前连接和执行层 holder / lease 语义对齐。
+- 普通 `servo_control` 映射到 `MotionCommand` 时，也会开始透传当前连接的
+  `requester_id` / `lease_id`；`execution_manager` 若收到这些字段，会优先按
+  holder / lease 做更严格的 teleop 命令校验。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
 - 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：
   - 兼容字段：`position`、`speed`
   - 增量语义字段：`value_encoding`、`duration_ms`
+  - teleop 身份字段：`requester_id`、`lease_id`
 
 状态查询与状态广播现在也会携带执行层反馈：
 

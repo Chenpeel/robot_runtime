@@ -100,13 +100,21 @@ class ExecutionManagerNode(Node):
     def _handle_command(self, source: str, msg: MotionCommand) -> None:
         now_sec = self._now_sec()
         setpoint = motion_command_to_setpoint(msg)
+        requester_id = str(getattr(msg, 'requester_id', '') or '').strip()
+        lease_id = str(getattr(msg, 'lease_id', '') or '').strip()
         frame = CommandFrame(
             servo_type=setpoint.actuator_type,
             servo_id=setpoint.actuator_id,
             position=setpoint.target_raw,
             speed=setpoint.duration_ms,
         )
-        result = self.arbitrator.receive_command(source, frame, now_sec)
+        result = self.arbitrator.receive_command(
+            source,
+            frame,
+            now_sec,
+            requester_id=requester_id,
+            lease_id=lease_id,
+        )
         if result.accepted:
             self.output_command_pub.publish(self._to_servo_command(setpoint, msg))
             if self.debug:
@@ -114,12 +122,14 @@ class ExecutionManagerNode(Node):
                     f'接受 {source} 命令: type={setpoint.actuator_type} '
                     f'id={setpoint.actuator_id} encoding={setpoint.value_encoding} '
                     f'target_raw={setpoint.target_raw} '
-                    f'duration_ms={setpoint.duration_ms}'
+                    f'duration_ms={setpoint.duration_ms} '
+                    f'requester_id={requester_id} lease_id={lease_id}'
                 )
         else:
             self.get_logger().warn(
                 f'拒绝 {source} 命令: reason={result.reason} '
-                f'id={setpoint.actuator_id} target_raw={setpoint.target_raw}'
+                f'id={setpoint.actuator_id} target_raw={setpoint.target_raw} '
+                f'requester_id={requester_id} lease_id={lease_id}'
             )
 
         self._publish_state(now_sec)

@@ -145,6 +145,39 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(received_context["lease_id"], "lease-1")
 
+    async def test_direct_servo_command_uses_cached_context(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket = _FakeWebSocket()
+        server.client_info[websocket] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": "lease-1",
+        }
+
+        received_command = None
+        received_context = None
+
+        async def servo_callback(command, context):
+            nonlocal received_command, received_context
+            received_command = command
+            received_context = context
+
+        server.handler.register_servo_command_handler(servo_callback)
+
+        await server._handle_servo_control_direct(
+            {
+                "servo_type": "bus",
+                "servo_id": 1,
+                "position": 1500,
+                "speed": 100,
+            },
+            context=server._build_client_context(websocket),
+        )
+
+        self.assertEqual(received_command["servo_id"], 1)
+        self.assertEqual(received_context["requester_id"], "client-a")
+        self.assertEqual(received_context["lease_id"], "lease-1")
+
 
 if __name__ == '__main__':
     unittest.main()

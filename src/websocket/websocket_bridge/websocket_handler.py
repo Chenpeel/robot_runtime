@@ -152,7 +152,7 @@ class WebSocketHandler:
         if msg_type == MessageType.HEARTBEAT:
             return await self._handle_heartbeat(data, context)
         elif msg_type == MessageType.SERVO_CONTROL:
-            return await self._handle_servo_control(data)
+            return await self._handle_servo_control(data, context)
         elif msg_type == MessageType.TELEOP_CLAIM:
             return await self._handle_teleop_claim(data, context)
         elif msg_type == MessageType.TELEOP_RELEASE:
@@ -164,9 +164,9 @@ class WebSocketHandler:
         elif msg_type == MessageType.REGISTER:
             return await self._handle_register(data)
         elif msg_type == MessageType.BROADCAST:
-            return await self._handle_broadcast(data)
+            return await self._handle_broadcast(data, context)
         elif msg_type == MessageType.PRIVATE:
-            return await self._handle_private(data)
+            return await self._handle_private(data, context)
         else:
             return None
     
@@ -257,7 +257,11 @@ class WebSocketHandler:
             device_id=self.device_id
         )
     
-    async def _handle_servo_control(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_servo_control(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理舵机控制命令"""
         servo_cmd = self.message_handler.parse_servo_control(data)
 
@@ -275,7 +279,11 @@ class WebSocketHandler:
         # 调用 ROS 2 命令处理器
         if self.on_servo_command:
             try:
-                await self.on_servo_command(servo_cmd)
+                await self._invoke_callback_with_context(
+                    self.on_servo_command,
+                    servo_cmd,
+                    context,
+                )
             except Exception as e:
                 print(f"[WebSocketHandler] 舵机命令处理失败: {e}")
                 return ErrorResponse.create(
@@ -364,7 +372,11 @@ class WebSocketHandler:
         
         return json.dumps(response, ensure_ascii=False)
     
-    async def _handle_broadcast(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_broadcast(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理广播消息"""
         content = data.get("content", {})
         
@@ -374,13 +386,21 @@ class WebSocketHandler:
         servo_cmd = self.message_handler.parse_servo_control(content)
         if servo_cmd and self.on_servo_command:
             try:
-                await self.on_servo_command(servo_cmd)
+                await self._invoke_callback_with_context(
+                    self.on_servo_command,
+                    servo_cmd,
+                    context,
+                )
             except Exception as e:
                 print(f"[WebSocketHandler] 广播舵机命令处理失败: {e}")
         
         return None
     
-    async def _handle_private(self, data: Dict[str, Any]) -> Optional[str]:
+    async def _handle_private(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """处理私有消息"""
         content = data.get("content", data)
         
@@ -390,7 +410,11 @@ class WebSocketHandler:
         servo_cmd = self.message_handler.parse_servo_control(content)
         if servo_cmd and self.on_servo_command:
             try:
-                await self.on_servo_command(servo_cmd)
+                await self._invoke_callback_with_context(
+                    self.on_servo_command,
+                    servo_cmd,
+                    context,
+                )
             except Exception as e:
                 print(f"[WebSocketHandler] 私有消息舵机命令处理失败: {e}")
             
@@ -506,6 +530,21 @@ class WebSocketHandler:
         if len(inspect.signature(callback).parameters) == 0:
             return await callback()
         return await callback(payload)
+
+    async def _invoke_callback_with_context(
+        self,
+        callback: Callable,
+        payload: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        payload = dict(payload or {})
+        context = dict(context or {})
+        param_count = len(inspect.signature(callback).parameters)
+        if param_count == 0:
+            return await callback()
+        if param_count == 1:
+            return await callback(payload)
+        return await callback(payload, context)
 
     @staticmethod
     def _default_teleop_ack_payload(

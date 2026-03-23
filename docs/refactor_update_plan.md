@@ -141,6 +141,9 @@
 - `motion_msgs/TeleopControl` 与 `ExecutionState` 已开始增量补充
   `lease_id` / `teleop_lease_id`，执行层会为活跃 teleop 控制权生成第一版
   lease，并在 keepalive / release 时优先按 lease 校验。
+- teleop 链路上的 `MotionCommand` 也已开始增量补充 `requester_id` /
+  `lease_id`，`execution_manager` 若收到这些字段，会优先按 holder / lease
+  校验 teleop 命令归属。
 - `ws_server` 已开始在连接断开时按同一 `requester_id` 尝试自动释放 teleop
   holder，减少旧租约拖到超时窗口后才清空的问题。
 - `teleop_claim_ack` / `teleop_release_ack` 已开始只表达“请求已转发到执行
@@ -176,7 +179,8 @@
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
    侧控制权确认流程。当前虽已在 register / status_query / execution_state
    广播中显式暴露 requester 视角，并已补上第一版 lease token，但执行层对空
-   lease 仍保留兼容回退，仍缺更正式的抢占策略和跨入口统一约束。
+   lease 以及空 requester 的 teleop 命令仍保留兼容回退，仍缺更正式的抢占策
+   略和跨入口统一约束。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

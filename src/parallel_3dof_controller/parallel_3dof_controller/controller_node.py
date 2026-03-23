@@ -194,6 +194,8 @@ class Parallel3DOFControllerNode(Node):
                 servo_msg.value_encoding = 'bus_pulse_us'
                 servo_msg.duration_ms = cmd['speed']
                 servo_msg.speed = cmd['speed']
+                servo_msg.requester_id = ''
+                servo_msg.lease_id = ''
                 servo_msg.stamp = self.get_clock().now().to_msg()
                 self.servo_cmd_pub.publish(servo_msg)
 

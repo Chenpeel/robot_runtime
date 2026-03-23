@@ -196,7 +196,10 @@ class WebSocketBridgeServer:
                 # 拦截 servo_control 类型的消息
                 if msg_type == "servo_control":
                     # 直接处理为舵机控制命令
-                    await self._handle_servo_control_direct(data)
+                    await self._handle_servo_control_direct(
+                        data,
+                        context=self._build_client_context(websocket),
+                    )
                     # 发送确认响应给客户端
                     ack = {
                         "type": "private_ack",
@@ -526,7 +529,10 @@ class WebSocketBridgeServer:
         try:
             servo_cmd = json.loads(content) if isinstance(
                 content, str) else content
-            await self._handle_servo_control_direct(servo_cmd)
+            await self._handle_servo_control_direct(
+                servo_cmd,
+                context=self._build_client_context(websocket),
+            )
 
             # 发送确认响应
             ack = {
@@ -546,7 +552,11 @@ class WebSocketBridgeServer:
         except Exception as e:
             print(f"[WebSocketServer] 处理舵机命令失败: {e}")
 
-    async def _handle_servo_control_direct(self, servo_cmd: dict):
+    async def _handle_servo_control_direct(
+        self,
+        servo_cmd: dict,
+        context: dict | None = None,
+    ):
         """
         直接处理舵机控制命令并转发到 ROS 2
 
@@ -570,7 +580,11 @@ class WebSocketBridgeServer:
         # 使用 handler 的舵机命令回调
         if hasattr(self.handler, 'on_servo_command') and self.handler.on_servo_command:
             try:
-                await self.handler.on_servo_command(parsed_cmd)
+                await self.handler._invoke_callback_with_context(
+                    self.handler.on_servo_command,
+                    parsed_cmd,
+                    context,
+                )
                 self._debug("ws_servo", f"舵机命令已转发到 ROS2: {parsed_cmd}")
             except Exception as e:
                 print(f"[WebSocketServer] ROS2 命令处理失败: {e}")
