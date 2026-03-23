@@ -93,7 +93,11 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   `motion_msgs/TeleopControl(action=\"claim\")`。
 - `bridge_node` 会使用当前 WebSocket 连接的 session id 填充
   `TeleopControl.requester_id`，作为当前 teleop holder 的最小标识。
+- `execution_manager` 在 claim 生效后会生成 `teleop_lease_id`，并通过
+  `ExecutionState` 回传；`ws_server` 会把它缓存到当前连接上下文里。
 - 控制权生效后，heartbeat 会被桥接为 `keepalive`，用于续租 teleop 控制权。
+- `keepalive` / `release` 当前会优先透传最近一次确认的 `lease_id`；若为空，
+  执行层仍会按 `requester_id` 走过渡兼容。
 - 客户端结束遥控时发送 `teleop_release`，由 `bridge_node` 发布
   `motion_msgs/TeleopControl(action=\"release\")`。
 - 当 WebSocket 连接断开时，`ws_server` 也会按同一 session id 尝试自动释放
@@ -102,9 +106,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   会附带当前已知的 `execution_state` 快照；控制权是否真正生效，仍以随后到达
   的 `execution_state` 广播为准。
 - `status_query` 响应，以及 `status_update.data.type == "execution_state"` 的
-  广播 payload，都会补充连接级 `requester_id`、`known_holder_matches`、
-  `known_teleop_active`、`control_confirmed`，用于把当前连接和执行层 holder
-  语义对齐。
+  广播 payload，都会补充连接级 `requester_id`、`teleop_lease_id`、
+  `known_holder_matches`、`known_lease_matches`、`known_teleop_active`、
+  `control_confirmed`，用于把当前连接和执行层 holder / lease 语义对齐。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
 - 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：
@@ -122,6 +126,7 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 teleop 控制权的最小反馈信息，例如：
 
 - `teleop_holder_id`
+- `teleop_lease_id`
 - `teleop_control_remaining_sec`
 - `last_teleop_control_action`
 - `last_teleop_control_accepted`
@@ -131,7 +136,9 @@ teleop 控制权的最小反馈信息，例如：
 `data.type == "execution_state"`，还会额外补当前连接视角的：
 
 - `requester_id`
+- `teleop_lease_id`
 - `known_holder_matches`
+- `known_lease_matches`
 - `known_teleop_active`
 - `control_confirmed`
 
@@ -212,7 +219,9 @@ heartbeat:
 {
   "character_name": "robot",
   "requester_id": "client-a",
+  "teleop_lease_id": "lease-1",
   "known_holder_matches": true,
+  "known_lease_matches": true,
   "known_teleop_active": true,
   "control_confirmed": true,
   "confirmation_source": "execution_state",
@@ -228,6 +237,7 @@ heartbeat:
     "mode": "idle",
     "active_source": null,
     "teleop_holder_id": "",
+    "teleop_lease_id": "",
     "estop_active": false,
     "teleop_active": false,
     "motion_active": false,

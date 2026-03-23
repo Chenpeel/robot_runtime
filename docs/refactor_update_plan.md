@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文是截至 2026-03-21 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-03-23 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -138,6 +138,9 @@
   最近一次控制动作结果与控制动作计数。
 - WebSocket teleop 链路已开始透传连接级 `requester_id`，执行层也已开始维
   护最小 `teleop_holder_id` 语义，用于约束 claim / keepalive / release。
+- `motion_msgs/TeleopControl` 与 `ExecutionState` 已开始增量补充
+  `lease_id` / `teleop_lease_id`，执行层会为活跃 teleop 控制权生成第一版
+  lease，并在 keepalive / release 时优先按 lease 校验。
 - `ws_server` 已开始在连接断开时按同一 `requester_id` 尝试自动释放 teleop
   holder，减少旧租约拖到超时窗口后才清空的问题。
 - `teleop_claim_ack` / `teleop_release_ack` 已开始只表达“请求已转发到执行
@@ -146,8 +149,9 @@
 - `ws_server` 已开始在 `connected` 回包显式暴露当前连接的
   `requester_id` / `clientId`。
 - `status_query` 已开始补充连接级 requester 视角的 teleop 控制确认字段，
-  例如 `known_holder_matches`、`known_teleop_active` 与
-  `control_confirmed`，用于把当前连接与执行层 holder 语义对齐。
+  例如 `known_holder_matches`、`known_lease_matches`、
+  `known_teleop_active` 与 `control_confirmed`，用于把当前连接与执行层
+  holder / lease 语义对齐。
 - `execution_state` 对应的 WebSocket `status_update` 广播也已开始按连接补充同
   一组 requester 视角字段，减少客户端必须主动轮询 `status_query` 才能确认
   控制权的耦合。
@@ -171,8 +175,8 @@
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
    侧控制权确认流程。当前虽已在 register / status_query / execution_state
-   广播中显式暴露 requester 视角，但仍缺更正式的 lease token、抢占策略和跨
-   入口统一约束。
+   广播中显式暴露 requester 视角，并已补上第一版 lease token，但执行层对空
+   lease 仍保留兼容回退，仍缺更正式的抢占策略和跨入口统一约束。
 4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
 
 完成标准：

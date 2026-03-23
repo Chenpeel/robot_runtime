@@ -49,6 +49,7 @@ class TestBridgeNodeTopics(unittest.TestCase):
 
         self.assertIn("'teleop_control_remaining_sec'", source)
         self.assertIn("'teleop_holder_id'", source)
+        self.assertIn("'teleop_lease_id'", source)
         self.assertIn("'last_teleop_control_action'", source)
         self.assertIn("'last_teleop_control_accepted'", source)
         self.assertIn("'last_teleop_control_reason'", source)
@@ -63,6 +64,7 @@ class TestBridgeNodeTopics(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("msg.requester_id", source)
+        self.assertIn("msg.lease_id", source)
 
     def test_motion_command_publish_includes_explicit_semantic_fields(self):
         """MotionCommand 发布应双写新语义字段"""
@@ -86,6 +88,8 @@ class TestBridgeNodeTopics(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("def _build_teleop_ack_payload", source)
+        self.assertIn("'teleop_lease_id': current_lease_id", source)
         self.assertIn("'execution_state': execution_state", source)
         self.assertIn("'known_holder_matches': holder_matches", source)
+        self.assertIn("'known_lease_matches': lease_matches", source)
         self.assertIn("'known_teleop_active': teleop_active", source)

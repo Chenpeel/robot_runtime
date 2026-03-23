@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文记录截至 2026-03-21 的仓库当前事实，用于补充说明现有模块到底已经承担了
+本文记录截至 2026-03-23 的仓库当前事实，用于补充说明现有模块到底已经承担了
 什么职责。
 
 它与长期规划文档的关系如下：
@@ -86,12 +86,14 @@
   - 在客户端 `register` 时显式回传当前连接的 `requester_id` / `clientId`。
   - 通过显式 `teleop_claim` / `teleop_release` 接口申请与释放 teleop 控制权。
   - 将 WebSocket 连接级 session id 作为 teleop requester 向执行层下发。
+  - 在 teleop 控制权确认后缓存当前连接对应的 `teleop_lease_id`，并在
+    keepalive / release 时优先继续透传。
   - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 将 `teleop_claim_ack` / `teleop_release_ack` 收紧为“请求已转发”语义，
     并附带当前已知执行状态快照，不再把 ack 当成控制权已经生效。
   - 在 `status_query` 回包与 `execution_state` 状态广播里提供连接级
     requester 视角的 teleop 控制权确认字段，便于客户端将当前连接与执行层
-    holder 状态对齐。
+    holder / lease 状态对齐。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
@@ -121,13 +123,14 @@
 - 当前问题
   - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
-    已补上最小控制权反馈与连接级 holder 语义，但当前还没有更正式的 lease
-    token、抢占策略和上层接口约束。
+    已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
+    但当前还没有更正式的抢占策略和上层接口约束。
   - 当前 ack 语义虽然已经和执行层状态分离，但上层客户端仍需要继续从
     `execution_state` 角度完成更正式的控制权确认与超时处理。
   - 当前 requester 视角的确认语义虽然已覆盖 register / status_query /
     `execution_state` 广播，但它仍属于 WebSocket 出站层派生逻辑，还不是更
-    正式的 lease token 或跨入口统一约束。
+    正式的跨入口统一约束；同时 keepalive / release 虽已优先透传 lease，
+    但执行层对空 lease 仍保留兼容回退。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
     双写 `duration_ms` 与 `value_encoding`，但外部消息仍保留
     `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。
@@ -241,6 +244,8 @@
   - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
   - 按 `requester_id` 维护当前 teleop holder，并限制 keepalive / release
     只能由当前 holder 发起。
+  - 为当前活跃控制权生成第一版 `teleop_lease_id`，并在 keepalive /
+    release 时优先按 lease 校验，空 lease 仍兼容回退到 holder 语义。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
   - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
@@ -249,7 +254,7 @@
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
     teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果、控制动作计
-    数与当前 holder 标识。
+    数、当前 holder 标识与当前 lease 标识。
 - 当前主要输入
   - `/execution/teleop/control`
   - `/execution/teleop/command`
@@ -264,8 +269,8 @@
   - 不做驱动协议实现。
 - 当前问题
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
-    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈与 holder 标
-    识，但还没有更正式的 lease token、持有者抢占规则和多入口约束。
+    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈、holder 标
+    识与第一版 lease 标识，但还没有更正式的持有者抢占规则和多入口约束。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，且 producer 也开始双写更明确的时长与编
     码字段，但外部命令字段仍带有明显的 servo 风格命名。

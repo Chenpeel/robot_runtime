@@ -30,9 +30,12 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
             return {
                 "execution_state": {
                     "teleop_holder_id": "client-a",
+                    "teleop_lease_id": "lease-1",
                     "teleop_active": True,
                 },
+                "teleop_lease_id": "lease-1",
                 "known_holder_matches": True,
+                "known_lease_matches": True,
                 "known_teleop_active": True,
             }
 
@@ -41,7 +44,7 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         response = asyncio.run(
             self.handler.handle_message(
                 json.dumps({"type": "teleop_claim"}),
-                context={"requester_id": "client-a"},
+                context={"requester_id": "client-a", "lease_id": "lease-1"},
             )
         )
 
@@ -51,7 +54,9 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         self.assertEqual(response_data["type"], "teleop_claim_ack")
         self.assertEqual(response_data["status"], "requested")
         self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertEqual(response_data["teleop_lease_id"], "lease-1")
         self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_lease_matches"])
         self.assertTrue(response_data["known_teleop_active"])
         self.assertEqual(
             response_data["execution_state"]["teleop_holder_id"],
@@ -69,9 +74,12 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
             return {
                 "execution_state": {
                     "teleop_holder_id": "client-a",
+                    "teleop_lease_id": "lease-1",
                     "teleop_active": True,
                 },
+                "teleop_lease_id": "lease-1",
                 "known_holder_matches": True,
+                "known_lease_matches": True,
                 "known_teleop_active": True,
             }
 
@@ -80,7 +88,7 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         response = asyncio.run(
             self.handler.handle_message(
                 json.dumps({"type": "teleop_release"}),
-                context={"requester_id": "client-a"},
+                context={"requester_id": "client-a", "lease_id": "lease-1"},
             )
         )
 
@@ -90,7 +98,9 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         self.assertEqual(response_data["type"], "teleop_release_ack")
         self.assertEqual(response_data["status"], "requested")
         self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertEqual(response_data["teleop_lease_id"], "lease-1")
         self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_lease_matches"])
         self.assertTrue(response_data["known_teleop_active"])
 
     def test_supported_commands_include_teleop_control(self):
@@ -104,6 +114,7 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
             "mode": "teleop_active",
             "active_source": "teleop",
             "teleop_holder_id": "client-a",
+            "teleop_lease_id": "lease-1",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -112,19 +123,45 @@ class TestWebSocketHandlerTeleopControl(unittest.TestCase):
         response = asyncio.run(
             self.handler.handle_message(
                 json.dumps({"type": "status_query"}),
-                context={"requester_id": "client-a"},
+                context={"requester_id": "client-a", "lease_id": "lease-1"},
             )
         )
 
         response_data = json.loads(response)
         self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertEqual(response_data["teleop_lease_id"], "lease-1")
         self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_lease_matches"])
         self.assertTrue(response_data["known_teleop_active"])
         self.assertTrue(response_data["control_confirmed"])
         self.assertEqual(
             response_data["confirmation_source"],
             "execution_state",
         )
+
+    def test_status_query_does_not_confirm_mismatched_lease(self):
+        self.handler.update_execution_state({
+            "mode": "teleop_active",
+            "active_source": "teleop",
+            "teleop_holder_id": "client-a",
+            "teleop_lease_id": "lease-1",
+            "teleop_active": True,
+            "motion_active": False,
+            "estop_active": False,
+        })
+
+        response = asyncio.run(
+            self.handler.handle_message(
+                json.dumps({"type": "status_query"}),
+                context={"requester_id": "client-a", "lease_id": "stale-lease"},
+            )
+        )
+
+        response_data = json.loads(response)
+        self.assertTrue(response_data["known_holder_matches"])
+        self.assertFalse(response_data["known_lease_matches"])
+        self.assertTrue(response_data["known_teleop_active"])
+        self.assertFalse(response_data["control_confirmed"])
 
 
 if __name__ == '__main__':

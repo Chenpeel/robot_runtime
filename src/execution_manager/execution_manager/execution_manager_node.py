@@ -128,15 +128,18 @@ class ExecutionManagerNode(Node):
         now_sec = self._now_sec()
         action = str(msg.action).strip().lower()
         requester_id = str(msg.requester_id).strip()
+        lease_id = str(msg.lease_id).strip()
         result = self.arbitrator.receive_teleop_control(
             action,
             now_sec,
             requester_id=requester_id,
+            lease_id=lease_id,
         )
 
         if self.debug:
             self.get_logger().info(
                 f'teleop 控制动作: action={action} requester_id={requester_id} '
+                f'lease_id={lease_id} '
                 f'accepted={result.accepted} mode={result.mode}'
             )
 
@@ -163,6 +166,7 @@ class ExecutionManagerNode(Node):
         state_msg.mode = str(snapshot['mode'])
         state_msg.active_source = str(snapshot['active_source'] or '')
         state_msg.teleop_holder_id = str(snapshot['teleop_holder_id'] or '')
+        state_msg.teleop_lease_id = str(snapshot['teleop_lease_id'] or '')
         state_msg.estop_active = bool(snapshot['estop_active'])
         state_msg.teleop_active = bool(snapshot['teleop_active'])
         state_msg.motion_active = bool(snapshot['motion_active'])

@@ -11,5 +11,10 @@ string action
 # 为空时表示匿名请求方，用于兼容过渡期旧入口
 string requester_id
 
+# 当前已确认的 teleop lease 标识
+# claim 时可为空；keepalive / release 应优先携带最近一次确认的 lease
+# 为空时允许执行层按 requester_id 走过渡兼容
+string lease_id
+
 # 时间戳
 builtin_interfaces/Time stamp

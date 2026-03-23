@@ -326,31 +326,46 @@ class WebSocketROS2Bridge(Node):
     async def handle_heartbeat(self, context: dict | None = None):
         """处理心跳消息"""
         requester_id = self._extract_requester_id(context)
+        lease_id = self._extract_lease_id(context)
         if self._teleop_control_is_active():
-            self._publish_teleop_control('keepalive', requester_id=requester_id)
+            self._publish_teleop_control(
+                'keepalive',
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
         self._debug_log("heartbeat", "received", self.heartbeat_debug)
 
     async def handle_teleop_claim(self, context: dict | None = None):
         """处理 teleop 控制权申请。"""
         requester_id = self._extract_requester_id(context)
-        self._publish_teleop_control('claim', requester_id=requester_id)
+        lease_id = self._extract_lease_id(context)
+        self._publish_teleop_control(
+            'claim',
+            requester_id=requester_id,
+            lease_id=lease_id,
+        )
         self._debug_log(
             "teleop_control",
-            f"claim requester_id={requester_id}",
+            f"claim requester_id={requester_id} lease_id={lease_id}",
             self.debug
         )
-        return self._build_teleop_ack_payload(requester_id)
+        return self._build_teleop_ack_payload(requester_id, lease_id)
 
     async def handle_teleop_release(self, context: dict | None = None):
         """处理 teleop 控制权释放。"""
         requester_id = self._extract_requester_id(context)
-        self._publish_teleop_control('release', requester_id=requester_id)
+        lease_id = self._extract_lease_id(context)
+        self._publish_teleop_control(
+            'release',
+            requester_id=requester_id,
+            lease_id=lease_id,
+        )
         self._debug_log(
             "teleop_control",
-            f"release requester_id={requester_id}",
+            f"release requester_id={requester_id} lease_id={lease_id}",
             self.debug
         )
-        return self._build_teleop_ack_payload(requester_id)
+        return self._build_teleop_ack_payload(requester_id, lease_id)
 
     async def handle_status_query(self) -> dict:
         """
@@ -571,23 +586,29 @@ class WebSocketROS2Bridge(Node):
         self,
         action: str,
         requester_id: str | None = None,
+        lease_id: str | None = None,
     ) -> None:
         msg = TeleopControl()
         msg.action = str(action).strip().lower()
         msg.requester_id = str(requester_id or '').strip()
+        msg.lease_id = str(lease_id or '').strip()
         msg.stamp = self.get_clock().now().to_msg()
         self.teleop_control_pub.publish(msg)
 
-    def _build_teleop_ack_payload(self, requester_id: str) -> dict:
+    def _build_teleop_ack_payload(self, requester_id: str, lease_id: str) -> dict:
         execution_state = dict(self.latest_execution_state)
         holder_id = str(execution_state.get('teleop_holder_id') or '')
+        current_lease_id = str(execution_state.get('teleop_lease_id') or '')
         teleop_active = bool(execution_state.get('teleop_active'))
         holder_matches = bool(requester_id) and holder_id == requester_id
+        lease_matches = bool(lease_id) and current_lease_id == lease_id
         return {
             'status': 'requested',
             'requester_id': requester_id,
+            'teleop_lease_id': current_lease_id,
             'execution_state': execution_state,
             'known_holder_matches': holder_matches,
+            'known_lease_matches': lease_matches,
             'known_teleop_active': teleop_active,
         }
 
@@ -596,6 +617,12 @@ class WebSocketROS2Bridge(Node):
         if not isinstance(context, dict):
             return ''
         return str(context.get('requester_id') or '').strip()
+
+    @staticmethod
+    def _extract_lease_id(context: dict | None) -> str:
+        if not isinstance(context, dict):
+            return ''
+        return str(context.get('lease_id') or '').strip()
 
     @staticmethod
     def _motion_value_encoding_for_servo_type(servo_type: str) -> str:
@@ -619,6 +646,7 @@ class WebSocketROS2Bridge(Node):
             'mode': str(msg.mode),
             'active_source': active_source,
             'teleop_holder_id': str(msg.teleop_holder_id or ''),
+            'teleop_lease_id': str(msg.teleop_lease_id or ''),
             'estop_active': bool(msg.estop_active),
             'teleop_active': bool(msg.teleop_active),
             'motion_active': bool(msg.motion_active),

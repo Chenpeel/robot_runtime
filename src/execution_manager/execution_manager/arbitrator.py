@@ -1,7 +1,8 @@
 """执行层纯逻辑仲裁器。"""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
+import uuid
 
 
 @dataclass(frozen=True)
@@ -33,14 +34,17 @@ class CommandArbitrator:
         self,
         teleop_timeout_sec: float = 0.8,
         motion_timeout_sec: float = 0.5,
+        lease_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self.teleop_timeout_sec = max(float(teleop_timeout_sec), 0.0)
         self.motion_timeout_sec = max(float(motion_timeout_sec), 0.0)
+        self.lease_id_factory = lease_id_factory or self._default_lease_id_factory
 
         self.mode = 'idle'
         self.active_source: Optional[str] = None
         self.estop_active = False
         self.teleop_holder_id = ''
+        self.teleop_lease_id = ''
 
         self.last_teleop_control_time: Optional[float] = None
         self.last_motion_time: Optional[float] = None
@@ -93,10 +97,12 @@ class CommandArbitrator:
         action: str,
         now_sec: float,
         requester_id: str = '',
+        lease_id: str = '',
     ) -> ArbitrationResult:
         """处理 teleop 控制权动作。"""
         normalized_action = str(action).strip().lower()
         normalized_requester_id = str(requester_id).strip()
+        normalized_lease_id = str(lease_id).strip()
         self.last_teleop_control_action = normalized_action
         self._refresh_mode(now_sec)
 
@@ -117,11 +123,17 @@ class CommandArbitrator:
                     'teleop_control_held_by_other',
                 )
             self.teleop_holder_id = normalized_requester_id
+            self.teleop_lease_id = self._claim_lease_id(
+                now_sec,
+                normalized_requester_id,
+                normalized_lease_id,
+            )
             self.last_teleop_control_time = now_sec
             return self._accept_teleop_control(
                 normalized_action,
                 now_sec,
                 holder_id=normalized_requester_id,
+                lease_id=self.teleop_lease_id,
             )
 
         if normalized_action == 'keepalive':
@@ -135,11 +147,17 @@ class CommandArbitrator:
                     normalized_action,
                     'teleop_control_not_holder',
                 )
+            if normalized_lease_id and not self._is_lease_holder(normalized_lease_id):
+                return self._reject_teleop_control(
+                    normalized_action,
+                    'teleop_control_lease_mismatch',
+                )
             self.last_teleop_control_time = now_sec
             return self._accept_teleop_control(
                 normalized_action,
                 now_sec,
                 holder_id=normalized_requester_id,
+                lease_id=self.teleop_lease_id,
             )
 
         if not self._is_teleop_control_active(now_sec):
@@ -152,12 +170,19 @@ class CommandArbitrator:
                 normalized_action,
                 'teleop_control_not_holder',
             )
+        if normalized_lease_id and not self._is_lease_holder(normalized_lease_id):
+            return self._reject_teleop_control(
+                normalized_action,
+                'teleop_control_lease_mismatch',
+            )
         self.teleop_holder_id = ''
+        self.teleop_lease_id = ''
         self.last_teleop_control_time = None
         return self._accept_teleop_control(
             normalized_action,
             now_sec,
             holder_id='',
+            lease_id='',
         )
 
     def set_estop(self, active: bool, now_sec: float) -> dict:
@@ -178,6 +203,7 @@ class CommandArbitrator:
             'mode': self.mode,
             'active_source': self.active_source,
             'teleop_holder_id': self.teleop_holder_id,
+            'teleop_lease_id': self.teleop_lease_id,
             'estop_active': self.estop_active,
             'teleop_active': self._is_source_active('teleop', now_sec),
             'motion_active': self._is_source_active('motion', now_sec),
@@ -211,12 +237,14 @@ class CommandArbitrator:
         action: str,
         now_sec: float,
         holder_id: str,
+        lease_id: str,
     ) -> ArbitrationResult:
         self.teleop_control_accepted_count += 1
         self.last_teleop_control_action = action
         self.last_teleop_control_accepted = True
         self.last_teleop_control_reason = 'accepted'
         self.teleop_holder_id = str(holder_id)
+        self.teleop_lease_id = str(lease_id)
         self._refresh_mode(now_sec)
         return ArbitrationResult(
             accepted=True,
@@ -275,6 +303,9 @@ class CommandArbitrator:
     def _is_holder(self, requester_id: str) -> bool:
         return str(requester_id).strip() == self.teleop_holder_id
 
+    def _is_lease_holder(self, lease_id: str) -> bool:
+        return str(lease_id).strip() == self.teleop_lease_id
+
     def _clear_expired_teleop_control(self, now_sec: float) -> None:
         if self.last_teleop_control_time is None:
             return
@@ -282,6 +313,7 @@ class CommandArbitrator:
             return
         self.last_teleop_control_time = None
         self.teleop_holder_id = ''
+        self.teleop_lease_id = ''
 
     def _teleop_control_remaining_sec(self, now_sec: float) -> float:
         if self.last_teleop_control_time is None:
@@ -295,3 +327,22 @@ class CommandArbitrator:
     def _validate_source(source: str) -> None:
         if source not in ('teleop', 'motion'):
             raise ValueError(f'unsupported source: {source}')
+
+    def _claim_lease_id(
+        self,
+        now_sec: float,
+        requester_id: str,
+        lease_id: str,
+    ) -> str:
+        if (
+            self._is_teleop_control_active(now_sec)
+            and self._is_holder(requester_id)
+            and self.teleop_lease_id
+        ):
+            return self.teleop_lease_id
+        del lease_id
+        return str(self.lease_id_factory())
+
+    @staticmethod
+    def _default_lease_id_factory() -> str:
+        return uuid.uuid4().hex

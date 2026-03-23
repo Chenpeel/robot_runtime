@@ -216,6 +216,7 @@ class WebSocketBridgeServer:
             )
 
             if response:
+                self._sync_client_teleop_lease_from_response(websocket, response)
                 await websocket.send(response)
                 self._debug("ws_send", f"发送响应: {response[:100]}...")
 
@@ -359,6 +360,7 @@ class WebSocketBridgeServer:
                 self._build_client_context(websocket),
             )
         )
+        self._sync_client_teleop_lease(websocket, payload)
         return payload
 
     async def _handle_register(self, websocket: WebSocketServerProtocol, data: dict):
@@ -443,6 +445,7 @@ class WebSocketBridgeServer:
         client_info = {
             "id": str(uuid.uuid4()),
             "name": f"client_{len(self.client_info) + 1}",
+            "teleop_lease_id": '',
         }
         self.client_info[websocket] = client_info
         return client_info
@@ -452,7 +455,40 @@ class WebSocketBridgeServer:
         return {
             "requester_id": client_info["id"],
             "client_name": client_info["name"],
+            "lease_id": str(client_info.get("teleop_lease_id") or ''),
         }
+
+    def _sync_client_teleop_lease_from_response(
+        self,
+        websocket: WebSocketServerProtocol,
+        response: str,
+    ) -> None:
+        if websocket not in self.client_info:
+            return
+        try:
+            payload = json.loads(response)
+        except json.JSONDecodeError:
+            return
+        self._sync_client_teleop_lease(websocket, payload)
+
+    def _sync_client_teleop_lease(
+        self,
+        websocket: WebSocketServerProtocol,
+        payload: dict,
+    ) -> None:
+        if websocket not in self.client_info or not isinstance(payload, dict):
+            return
+
+        client_info = self._get_or_create_client_info(websocket)
+        lease_id = str(payload.get('teleop_lease_id') or '').strip()
+        holder_matches = bool(payload.get('known_holder_matches'))
+        teleop_active = bool(payload.get('known_teleop_active'))
+
+        if holder_matches and teleop_active and lease_id:
+            client_info['teleop_lease_id'] = lease_id
+            return
+
+        client_info['teleop_lease_id'] = ''
 
     async def _release_teleop_for_client(
         self,

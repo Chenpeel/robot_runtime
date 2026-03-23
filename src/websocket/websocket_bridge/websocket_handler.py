@@ -475,17 +475,23 @@ class WebSocketHandler:
     ) -> Dict[str, Any]:
         """根据当前 execution_state 生成连接级 teleop 控制权视图。"""
         requester_id = self._extract_requester_id(context)
+        lease_id = self._extract_lease_id(context)
         holder_id = str(self.execution_state.get("teleop_holder_id") or "")
+        current_lease_id = str(self.execution_state.get("teleop_lease_id") or "")
         teleop_active = bool(self.execution_state.get("teleop_active"))
         holder_matches = bool(requester_id) and holder_id == requester_id
+        lease_matches = bool(lease_id) and current_lease_id == lease_id
         control_confirmed = bool(
             holder_matches
             and teleop_active
             and self.execution_state.get("active_source") == "teleop"
+            and (not lease_id or lease_matches)
         )
         return {
             "requester_id": requester_id,
+            "teleop_lease_id": current_lease_id,
             "known_holder_matches": holder_matches,
+            "known_lease_matches": lease_matches,
             "known_teleop_active": teleop_active,
             "control_confirmed": control_confirmed,
             "confirmation_source": "execution_state",
@@ -510,8 +516,10 @@ class WebSocketHandler:
         return {
             'status': 'requested',
             'requester_id': requester_id,
+            'teleop_lease_id': '',
             'execution_state': {},
             'known_holder_matches': False,
+            'known_lease_matches': False,
             'known_teleop_active': False,
         }
 
@@ -531,6 +539,14 @@ class WebSocketHandler:
         if not isinstance(context, dict):
             return ""
         return str(context.get("requester_id") or "").strip()
+
+    @staticmethod
+    def _extract_lease_id(
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        if not isinstance(context, dict):
+            return ""
+        return str(context.get("lease_id") or "").strip()
 
     def _build_current_status(self) -> Dict[str, Any]:
         """根据 execution_state 构造当前状态摘要。"""

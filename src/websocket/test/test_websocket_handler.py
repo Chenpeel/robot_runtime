@@ -53,9 +53,12 @@ class TestWebSocketHandler:
             return {
                 "execution_state": {
                     "teleop_holder_id": "client-a",
+                    "teleop_lease_id": "lease-1",
                     "teleop_active": True,
                 },
+                "teleop_lease_id": "lease-1",
                 "known_holder_matches": True,
+                "known_lease_matches": True,
                 "known_teleop_active": True,
             }
 
@@ -64,7 +67,7 @@ class TestWebSocketHandler:
         raw_message = json.dumps({"type": "teleop_claim"})
         response = await self.handler.handle_message(
             raw_message,
-            context={"requester_id": "client-a"},
+            context={"requester_id": "client-a", "lease_id": "lease-1"},
         )
 
         assert callback_called
@@ -74,7 +77,9 @@ class TestWebSocketHandler:
         assert response_data["type"] == "teleop_claim_ack"
         assert response_data["status"] == "requested"
         assert response_data["requester_id"] == "client-a"
+        assert response_data["teleop_lease_id"] == "lease-1"
         assert response_data["known_holder_matches"] is True
+        assert response_data["known_lease_matches"] is True
         assert response_data["known_teleop_active"] is True
         assert response_data["execution_state"]["teleop_holder_id"] == "client-a"
 
@@ -91,9 +96,12 @@ class TestWebSocketHandler:
             return {
                 "execution_state": {
                     "teleop_holder_id": "client-a",
+                    "teleop_lease_id": "lease-1",
                     "teleop_active": True,
                 },
+                "teleop_lease_id": "lease-1",
                 "known_holder_matches": True,
+                "known_lease_matches": True,
                 "known_teleop_active": True,
             }
 
@@ -102,7 +110,7 @@ class TestWebSocketHandler:
         raw_message = json.dumps({"type": "teleop_release"})
         response = await self.handler.handle_message(
             raw_message,
-            context={"requester_id": "client-a"},
+            context={"requester_id": "client-a", "lease_id": "lease-1"},
         )
 
         assert callback_called
@@ -112,7 +120,9 @@ class TestWebSocketHandler:
         assert response_data["type"] == "teleop_release_ack"
         assert response_data["status"] == "requested"
         assert response_data["requester_id"] == "client-a"
+        assert response_data["teleop_lease_id"] == "lease-1"
         assert response_data["known_holder_matches"] is True
+        assert response_data["known_lease_matches"] is True
         assert response_data["known_teleop_active"] is True
 
     @pytest.mark.asyncio
@@ -202,7 +212,7 @@ class TestWebSocketHandler:
         raw_message = json.dumps({"type": "status_query"})
         response = await self.handler.handle_message(
             raw_message,
-            context={"requester_id": "client-a"},
+            context={"requester_id": "client-a", "lease_id": "lease-1"},
         )
 
         assert response is not None
@@ -211,6 +221,7 @@ class TestWebSocketHandler:
         assert "current_status" in response_data
         assert response_data["result_code"] == 200
         assert response_data["requester_id"] == "client-a"
+        assert response_data["teleop_lease_id"] == ""
 
     @pytest.mark.asyncio
     async def test_handle_status_query_with_callback(self):
@@ -231,7 +242,7 @@ class TestWebSocketHandler:
         raw_message = json.dumps({"type": "status_query"})
         response = await self.handler.handle_message(
             raw_message,
-            context={"requester_id": "client-a"},
+            context={"requester_id": "client-a", "lease_id": "lease-1"},
         )
 
         response_data = json.loads(response)
@@ -239,7 +250,9 @@ class TestWebSocketHandler:
         assert response_data["character_name"] == "custom_robot"
         assert response_data["current_status"]["action"] == "walking"
         assert response_data["requester_id"] == "client-a"
+        assert response_data["teleop_lease_id"] == ""
         assert response_data["known_holder_matches"] is False
+        assert response_data["known_lease_matches"] is False
         assert response_data["known_teleop_active"] is False
         assert response_data["control_confirmed"] is False
 
@@ -250,6 +263,7 @@ class TestWebSocketHandler:
             "mode": "teleop_active",
             "active_source": "teleop",
             "teleop_holder_id": "client-a",
+            "teleop_lease_id": "lease-1",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -264,12 +278,13 @@ class TestWebSocketHandler:
         raw_message = json.dumps({"type": "status_query"})
         response = await self.handler.handle_message(
             raw_message,
-            context={"requester_id": "client-a"},
+            context={"requester_id": "client-a", "lease_id": "lease-1"},
         )
 
         response_data = json.loads(response)
         assert response_data["execution_state"]["mode"] == "teleop_active"
         assert response_data["execution_state"]["teleop_holder_id"] == "client-a"
+        assert response_data["execution_state"]["teleop_lease_id"] == "lease-1"
         assert response_data["execution_state"]["teleop_control_remaining_sec"] == 0.42
         assert response_data["execution_state"]["last_teleop_control_action"] == "claim"
         assert response_data["execution_state"]["last_teleop_control_accepted"] is True
@@ -278,7 +293,9 @@ class TestWebSocketHandler:
         assert response_data["current_status"]["listening"] is True
         assert response_data["current_status"]["action"] == "teleop_active"
         assert response_data["requester_id"] == "client-a"
+        assert response_data["teleop_lease_id"] == "lease-1"
         assert response_data["known_holder_matches"] is True
+        assert response_data["known_lease_matches"] is True
         assert response_data["known_teleop_active"] is True
         assert response_data["control_confirmed"] is True
         assert response_data["confirmation_source"] == "execution_state"

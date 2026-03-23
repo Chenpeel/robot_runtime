@@ -22,6 +22,7 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
             "mode": "teleop_active",
             "active_source": "teleop",
             "teleop_holder_id": "client-a",
+            "teleop_lease_id": "lease-1",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -36,7 +37,7 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
         response = asyncio.run(
             handler.handle_message(
                 json.dumps({"type": "status_query"}),
-                context={"requester_id": "client-a"},
+                context={"requester_id": "client-a", "lease_id": "lease-1"},
             )
         )
 
@@ -53,6 +54,10 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
             response_data["execution_state"]["teleop_holder_id"],
             "client-a",
         )
+        self.assertEqual(
+            response_data["execution_state"]["teleop_lease_id"],
+            "lease-1",
+        )
         self.assertAlmostEqual(
             response_data["execution_state"]["teleop_control_remaining_sec"],
             0.42,
@@ -67,7 +72,9 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
             "teleop_active",
         )
         self.assertEqual(response_data["requester_id"], "client-a")
+        self.assertEqual(response_data["teleop_lease_id"], "lease-1")
         self.assertTrue(response_data["known_holder_matches"])
+        self.assertTrue(response_data["known_lease_matches"])
         self.assertTrue(response_data["known_teleop_active"])
         self.assertTrue(response_data["control_confirmed"])
         self.assertEqual(

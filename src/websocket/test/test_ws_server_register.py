@@ -69,12 +69,21 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         websocket_a = _FakeWebSocket()
         websocket_b = _FakeWebSocket()
         server.clients.update({websocket_a, websocket_b})
-        server.client_info[websocket_a] = {"id": "client-a", "name": "a"}
-        server.client_info[websocket_b] = {"id": "client-b", "name": "b"}
+        server.client_info[websocket_a] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": '',
+        }
+        server.client_info[websocket_b] = {
+            "id": "client-b",
+            "name": "b",
+            "teleop_lease_id": '',
+        }
         server.update_execution_state({
             "mode": "teleop_active",
             "active_source": "teleop",
             "teleop_holder_id": "client-a",
+            "teleop_lease_id": "lease-1",
             "teleop_active": True,
             "motion_active": False,
             "estop_active": False,
@@ -84,6 +93,7 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
             "type": "execution_state",
             "execution_state": {
                 "teleop_holder_id": "client-a",
+                "teleop_lease_id": "lease-1",
                 "teleop_active": True,
             },
         })
@@ -92,13 +102,48 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         data_b = websocket_b.sent_messages[0]["data"]
 
         self.assertEqual(data_a["requester_id"], "client-a")
+        self.assertEqual(data_a["teleop_lease_id"], "lease-1")
         self.assertTrue(data_a["known_holder_matches"])
+        self.assertFalse(data_a["known_lease_matches"])
         self.assertTrue(data_a["known_teleop_active"])
         self.assertTrue(data_a["control_confirmed"])
         self.assertEqual(data_b["requester_id"], "client-b")
+        self.assertEqual(data_b["teleop_lease_id"], "lease-1")
         self.assertFalse(data_b["known_holder_matches"])
+        self.assertFalse(data_b["known_lease_matches"])
         self.assertTrue(data_b["known_teleop_active"])
         self.assertFalse(data_b["control_confirmed"])
+        self.assertEqual(
+            server.client_info[websocket_a]["teleop_lease_id"],
+            "lease-1",
+        )
+        self.assertEqual(server.client_info[websocket_b]["teleop_lease_id"], '')
+        self.assertEqual(
+            server._build_client_context(websocket_a)["lease_id"],
+            "lease-1",
+        )
+
+    async def test_disconnect_release_uses_cached_lease_id(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket = _FakeWebSocket()
+        server.client_info[websocket] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": "lease-1",
+        }
+
+        received_context = None
+
+        async def release_callback(context):
+            nonlocal received_context
+            received_context = context
+
+        server.handler.register_teleop_release_handler(release_callback)
+
+        await server._release_teleop_for_client(websocket)
+
+        self.assertEqual(received_context["requester_id"], "client-a")
+        self.assertEqual(received_context["lease_id"], "lease-1")
 
 
 if __name__ == '__main__':
