@@ -95,3 +95,17 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("'known_holder_matches': holder_matches", source)
         self.assertIn("'known_lease_matches': lease_matches", source)
         self.assertIn("'known_teleop_active': teleop_active", source)
+
+    def test_teleop_command_is_prevalidated_against_execution_state(self):
+        """teleop servo 命令应先按 execution_state 做 holder/lease 预校验"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("self._ensure_teleop_command_allowed(", source)
+        self.assertIn("TeleopControlRejectedException", source)
+        self.assertIn("'teleop_control_not_holder'", source)
+        self.assertIn("'teleop_control_lease_mismatch'", source)

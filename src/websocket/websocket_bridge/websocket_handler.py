@@ -13,7 +13,8 @@ from .error_codes import (
     ErrorResponse,
     SuccessResponse,
     InvalidServoCommandException,
-    ServoCommandFailedException
+    ServoCommandFailedException,
+    WebSocketException,
 )
 from .logger import get_logger
 
@@ -284,6 +285,8 @@ class WebSocketHandler:
                     servo_cmd,
                     context,
                 )
+            except WebSocketException as e:
+                return e.to_response(self.device_id)
             except Exception as e:
                 print(f"[WebSocketHandler] 舵机命令处理失败: {e}")
                 return ErrorResponse.create(

@@ -112,6 +112,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - 普通 `servo_control` 映射到 `MotionCommand` 时，也会开始透传当前连接的
   `requester_id` / `lease_id`；`execution_manager` 若收到这些字段，会优先按
   holder / lease 做更严格的 teleop 命令校验。
+- `bridge_node` 现在也会基于最新 `execution_state` 先做一层 holder / lease
+  预校验；若当前连接尚未确认控制权，会直接返回错误，不再先发命令再等执行层
+  拒绝。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
 - 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：

@@ -90,6 +90,8 @@
     keepalive / release 时优先继续透传。
   - 在 `servo_control` 等 teleop 命令链路中，开始把当前连接的
     `requester_id` / `lease_id` 一并透传到 `MotionCommand`。
+  - 在将 teleop 命令下发到执行层前，先基于最新 `execution_state` 做一层
+    holder / lease 预校验；若当前连接尚未确认控制权，会直接返回错误回包。
   - 在 WebSocket 连接断开时，按同一 session id 尝试自动释放 teleop holder。
   - 将 `teleop_claim_ack` / `teleop_release_ack` 收紧为“请求已转发”语义，
     并附带当前已知执行状态快照，不再把 ack 当成控制权已经生效。
@@ -133,6 +135,8 @@
     `execution_state` 广播，但它仍属于 WebSocket 出站层派生逻辑，还不是更
     正式的跨入口统一约束；同时 keepalive / release 虽已优先透传 lease，
     但执行层对空 lease 仍保留兼容回退。
+  - 当前 teleop 命令预校验依赖 `websocket_bridge` 持有的最新
+    `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
     双写 `duration_ms` 与 `value_encoding`，但外部消息仍保留
     `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。

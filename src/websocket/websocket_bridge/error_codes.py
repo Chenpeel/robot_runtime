@@ -22,6 +22,7 @@ class ErrorCode(IntEnum):
     MISSING_REQUIRED_FIELD = 4003
     INVALID_PARAMETER_VALUE = 4004
     UNSUPPORTED_MESSAGE_TYPE = 4005
+    TELEOP_CONTROL_REJECTED = 4006
 
     # 服务器错误 (5xx)
     INTERNAL_ERROR = 500
@@ -93,6 +94,7 @@ class ErrorResponse:
             ErrorCode.MISSING_REQUIRED_FIELD: "缺少必需字段",
             ErrorCode.INVALID_PARAMETER_VALUE: "参数值无效",
             ErrorCode.UNSUPPORTED_MESSAGE_TYPE: "不支持的消息类型",
+            ErrorCode.TELEOP_CONTROL_REJECTED: "teleop 控制权未确认",
             ErrorCode.INTERNAL_ERROR: "内部错误",
             ErrorCode.SERVO_COMMAND_FAILED: "舵机控制命令执行失败",
             ErrorCode.ROS_CALLBACK_FAILED: "ROS回调失败",
@@ -213,6 +215,13 @@ class ServoCommandFailedException(WebSocketException):
 
     def __init__(self, message: str = "", details: Optional[Dict[str, Any]] = None):
         super().__init__(ErrorCode.SERVO_COMMAND_FAILED, message, details)
+
+
+class TeleopControlRejectedException(WebSocketException):
+    """teleop 控制权未确认异常"""
+
+    def __init__(self, message: str = "", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.TELEOP_CONTROL_REJECTED, message, details)
 
 
 class ConnectionTimeoutException(WebSocketException):

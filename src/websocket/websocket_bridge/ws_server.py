@@ -12,6 +12,9 @@ from typing import Set, Optional
 from websockets.server import serve, WebSocketServerProtocol
 from websockets.exceptions import ConnectionClosed
 
+from .error_codes import ErrorCode
+from .error_codes import ErrorResponse
+from .error_codes import WebSocketException
 from .websocket_handler import WebSocketHandler
 
 
@@ -196,10 +199,13 @@ class WebSocketBridgeServer:
                 # 拦截 servo_control 类型的消息
                 if msg_type == "servo_control":
                     # 直接处理为舵机控制命令
-                    await self._handle_servo_control_direct(
+                    error_response = await self._handle_servo_control_direct(
                         data,
                         context=self._build_client_context(websocket),
                     )
+                    if error_response:
+                        await websocket.send(error_response)
+                        return
                     # 发送确认响应给客户端
                     ack = {
                         "type": "private_ack",
@@ -529,10 +535,13 @@ class WebSocketBridgeServer:
         try:
             servo_cmd = json.loads(content) if isinstance(
                 content, str) else content
-            await self._handle_servo_control_direct(
+            error_response = await self._handle_servo_control_direct(
                 servo_cmd,
                 context=self._build_client_context(websocket),
             )
+            if error_response:
+                await websocket.send(error_response)
+                return
 
             # 发送确认响应
             ack = {
@@ -556,7 +565,7 @@ class WebSocketBridgeServer:
         self,
         servo_cmd: dict,
         context: dict | None = None,
-    ):
+    ) -> str | None:
         """
         直接处理舵机控制命令并转发到 ROS 2
 
@@ -586,10 +595,20 @@ class WebSocketBridgeServer:
                     context,
                 )
                 self._debug("ws_servo", f"舵机命令已转发到 ROS2: {parsed_cmd}")
+                return None
+            except WebSocketException as e:
+                return e.to_response(self.device_id)
             except Exception as e:
                 print(f"[WebSocketServer] ROS2 命令处理失败: {e}")
+                return ErrorResponse.create(
+                    error_code=ErrorCode.SERVO_COMMAND_FAILED,
+                    message=f"舵机命令执行失败: {str(e)}",
+                    details={"command": parsed_cmd, "exception": str(e)},
+                    device_id=self.device_id,
+                )
         else:
             print(f"[WebSocketServer] 警告：没有注册舵机命令处理器")
+        return None
 
 
 async def run_server(host: str = "0.0.0.0", port: int = 9102,

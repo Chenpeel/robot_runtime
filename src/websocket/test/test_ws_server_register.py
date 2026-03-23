@@ -33,6 +33,7 @@ if 'websockets.server' not in sys.modules:
     sys.modules['websockets.exceptions'] = exceptions_module
 
 from websocket_bridge.ws_server import WebSocketBridgeServer
+from websocket_bridge.error_codes import TeleopControlRejectedException
 
 
 class _FakeWebSocket:
@@ -177,6 +178,42 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(received_command["servo_id"], 1)
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(received_context["lease_id"], "lease-1")
+
+    async def test_direct_servo_command_returns_error_response_on_rejection(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket = _FakeWebSocket()
+        server.client_info[websocket] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": "lease-1",
+        }
+
+        async def servo_callback(command, context):
+            del command, context
+            raise TeleopControlRejectedException(
+                message='teleop command rejected: teleop_control_not_holder',
+                details={'reason': 'teleop_control_not_holder'},
+            )
+
+        server.handler.register_servo_command_handler(servo_callback)
+
+        error_response = await server._handle_servo_control_direct(
+            {
+                "servo_type": "bus",
+                "servo_id": 1,
+                "position": 1500,
+                "speed": 100,
+            },
+            context=server._build_client_context(websocket),
+        )
+
+        response_data = json.loads(error_response)
+        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["error_name"], "TELEOP_CONTROL_REJECTED")
+        self.assertEqual(
+            response_data["details"]["reason"],
+            "teleop_control_not_holder",
+        )
 
 
 if __name__ == '__main__':

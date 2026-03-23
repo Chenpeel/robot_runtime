@@ -27,6 +27,7 @@ except Exception:  # pragma: no cover - optional dependency
     HAS_IMU_DATA = False
 
 from .ws_server import WebSocketBridgeServer
+from .error_codes import TeleopControlRejectedException
 from record_load_action.bvh_player import BvhActionPlayer
 from .debug_aggregator import DebugAggregator
 
@@ -270,6 +271,10 @@ class WebSocketROS2Bridge(Node):
             speed = self._coerce_uint16(servo_cmd.get("speed", 100), 100)
             requester_id = self._extract_requester_id(context)
             lease_id = self._extract_lease_id(context)
+            self._ensure_teleop_command_allowed(
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
 
             # 转换为 MotionCommand 消息
             msg = MotionCommand()
@@ -634,6 +639,44 @@ class WebSocketROS2Bridge(Node):
         if not isinstance(context, dict):
             return ''
         return str(context.get('lease_id') or '').strip()
+
+    def _ensure_teleop_command_allowed(
+        self,
+        requester_id: str,
+        lease_id: str,
+    ) -> None:
+        if not requester_id and not lease_id:
+            return
+
+        execution_state = dict(self.latest_execution_state)
+        holder_id = str(execution_state.get('teleop_holder_id') or '')
+        current_lease_id = str(execution_state.get('teleop_lease_id') or '')
+        teleop_active = bool(execution_state.get('teleop_active'))
+        active_source = str(execution_state.get('active_source') or '')
+
+        rejection_reason = ''
+        if not teleop_active or active_source != 'teleop':
+            rejection_reason = 'teleop_control_not_granted'
+        elif requester_id and holder_id != requester_id:
+            rejection_reason = 'teleop_control_not_holder'
+        elif lease_id and current_lease_id != lease_id:
+            rejection_reason = 'teleop_control_lease_mismatch'
+
+        if not rejection_reason:
+            return
+
+        raise TeleopControlRejectedException(
+            message=f'teleop command rejected: {rejection_reason}',
+            details={
+                'reason': rejection_reason,
+                'requester_id': requester_id,
+                'lease_id': lease_id,
+                'teleop_holder_id': holder_id,
+                'teleop_lease_id': current_lease_id,
+                'teleop_active': teleop_active,
+                'active_source': active_source,
+            },
+        )
 
     @staticmethod
     def _motion_value_encoding_for_servo_type(servo_type: str) -> str:

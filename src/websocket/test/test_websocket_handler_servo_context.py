@@ -10,6 +10,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from websocket_bridge.error_codes import TeleopControlRejectedException
 from websocket_bridge.websocket_handler import WebSocketHandler
 
 
@@ -49,6 +50,37 @@ class TestWebSocketHandlerServoContext(unittest.TestCase):
         self.assertEqual(received_command["servo_id"], 1)
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(received_context["lease_id"], "lease-1")
+
+    def test_servo_control_returns_explicit_error_when_teleop_rejected(self):
+        async def servo_callback(command, context):
+            del command, context
+            raise TeleopControlRejectedException(
+                message='teleop command rejected: teleop_control_not_granted',
+                details={'reason': 'teleop_control_not_granted'},
+            )
+
+        self.handler.register_servo_command_handler(servo_callback)
+
+        response = asyncio.run(
+            self.handler.handle_message(
+                json.dumps({
+                    "type": "servo_control",
+                    "servo_type": "bus",
+                    "servo_id": 1,
+                    "position": 10,
+                    "speed": 120,
+                }),
+                context={"requester_id": "client-a"},
+            )
+        )
+
+        response_data = json.loads(response)
+        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["error_name"], "TELEOP_CONTROL_REJECTED")
+        self.assertEqual(
+            response_data["details"]["reason"],
+            "teleop_control_not_granted",
+        )
 
 
 if __name__ == '__main__':
