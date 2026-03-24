@@ -340,6 +340,10 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 public launch 参数，并已有 source-level
     contract 测试固定最小 public surface。
+  - 当前 `simulation_bridge` 自己也已不再暴露
+    `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
+    参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
+    也不再感知这两个内部常量。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系

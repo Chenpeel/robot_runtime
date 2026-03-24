@@ -252,6 +252,10 @@
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulation 域 public launch 参数，并已有
   source-level contract 测试固定这层最小对外 surface。
+- `simulation_bridge/simulation_bridges.launch.py` 也已不再把
+  `servo_command_topic`、`servo_state_topic` 作为 public launch 参数暴露，
+  而是回收为 simulation 域内部固定 driver 接线；对应地
+  `robot_bringup/simulation.launch.py` 也不再感知这两个内部常量。
 
 动作：
 

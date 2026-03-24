@@ -30,18 +30,12 @@ class TestSimulationLaunchSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn(
-            "DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'",
-            source,
-        )
-        self.assertIn(
-            "DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'",
-            source,
-        )
-        self.assertNotIn("DeclareLaunchArgument(\n        'servo_command_topic'", source)
-        self.assertNotIn("DeclareLaunchArgument(\n        'servo_state_topic'", source)
-        self.assertIn("'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC", source)
-        self.assertIn("'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC", source)
+        self._assert_launch_argument_not_declared(source, 'servo_command_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'servo_state_topic_arg')
+        self.assertNotIn('DEFAULT_DRIVER_COMMAND_TOPIC', source)
+        self.assertNotIn('DEFAULT_DRIVER_STATE_TOPIC', source)
+        self.assertNotIn("'servo_command_topic':", source)
+        self.assertNotIn("'servo_state_topic':", source)
 
     def test_simulation_launch_keeps_sim_domain_topic_surface(self):
         source = Path(

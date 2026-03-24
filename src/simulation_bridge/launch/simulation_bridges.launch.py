@@ -6,6 +6,9 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
+DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
+
 
 def generate_launch_description():
     enable_isaac_bridge_arg = DeclareLaunchArgument(
@@ -60,17 +63,6 @@ def generate_launch_description():
         description='C++仿真桥接发布频率(Hz)',
     )
 
-    servo_command_topic_arg = DeclareLaunchArgument(
-        'servo_command_topic',
-        default_value='/servo/command',
-        description='驱动级舵机命令话题',
-    )
-    servo_state_topic_arg = DeclareLaunchArgument(
-        'servo_state_topic',
-        default_value='/servo/state',
-        description='驱动级舵机状态话题',
-    )
-
     isaac_bridge_node = Node(
         package='simulation_bridge',
         executable='isaac_bridge_node',
@@ -80,8 +72,8 @@ def generate_launch_description():
         parameters=[
             {'isaac_command_topic': LaunchConfiguration('isaac_command_topic')},
             {'isaac_state_topic': LaunchConfiguration('isaac_state_topic')},
-            {'servo_command_topic': LaunchConfiguration('servo_command_topic')},
-            {'servo_state_topic': LaunchConfiguration('servo_state_topic')},
+            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
+            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')},
             {'debug': LaunchConfiguration('isaac_bridge_debug')},
         ],
@@ -96,8 +88,8 @@ def generate_launch_description():
         parameters=[
             {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
             {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
-            {'servo_command_topic': LaunchConfiguration('servo_command_topic')},
-            {'servo_state_topic': LaunchConfiguration('servo_state_topic')},
+            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
+            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
             {'speed': 100},
             {'debug': LaunchConfiguration('sim_cpp_bridge_debug')},
@@ -115,8 +107,6 @@ def generate_launch_description():
         sim_joint_cmd_topic_arg,
         sim_joint_state_fb_topic_arg,
         sim_publish_rate_hz_arg,
-        servo_command_topic_arg,
-        servo_state_topic_arg,
         isaac_bridge_node,
         sim_cpp_bridge_node,
     ])

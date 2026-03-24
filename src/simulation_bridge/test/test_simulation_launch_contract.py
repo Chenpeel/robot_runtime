@@ -14,6 +14,12 @@ class TestSimulationLaunchContract(unittest.TestCase):
             rf"(?m)^\s*{variable_name}\s*=\s*DeclareLaunchArgument\(",
         )
 
+    def _assert_launch_argument_not_declared(self, source: str, variable_name: str):
+        self.assertNotRegex(
+            source,
+            rf"(?m)^\s*{variable_name}\s*=\s*DeclareLaunchArgument\(",
+        )
+
     def test_cpp_bridge_uses_unified_servo_command_topic_name(self):
         launch_source = Path(
             os.path.join(
@@ -34,8 +40,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
+        self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", launch_source)
+        self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", launch_source)
         self.assertIn(
-            "{'servo_command_topic': LaunchConfiguration('servo_command_topic')}",
+            "{'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC}",
             launch_source,
         )
         self.assertIn(
@@ -48,6 +60,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
+            launch_source,
+        )
+        self.assertNotIn(
+            "{'servo_command_topic': LaunchConfiguration('servo_command_topic')}",
+            launch_source,
+        )
+        self.assertNotIn(
+            "{'servo_state_topic': LaunchConfiguration('servo_state_topic')}",
             launch_source,
         )
         self.assertNotIn(
@@ -130,6 +150,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self._assert_launch_argument_declared(
             launch_source,
             'sim_publish_rate_hz_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            launch_source,
+            'servo_command_topic_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            launch_source,
+            'servo_state_topic_arg',
         )
 
 
