@@ -336,7 +336,7 @@
     一部分 simulator-facing 参数收口到 simulation 词表，但 Python / C++
     两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
     接口。
-  - 当前 `simulation_bridge` 与 `robot_bringup` 已显式声明
+  - 当前 `simulation_bridge` 已显式声明
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 public launch 参数，并已有 source-level
     contract 测试固定最小 public surface。
@@ -360,6 +360,11 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
     `robot_bringup/simulation.launch.py` 这个 simulation 域入口中。
+  - 当前 `robot_bringup/simulation.launch.py` 也已不再继续暴露
+    `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+    `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步
+    收回到 `simulation_bridge/simulation_bridges.launch.py` 这个
+    simulation 责任域自身的 launch contract 中。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系

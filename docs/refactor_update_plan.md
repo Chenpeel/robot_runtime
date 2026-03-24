@@ -247,8 +247,7 @@
   `sim_publish_rate_hz` 这组 simulation 域词表收口，并对旧
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
   保留过渡兼容。
-- `robot_bringup/simulation.launch.py` 与
-  `simulation_bridge/simulation_bridges.launch.py` 现在都已显式声明
+- `simulation_bridge/simulation_bridges.launch.py` 现在已显式声明
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulation 域 public launch 参数，并已有
   source-level contract 测试固定这层最小对外 surface。
@@ -274,6 +273,11 @@
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
   `robot_bringup/simulation.launch.py` 这个 simulation 域入口中。
+- `robot_bringup/simulation.launch.py` 也已不再继续暴露
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+  `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步收
+  回到 `simulation_bridge/simulation_bridges.launch.py` 这个 simulation
+  责任域自身的 launch contract 中。
 
 动作：
 

@@ -15,21 +15,6 @@ def generate_launch_description():
         default_value='true',
         description='是否启动simulation域桥接链路',
     )
-    sim_joint_cmd_topic_arg = DeclareLaunchArgument(
-        'sim_joint_cmd_topic',
-        default_value='/sim/joint_cmd',
-        description='仿真侧关节命令话题(std_msgs/Float32MultiArray)',
-    )
-    sim_joint_state_fb_topic_arg = DeclareLaunchArgument(
-        'sim_joint_state_fb_topic',
-        default_value='/sim/joint_state_fb',
-        description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
-    )
-    sim_publish_rate_hz_arg = DeclareLaunchArgument(
-        'sim_publish_rate_hz',
-        default_value='50.0',
-        description='C++仿真桥接发布频率(Hz)',
-    )
 
     simulation_bridges = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -40,11 +25,6 @@ def generate_launch_description():
             ])
         ),
         condition=IfCondition(LaunchConfiguration('enable_simulation')),
-        launch_arguments={
-            'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
-            'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
-            'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
-        }.items(),
     )
 
     log_info = LogInfo(
@@ -58,9 +38,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         enable_simulation_arg,
-        sim_joint_cmd_topic_arg,
-        sim_joint_state_fb_topic_arg,
-        sim_publish_rate_hz_arg,
         log_info,
         simulation_bridges,
     ])
