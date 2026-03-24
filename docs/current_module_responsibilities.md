@@ -344,6 +344,10 @@
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
     参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
     也不再感知这两个内部常量。
+  - 当前 `robot_bringup` 也已不再继续暴露
+    `isaac_command_topic`、`isaac_state_topic`、
+    `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置已
+    收回到 `simulation_bridge` 自己的 launch 边界。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系

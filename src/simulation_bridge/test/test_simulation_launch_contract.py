@@ -160,6 +160,39 @@ class TestSimulationLaunchContract(unittest.TestCase):
             'servo_state_topic_arg',
         )
 
+    def test_launch_surface_keeps_isaac_bridge_details_local_to_simulation_bridge(self):
+        launch_source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/simulation_bridges.launch.py',
+            )
+        ).read_text(encoding='utf-8')
+
+        self._assert_launch_argument_declared(
+            launch_source,
+            'isaac_command_topic_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
+            'isaac_state_topic_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
+            'isaac_enforce_limits_arg',
+        )
+        self.assertIn(
+            "{'isaac_command_topic': LaunchConfiguration('isaac_command_topic')}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'isaac_state_topic': LaunchConfiguration('isaac_state_topic')}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')}",
+            launch_source,
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

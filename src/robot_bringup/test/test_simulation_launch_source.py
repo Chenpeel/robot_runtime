@@ -37,6 +37,23 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'servo_command_topic':", source)
         self.assertNotIn("'servo_state_topic':", source)
 
+    def test_simulation_launch_hides_isaac_topic_details_from_public_surface(self):
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/simulation.launch.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
+        self._assert_launch_argument_declared(source, 'isaac_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
+        self.assertNotIn("'isaac_command_topic':", source)
+        self.assertNotIn("'isaac_state_topic':", source)
+        self.assertNotIn("'isaac_enforce_limits':", source)
+
     def test_simulation_launch_keeps_sim_domain_topic_surface(self):
         source = Path(
             os.path.join(
@@ -83,6 +100,23 @@ class TestSimulationLaunchSource(unittest.TestCase):
             "'servo_state_topic': '/servo/state'",
             source,
         )
+
+    def test_full_system_hides_isaac_topic_details_from_public_surface(self):
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/full_system.launch.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
+        self._assert_launch_argument_declared(source, 'isaac_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
+        self.assertNotIn("'isaac_command_topic':", source)
+        self.assertNotIn("'isaac_state_topic':", source)
+        self.assertNotIn("'isaac_enforce_limits':", source)
 
     def test_full_system_forwards_sim_domain_topic_surface(self):
         source = Path(

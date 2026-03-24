@@ -256,6 +256,11 @@
   `servo_command_topic`、`servo_state_topic` 作为 public launch 参数暴露，
   而是回收为 simulation 域内部固定 driver 接线；对应地
   `robot_bringup/simulation.launch.py` 也不再感知这两个内部常量。
+- `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
+  续暴露 `isaac_command_topic`、`isaac_state_topic`、
+  `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置现已
+  收回到 `simulation_bridge/simulation_bridges.launch.py` 自己的 launch
+  边界内。
 
 动作：
 
