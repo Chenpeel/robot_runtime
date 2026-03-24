@@ -236,6 +236,9 @@
 - `robot_bringup/full_system.launch.py` 已切到 include
   `simulation_bridge` 自己的仿真 launch。
 - `sim_servo_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界。
+- 仿真域对外 launch contract 已开始收紧最基础的 driver-facing 参数命名，
+  例如 C++ 仿真桥已开始以 `servo_command_topic` 作为对外主参数名，并对旧
+  `servo_cmd_topic` 保留过渡兼容。
 
 动作：
 

@@ -2,7 +2,7 @@ sim_servo_bridge:
   ros__parameters:
     joint_cmd_topic: "/sim/joint_cmd"
     joint_state_fb_topic: "/sim/joint_state_fb"
-    servo_cmd_topic: "/servo/command"
+    servo_command_topic: "/servo/command"
     servo_state_topic: "/servo/state"
     publish_rate_hz: 50.0
     speed: 100

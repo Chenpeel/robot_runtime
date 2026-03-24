@@ -96,7 +96,7 @@ def generate_launch_description():
         parameters=[
             {'joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
             {'joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
-            {'servo_cmd_topic': LaunchConfiguration('servo_command_topic')},
+            {'servo_command_topic': LaunchConfiguration('servo_command_topic')},
             {'servo_state_topic': LaunchConfiguration('servo_state_topic')},
             {'publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
             {'speed': 100},

@@ -29,10 +29,12 @@ class SimServoBridgeNode : public rclcpp::Node {
       "joint_cmd_topic", "/sim/joint_cmd");
     joint_state_fb_topic_ = this->declare_parameter<std::string>(
       "joint_state_fb_topic", "/sim/joint_state_fb");
-    servo_cmd_topic_ = this->declare_parameter<std::string>(
-      "servo_cmd_topic", "/servo/command");
+    servo_command_topic_ = this->declare_parameter<std::string>(
+      "servo_command_topic", "/servo/command");
     servo_state_topic_ = this->declare_parameter<std::string>(
       "servo_state_topic", "/servo/state");
+    const auto legacy_servo_cmd_topic = this->declare_parameter<std::string>(
+      "servo_cmd_topic", "");
 
     publish_rate_hz_ = this->declare_parameter<double>("publish_rate_hz", 50.0);
     speed_ = this->declare_parameter<int64_t>("speed", 100);
@@ -50,6 +52,25 @@ class SimServoBridgeNode : public rclcpp::Node {
       "servo_offsets_us", std::vector<double>{});
     debug_ = this->declare_parameter<bool>("debug", false);
 
+    if (
+      !legacy_servo_cmd_topic.empty() &&
+      servo_command_topic_ == "/servo/command")
+    {
+      servo_command_topic_ = legacy_servo_cmd_topic;
+      RCLCPP_WARN(
+        this->get_logger(),
+        "parameter servo_cmd_topic is deprecated, use servo_command_topic instead");
+    } else if (
+      !legacy_servo_cmd_topic.empty() &&
+      legacy_servo_cmd_topic != servo_command_topic_)
+    {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "ignoring deprecated servo_cmd_topic=%s because servo_command_topic=%s is set",
+        legacy_servo_cmd_topic.c_str(),
+        servo_command_topic_.c_str());
+    }
+
     validate_and_fix_parameters(default_mapping);
     load_servo_offsets(servo_ids_with_offset, servo_offsets_us);
     build_reverse_mapping();
@@ -58,7 +79,7 @@ class SimServoBridgeNode : public rclcpp::Node {
     latest_joint_state_rad_.fill(0.0);
 
     servo_cmd_pub_ = this->create_publisher<servo_msgs::msg::ServoCommand>(
-      servo_cmd_topic_, 100);
+      servo_command_topic_, 100);
     joint_state_fb_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
       joint_state_fb_topic_, 10);
 
@@ -81,7 +102,7 @@ class SimServoBridgeNode : public rclcpp::Node {
       this->get_logger(),
       "sim_servo_bridge_node started: %s -> %s, %s -> %s, rate=%.2fHz",
       joint_cmd_topic_.c_str(),
-      servo_cmd_topic_.c_str(),
+      servo_command_topic_.c_str(),
       servo_state_topic_.c_str(),
       joint_state_fb_topic_.c_str(),
       publish_rate_hz_);
@@ -284,7 +305,7 @@ class SimServoBridgeNode : public rclcpp::Node {
 
   std::string joint_cmd_topic_;
   std::string joint_state_fb_topic_;
-  std::string servo_cmd_topic_;
+  std::string servo_command_topic_;
   std::string servo_state_topic_;
   std::string servo_type_;
 
