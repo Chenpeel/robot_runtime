@@ -4,6 +4,7 @@ WebSocket桥接节点 - 连接WebSocket服务器和ROS 2舵机驱动
 数据流:
 1. WebSocket客户端 -> WebSocket服务器 -> bridge_node
    -> /execution/teleop/control + /execution/teleop/command -> execution_manager
+   -> /execution/motion/command (BVH/demo) -> execution_manager
 2. 舵机驱动节点 -> /servo/state话题 -> bridge_node -> WebSocket服务器 -> WebSocket客户端
 """
 
@@ -32,6 +33,7 @@ from record_load_action.bvh_player import BvhActionPlayer
 from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
+DEFAULT_BVH_COMMAND_TOPIC = '/execution/motion/command'
 DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
 
 
@@ -63,6 +65,7 @@ class WebSocketROS2Bridge(Node):
         self.declare_parameter('device_id', device_id)
         self.declare_parameter('debug', debug)
         self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
+        self.declare_parameter('bvh_command_topic', DEFAULT_BVH_COMMAND_TOPIC)
         self.declare_parameter('teleop_control_topic', DEFAULT_TELEOP_CONTROL_TOPIC)
         self.declare_parameter('execution_state_topic', '/execution/state')
         self.declare_parameter('imu_debug', debug)
@@ -79,6 +82,7 @@ class WebSocketROS2Bridge(Node):
         self.device_id = self.get_parameter('device_id').value
         self.debug = self.get_parameter('debug').value
         self.command_topic = self.get_parameter('command_topic').value
+        self.bvh_command_topic = self.get_parameter('bvh_command_topic').value
         self.teleop_control_topic = self.get_parameter('teleop_control_topic').value
         self.execution_state_topic = self.get_parameter('execution_state_topic').value
         self.imu_debug = self.get_parameter('imu_debug').value
@@ -101,10 +105,16 @@ class WebSocketROS2Bridge(Node):
             self.create_timer(self.debug_aggregate_period, self.debug_aggregator.flush)
 
         # ROS 2话题
-        # 发布舵机命令到驱动节点
-        self.servo_command_pub = self.create_publisher(
+        # 发布 teleop MotionCommand 到执行层
+        self.teleop_command_pub = self.create_publisher(
             MotionCommand,
             self.command_topic,
+            10
+        )
+        # 发布 demo/BVH MotionCommand 到 motion 入口
+        self.bvh_command_pub = self.create_publisher(
+            MotionCommand,
+            self.bvh_command_topic,
             10
         )
         self.teleop_control_pub = self.create_publisher(
@@ -155,6 +165,7 @@ class WebSocketROS2Bridge(Node):
         self.get_logger().info(
             f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}, '
             f'command_topic={self.command_topic}, '
+            f'bvh_command_topic={self.bvh_command_topic}, '
             f'teleop_control_topic={self.teleop_control_topic}, '
             f'execution_state_topic={self.execution_state_topic}'
         )
@@ -277,19 +288,17 @@ class WebSocketROS2Bridge(Node):
             )
 
             # 转换为 MotionCommand 消息
-            msg = MotionCommand()
-            msg.servo_type = servo_type
-            msg.servo_id = servo_cmd["servo_id"]
-            msg.position = position
-            msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
-            msg.duration_ms = speed
-            msg.speed = speed  # 默认速度100ms
-            msg.requester_id = requester_id
-            msg.lease_id = lease_id
-            msg.stamp = self.get_clock().now().to_msg()
+            msg = self._build_motion_command(
+                servo_type=servo_type,
+                servo_id=servo_cmd["servo_id"],
+                position=position,
+                duration_ms=speed,
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
 
             # 发布到ROS 2话题
-            self.servo_command_pub.publish(msg)
+            self.teleop_command_pub.publish(msg)
 
             self._debug_log(
                 "servo_command",
@@ -307,17 +316,15 @@ class WebSocketROS2Bridge(Node):
 
     def _publish_bvh_command(self, servo_type: str, servo_id: int,
                              position: int, speed: int) -> None:
-        msg = MotionCommand()
-        msg.servo_type = servo_type
-        msg.servo_id = int(servo_id)
-        msg.position = int(position)
-        msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
-        msg.duration_ms = int(speed)
-        msg.speed = int(speed)
-        msg.requester_id = ''
-        msg.lease_id = ''
-        msg.stamp = self.get_clock().now().to_msg()
-        self.servo_command_pub.publish(msg)
+        msg = self._build_motion_command(
+            servo_type=servo_type,
+            servo_id=int(servo_id),
+            position=int(position),
+            duration_ms=int(speed),
+            requester_id='',
+            lease_id='',
+        )
+        self.bvh_command_pub.publish(msg)
 
     async def handle_bvh_play(self, payload: dict):
         """处理BVH动作播放请求"""
@@ -687,6 +694,28 @@ class WebSocketROS2Bridge(Node):
         if normalized_type == 'pca':
             return 'pca_tick'
         return ''
+
+    def _build_motion_command(
+        self,
+        servo_type: str,
+        servo_id: int,
+        position: int,
+        duration_ms: int,
+        requester_id: str,
+        lease_id: str,
+    ) -> MotionCommand:
+        msg = MotionCommand()
+        msg.servo_type = str(servo_type)
+        msg.servo_id = int(servo_id)
+        msg.position = int(position)
+        msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
+        msg.duration_ms = int(duration_ms)
+        # 过渡期继续镜像到旧字段，便于旧 consumer 保持兼容。
+        msg.speed = int(duration_ms)
+        msg.requester_id = str(requester_id)
+        msg.lease_id = str(lease_id)
+        msg.stamp = self.get_clock().now().to_msg()
+        return msg
 
     def _teleop_control_is_active(self) -> bool:
         return bool(

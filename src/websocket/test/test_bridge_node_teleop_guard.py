@@ -122,6 +122,29 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             latest_execution_state=execution_state or {},
         )
 
+    @staticmethod
+    def _fake_clock():
+        class _Now:
+            def to_msg(self):
+                return 'fake-stamp'
+
+        class _Clock:
+            def now(self):
+                return _Now()
+
+        return _Clock()
+
+    @staticmethod
+    def _fake_publisher():
+        class _Publisher:
+            def __init__(self):
+                self.messages = []
+
+            def publish(self, msg):
+                self.messages.append(msg)
+
+        return _Publisher()
+
     def test_missing_identity_without_active_teleop_is_not_granted(self):
         bridge = self._bridge()
 
@@ -194,6 +217,43 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
         self.assertIsNone(result)
+
+    def test_bvh_command_uses_motion_publisher_with_empty_identity(self):
+        teleop_pub = self._fake_publisher()
+        bvh_pub = self._fake_publisher()
+        bridge = types.SimpleNamespace()
+        bridge.teleop_command_pub = teleop_pub
+        bridge.bvh_command_pub = bvh_pub
+        bridge.get_clock = self._fake_clock
+        bridge._motion_value_encoding_for_servo_type = (
+            WebSocketROS2Bridge._motion_value_encoding_for_servo_type
+        )
+        bridge._build_motion_command = (
+            lambda **kwargs: WebSocketROS2Bridge._build_motion_command(
+                bridge,
+                **kwargs,
+            )
+        )
+
+        WebSocketROS2Bridge._publish_bvh_command(
+            bridge,
+            'bus',
+            1,
+            1500,
+            80,
+        )
+
+        self.assertEqual(len(teleop_pub.messages), 0)
+        self.assertEqual(len(bvh_pub.messages), 1)
+        msg = bvh_pub.messages[0]
+        self.assertEqual(msg.servo_type, 'bus')
+        self.assertEqual(msg.servo_id, 1)
+        self.assertEqual(msg.position, 1500)
+        self.assertEqual(msg.value_encoding, 'bus_pulse_us')
+        self.assertEqual(msg.duration_ms, 80)
+        self.assertEqual(msg.speed, 80)
+        self.assertEqual(msg.requester_id, '')
+        self.assertEqual(msg.lease_id, '')
 
 
 if __name__ == '__main__':

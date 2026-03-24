@@ -38,6 +38,20 @@ class TestBridgeNodeTopics(unittest.TestCase):
             source
         )
 
+    def test_default_bvh_command_topic_constant(self):
+        """BVH/demo 默认应走 motion 执行入口，而不是复用 teleop 入口"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn(
+            "DEFAULT_BVH_COMMAND_TOPIC = '/execution/motion/command'",
+            source
+        )
+
     def test_execution_state_mapping_includes_teleop_control_feedback(self):
         """execution_state 映射应包含 teleop 控制权反馈字段"""
         source = Path(
@@ -79,6 +93,18 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("msg.duration_ms", source)
         self.assertIn("msg.requester_id", source)
         self.assertIn("msg.lease_id", source)
+
+    def test_bvh_publish_uses_dedicated_motion_topic(self):
+        """BVH/demo 应通过独立 motion publisher 下发，避免复用 teleop 入口"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("self.bvh_command_pub = self.create_publisher(", source)
+        self.assertIn("self.bvh_command_pub.publish(msg)", source)
 
     def test_teleop_ack_payload_includes_execution_snapshot(self):
         """teleop ack 应携带当前 execution_state 快照语义"""

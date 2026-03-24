@@ -75,11 +75,15 @@ python -m websocket_bridge.ws_server --host 0.0.0.0 --port 9105 --debug
 舵机控制请求仍通过参数 `command_topic` 发布到
 `motion_msgs/MotionCommand`，默认值为 `/execution/teleop/command`。
 
+BVH/demo 回放请求则通过参数 `bvh_command_topic` 发布到
+`motion_msgs/MotionCommand`，默认值为 `/execution/motion/command`。
+
 完整系统默认链路如下：
 
 ```text
 WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
-          -> bridge_node -> MotionCommand -> /execution/teleop/command
+          -> bridge_node -> MotionCommand (teleop) -> /execution/teleop/command
+          -> bridge_node -> MotionCommand (bvh/demo) -> /execution/motion/command
           -> execution_manager -> ServoCommand -> /servo/command
 ```
 
@@ -123,6 +127,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   - 兼容字段：`position`、`speed`
   - 增量语义字段：`value_encoding`、`duration_ms`
   - teleop 身份字段：`requester_id`、`lease_id`
+- `bvh_play` 触发的 demo/BVH 回放默认会走 `bvh_command_topic`，即
+  `/execution/motion/command`，不再复用 teleop 的 `command_topic`。
 
 状态查询与状态广播现在也会携带执行层反馈：
 

@@ -170,6 +170,9 @@
   `parallel_3dof_controller` 已先在 producer 内部显式以
   `duration_ms` / `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜
   像字段。
+- `websocket_bridge` 内部的 demo/BVH 回放链路也已开始默认改走
+  `/execution/motion/command`，不再复用 teleop 命令入口，降低 demo 能力与
+  teleop 控制权约束的耦合。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 

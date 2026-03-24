@@ -100,6 +100,9 @@
   - 在 `status_query` 回包与 `execution_state` 状态广播里提供连接级
     requester 视角的 teleop 控制权确认字段，便于客户端将当前连接与执行层
     holder / lease 状态对齐。
+  - 通过 `record_load_action` 触发 BVH 动作播放时，已开始默认将 demo/BVH
+    生成的 `MotionCommand` 输出到 motion 执行入口，而不再复用 teleop 命令入
+    口。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
@@ -119,6 +122,9 @@
   - 通过参数 `command_topic` 默认输出
     `motion_msgs/MotionCommand` 到
     `/execution/teleop/command`
+  - 通过参数 `bvh_command_topic` 默认输出
+    `motion_msgs/MotionCommand` 到
+    `/execution/motion/command`
   - WebSocket 状态广播
   - WebSocket 执行状态广播与状态查询回包
   - WebSocket IMU 广播
@@ -128,6 +134,8 @@
   - 不应该长期承载 demo/BVH 与系统级 launch 编排。
 - 当前问题
   - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
+  - demo/BVH 虽已不再复用 teleop 执行入口，但能力本身仍挂在
+    `websocket_bridge` 包内，尚未真正从 teleop 主链路边界里抽离。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
     但当前还没有更正式的抢占策略和上层接口约束。
