@@ -166,7 +166,10 @@
   setpoint 语义，再继续仲裁并转发到驱动层。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
   `execution_manager` 已优先读取新字段，`websocket_bridge` 与
-  `parallel_3dof_controller` 也已开始双写。
+  `parallel_3dof_controller` 也已开始双写；其中
+  `parallel_3dof_controller` 已先在 producer 内部显式以
+  `duration_ms` / `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜
+  像字段。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 

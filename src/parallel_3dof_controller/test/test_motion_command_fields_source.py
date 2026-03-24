@@ -16,8 +16,9 @@ class TestMotionCommandFieldsSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("servo_msg.value_encoding = 'bus_pulse_us'", source)
-        self.assertIn("servo_msg.duration_ms = cmd['speed']", source)
+        self.assertIn("motion_msg.value_encoding = 'bus_pulse_us'", source)
+        self.assertIn("motion_msg.duration_ms = duration_ms", source)
+        self.assertIn("duration_ms = int(cmd['speed'])", source)
 
 
 if __name__ == '__main__':

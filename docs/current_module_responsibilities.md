@@ -216,7 +216,8 @@
   - 订阅脚踝 RPY 姿态命令。
   - 进行 3-DOF 并联机构运动学求解。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
-  - 在输出 `MotionCommand` 时开始双写 `duration_ms` 与 `value_encoding`。
+  - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
+    `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜像字段。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
@@ -231,7 +232,8 @@
   - 不负责驱动协议本身。
 - 当前问题
   - 已不再直接依赖 `servo_msgs`。当前 `MotionCommand` 也已开始补充更明确的
-    时长与编码语义，但外部接口仍保留驱动风格字段作为过渡接口。
+    时长与编码语义，controller 内部也已先按新语义表达；但外部接口仍保留驱动
+    风格字段作为过渡接口。
 - 与长期规划的关系
   - 长期更接近 `motion_control` 的前身。
   - 当前已先输出到执行边界，后续还需继续把过渡消息演进为更稳定的控制语

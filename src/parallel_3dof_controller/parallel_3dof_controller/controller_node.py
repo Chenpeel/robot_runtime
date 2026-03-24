@@ -1,7 +1,7 @@
 """
 3-DOF并联控制器ROS 2节点
 
-订阅脚踝姿态命令,转换为舵机控制命令并发布
+订阅脚踝姿态命令,转换为 MotionCommand 并发布
 """
 
 import rclpy
@@ -23,12 +23,12 @@ class Parallel3DOFControllerNode(Node):
 
     功能:
     - 订阅脚踝RPY姿态命令
-    - 将RPY转换为舵机角度
-    - 发布舵机控制命令
+    - 将RPY转换为舵机目标
+    - 发布 MotionCommand 执行命令
 
     话题:
     - 订阅: ~/ankle_rpy (Vector3) - 脚踝RPY命令 (度)
-    - 发布: command_topic (MotionCommand) - 舵机控制命令
+    - 发布: command_topic (MotionCommand) - 执行命令
     - 发布: ~/ankle_theta (Float32MultiArray) - Theta角反馈 (度)
 
     参数:
@@ -39,7 +39,7 @@ class Parallel3DOFControllerNode(Node):
     - servo_ids: 自定义舵机ID列表 (3个元素)
     - servo_offsets: 自定义舵机offset列表 (3个元素, 可选)
     - servo_directions: 自定义舵机direction列表 (3个元素, 可选)
-    - default_speed: 默认舵机速度 (毫秒, 默认100)
+    - default_speed: 默认运动时长 (毫秒, 保留旧参数名, 默认100)
     - command_topic: 控制命令输出话题 (默认/execution/motion/command)
     - debug: 是否打印调试信息 (默认False)
     """
@@ -130,8 +130,8 @@ class Parallel3DOFControllerNode(Node):
             10
         )
 
-        # 发布舵机命令
-        self.servo_cmd_pub = self.create_publisher(
+        # 发布执行命令
+        self.motion_command_pub = self.create_publisher(
             MotionCommand,
             self.command_topic,
             10
@@ -185,23 +185,16 @@ class Parallel3DOFControllerNode(Node):
                 speed=self.default_speed
             )
 
-            # 发布舵机命令
+            # 将求解器输出适配为 MotionCommand 并发布
             for cmd in commands:
-                servo_msg = MotionCommand()
-                servo_msg.servo_type = "bus"  # 总线舵机
-                servo_msg.servo_id = cmd['id']
-                servo_msg.position = cmd['position']
-                servo_msg.value_encoding = 'bus_pulse_us'
-                servo_msg.duration_ms = cmd['speed']
-                servo_msg.speed = cmd['speed']
-                servo_msg.requester_id = ''
-                servo_msg.lease_id = ''
-                servo_msg.stamp = self.get_clock().now().to_msg()
-                self.servo_cmd_pub.publish(servo_msg)
+                motion_msg = self._build_motion_command(cmd)
+                self.motion_command_pub.publish(motion_msg)
 
                 if self.debug:
                     self.get_logger().info(
-                        f"  舵机ID={cmd['id']}: position={cmd['position']}us, "
+                        f"  actuator_id={motion_msg.servo_id}: "
+                        f"target_pulse_us={motion_msg.position}, "
+                        f"duration_ms={motion_msg.duration_ms}, "
                         f"theta={cmd['theta_deg']:.2f}°"
                     )
 
@@ -216,6 +209,23 @@ class Parallel3DOFControllerNode(Node):
 
         except Exception as e:
             self.get_logger().error(f"处理RPY命令失败: {e}")
+
+    def _build_motion_command(self, cmd: dict) -> MotionCommand:
+        target_pulse_us = int(cmd['position'])
+        duration_ms = int(cmd['speed'])
+
+        motion_msg = MotionCommand()
+        motion_msg.servo_type = "bus"
+        motion_msg.servo_id = int(cmd['id'])
+        motion_msg.position = target_pulse_us
+        motion_msg.value_encoding = 'bus_pulse_us'
+        motion_msg.duration_ms = duration_ms
+        # 过渡期继续镜像到旧字段，便于旧 consumer 保持兼容。
+        motion_msg.speed = duration_ms
+        motion_msg.requester_id = ''
+        motion_msg.lease_id = ''
+        motion_msg.stamp = self.get_clock().now().to_msg()
+        return motion_msg
 
 
 def main(args=None):
