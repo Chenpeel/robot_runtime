@@ -46,13 +46,17 @@ class TestSimulationLaunchSource(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
-        self._assert_launch_argument_declared(source, 'isaac_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_bridge_debug_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
+        self._assert_launch_argument_declared(source, 'enable_sim_cpp_bridge_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self.assertNotIn("'isaac_bridge_debug':", source)
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
         self.assertNotIn("'isaac_enforce_limits':", source)
+        self.assertNotIn("'sim_cpp_bridge_debug':", source)
 
     def test_simulation_launch_keeps_sim_domain_topic_surface(self):
         source = Path(
@@ -110,13 +114,17 @@ class TestSimulationLaunchSource(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
-        self._assert_launch_argument_declared(source, 'isaac_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'isaac_bridge_debug_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
+        self._assert_launch_argument_declared(source, 'enable_sim_cpp_bridge_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self.assertNotIn("'isaac_bridge_debug':", source)
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
         self.assertNotIn("'isaac_enforce_limits':", source)
+        self.assertNotIn("'sim_cpp_bridge_debug':", source)
 
     def test_full_system_forwards_sim_domain_topic_surface(self):
         source = Path(

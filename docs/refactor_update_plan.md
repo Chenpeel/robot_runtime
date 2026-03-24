@@ -261,6 +261,10 @@
   `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置现已
   收回到 `simulation_bridge/simulation_bridges.launch.py` 自己的 launch
   边界内。
+- `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
+  续暴露 `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-
+  specific debug 开关；相关调试参数现已只保留在
+  `simulation_bridge/simulation_bridges.launch.py` 自己的 launch 边界。
 
 动作：
 

@@ -174,11 +174,23 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self._assert_launch_argument_declared(
             launch_source,
+            'isaac_bridge_debug_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
             'isaac_state_topic_arg',
         )
         self._assert_launch_argument_declared(
             launch_source,
             'isaac_enforce_limits_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
+            'sim_cpp_bridge_debug_arg',
+        )
+        self.assertIn(
+            "{'debug': LaunchConfiguration('isaac_bridge_debug')}",
+            launch_source,
         )
         self.assertIn(
             "{'isaac_command_topic': LaunchConfiguration('isaac_command_topic')}",
@@ -190,6 +202,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             "{'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'debug': LaunchConfiguration('sim_cpp_bridge_debug')}",
             launch_source,
         )
 
