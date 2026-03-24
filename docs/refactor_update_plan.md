@@ -242,6 +242,11 @@
 - `robot_bringup/simulation.launch.py` 也已开始把 driver-facing 的
   `/servo/command` / `/servo/state` 接线收回为 simulation 域内部固定值，
   不再继续把这两个参数暴露为 bringup 的 public surface。
+- C++ 仿真桥对 simulator-facing 的 public 参数名也已开始向
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+  `sim_publish_rate_hz` 这组 simulation 域词表收口，并对旧
+  `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
+  保留过渡兼容。
 
 动作：
 

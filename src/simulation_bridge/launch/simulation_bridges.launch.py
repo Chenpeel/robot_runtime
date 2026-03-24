@@ -44,16 +44,6 @@ def generate_launch_description():
         default_value='false',
         description='C++仿真桥接节点调试模式',
     )
-    sim_joint_cmd_topic_arg = DeclareLaunchArgument(
-        'sim_joint_cmd_topic',
-        default_value='/sim/joint_cmd',
-        description='仿真侧关节命令话题(std_msgs/Float32MultiArray)',
-    )
-    sim_joint_state_fb_topic_arg = DeclareLaunchArgument(
-        'sim_joint_state_fb_topic',
-        default_value='/sim/joint_state_fb',
-        description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
-    )
     sim_publish_rate_hz_arg = DeclareLaunchArgument(
         'sim_publish_rate_hz',
         default_value='50.0',
@@ -94,11 +84,11 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(LaunchConfiguration('enable_sim_cpp_bridge')),
         parameters=[
-            {'joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
-            {'joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
+            {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
+            {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
             {'servo_command_topic': LaunchConfiguration('servo_command_topic')},
             {'servo_state_topic': LaunchConfiguration('servo_state_topic')},
-            {'publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
+            {'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
             {'speed': 100},
             {'debug': LaunchConfiguration('sim_cpp_bridge_debug')},
         ],

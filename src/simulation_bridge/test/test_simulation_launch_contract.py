@@ -33,7 +33,39 @@ class TestSimulationLaunchContract(unittest.TestCase):
             launch_source,
         )
         self.assertIn(
+            "{'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')}",
+            launch_source,
+        )
+        self.assertIn(
+            "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
+            launch_source,
+        )
+        self.assertIn(
+            '"sim_joint_cmd_topic", "/sim/joint_cmd"',
+            cpp_source,
+        )
+        self.assertIn(
+            '"sim_joint_state_fb_topic", "/sim/joint_state_fb"',
+            cpp_source,
+        )
+        self.assertIn(
+            '"sim_publish_rate_hz", 50.0',
+            cpp_source,
+        )
+        self.assertIn(
             '"servo_command_topic", "/servo/command"',
+            cpp_source,
+        )
+        self.assertIn(
+            '"joint_cmd_topic", ""',
+            cpp_source,
+        )
+        self.assertIn(
+            '"joint_state_fb_topic", ""',
             cpp_source,
         )
         self.assertIn(
@@ -41,7 +73,23 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_source,
         )
         self.assertIn(
+            '"publish_rate_hz", -1.0',
+            cpp_source,
+        )
+        self.assertIn(
+            'sim_joint_cmd_topic: "/sim/joint_cmd"',
+            default_params,
+        )
+        self.assertIn(
+            'sim_joint_state_fb_topic: "/sim/joint_state_fb"',
+            default_params,
+        )
+        self.assertIn(
             'servo_command_topic: "/servo/command"',
+            default_params,
+        )
+        self.assertIn(
+            'sim_publish_rate_hz: 50.0',
             default_params,
         )
 

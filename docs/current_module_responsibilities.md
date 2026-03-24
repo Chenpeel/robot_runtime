@@ -332,8 +332,10 @@
   - 当前只收口了 Python Isaac 桥，`sim_servo_bridge_cpp` 仍是独立 C++ 包。
   - 整机编排虽已迁到 `robot_bringup`，但仿真域仍是跨
     `simulation_bridge` 与 `sim_servo_bridge_cpp` 组合。
-  - 仿真域内部虽然已开始统一 launch contract，但 Python / C++ 两条桥接链
-    路的 topic 与参数语义仍未完全收成一套更高层的 simulation 接口。
+  - 仿真域内部虽然已开始统一 launch contract，并已将 driver-facing 参数与
+    一部分 simulator-facing 参数收口到 simulation 词表，但 Python / C++
+    两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
+    接口。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系
@@ -364,8 +366,11 @@
 - 当前问题
   - 仍然直接耦合驱动级接口。
   - 当前虽已开始以 `servo_command_topic` 作为对外主参数名，并对旧
-    `servo_cmd_topic` 保留兼容，但仿真域的其它参数与消息 contract 仍未完全
-    统一。
+    `servo_cmd_topic` 保留兼容；同时 simulator-facing 参数也已开始以
+    `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+    `sim_publish_rate_hz` 作为对外主名，并对旧
+    `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
+    保留兼容，但仿真域的其它参数与消息 contract 仍未完全统一。
   - 当前通过 `robot_bringup` 的整机 launch 启停，仍未完全收口到统一的
     `simulation_bridge` 包边界。
 - 与长期规划的关系
