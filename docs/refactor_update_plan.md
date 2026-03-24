@@ -239,6 +239,9 @@
 - 仿真域对外 launch contract 已开始收紧最基础的 driver-facing 参数命名，
   例如 C++ 仿真桥已开始以 `servo_command_topic` 作为对外主参数名，并对旧
   `servo_cmd_topic` 保留过渡兼容。
+- `robot_bringup/simulation.launch.py` 也已开始把 driver-facing 的
+  `/servo/command` / `/servo/state` 接线收回为 simulation 域内部固定值，
+  不再继续把这两个参数暴露为 bringup 的 public surface。
 
 动作：
 

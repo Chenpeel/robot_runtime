@@ -6,6 +6,9 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
+DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
+DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
+
 
 def generate_launch_description():
     """Generate simulation stack launch description."""
@@ -59,16 +62,6 @@ def generate_launch_description():
         default_value='50.0',
         description='C++仿真桥接发布频率(Hz)',
     )
-    servo_command_topic_arg = DeclareLaunchArgument(
-        'servo_command_topic',
-        default_value='/servo/command',
-        description='驱动级舵机命令话题',
-    )
-    servo_state_topic_arg = DeclareLaunchArgument(
-        'servo_state_topic',
-        default_value='/servo/state',
-        description='驱动级舵机状态话题',
-    )
 
     simulation_bridges = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -89,8 +82,8 @@ def generate_launch_description():
             'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
             'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
             'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
-            'servo_command_topic': LaunchConfiguration('servo_command_topic'),
-            'servo_state_topic': LaunchConfiguration('servo_state_topic'),
+            'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC,
+            'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC,
         }.items(),
     )
 
@@ -103,11 +96,11 @@ def generate_launch_description():
             '  C++仿真桥启用: ',
             LaunchConfiguration('enable_sim_cpp_bridge'),
             '\n',
-            '  驱动命令话题: ',
-            LaunchConfiguration('servo_command_topic'),
+            '  驱动命令话题(内部固定): ',
+            DEFAULT_DRIVER_COMMAND_TOPIC,
             '\n',
-            '  驱动状态话题: ',
-            LaunchConfiguration('servo_state_topic'),
+            '  驱动状态话题(内部固定): ',
+            DEFAULT_DRIVER_STATE_TOPIC,
             '\n',
         ],
     )
@@ -123,8 +116,6 @@ def generate_launch_description():
         sim_joint_cmd_topic_arg,
         sim_joint_state_fb_topic_arg,
         sim_publish_rate_hz_arg,
-        servo_command_topic_arg,
-        servo_state_topic_arg,
         log_info,
         simulation_bridges,
     ])

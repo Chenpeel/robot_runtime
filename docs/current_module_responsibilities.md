@@ -57,6 +57,8 @@
   - 将整机编排拆为 hardware、teleop、simulation 三个子 launch。
   - 组合 `execution_manager`、`websocket_bridge`、`servo_hardware`、
     `sensor_hardware` 与 `simulation_bridge` 等运行链路。
+  - 已开始收回 simulation 域内部的 driver-facing 接线细节，避免整机层继续
+    把 `/servo/command` / `/servo/state` 当成仿真入口的公共参数面。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
@@ -332,8 +334,8 @@
     `simulation_bridge` 与 `sim_servo_bridge_cpp` 组合。
   - 仿真域内部虽然已开始统一 launch contract，但 Python / C++ 两条桥接链
     路的 topic 与参数语义仍未完全收成一套更高层的 simulation 接口。
-  - 当前虽然已有独立 launch，但整机默认链路仍需由 `robot_bringup`
-    include 调起。
+  - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
+    内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系
   - 已开始形成 `simulation_bridge` 正式责任域。
   - 后续需要继续把 C++ 仿真桥与 launch 组织一起收口。

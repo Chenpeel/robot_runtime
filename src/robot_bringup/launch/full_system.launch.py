@@ -362,8 +362,6 @@ def generate_launch_description():
             'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
             'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
             'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
-            'servo_command_topic': '/servo/command',
-            'servo_state_topic': '/servo/state',
         }.items(),
     )
 
