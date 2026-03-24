@@ -44,6 +44,16 @@ def generate_launch_description():
         default_value='false',
         description='C++仿真桥接节点调试模式',
     )
+    sim_joint_cmd_topic_arg = DeclareLaunchArgument(
+        'sim_joint_cmd_topic',
+        default_value='/sim/joint_cmd',
+        description='仿真侧关节命令话题(std_msgs/Float32MultiArray)',
+    )
+    sim_joint_state_fb_topic_arg = DeclareLaunchArgument(
+        'sim_joint_state_fb_topic',
+        default_value='/sim/joint_state_fb',
+        description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
+    )
     sim_publish_rate_hz_arg = DeclareLaunchArgument(
         'sim_publish_rate_hz',
         default_value='50.0',

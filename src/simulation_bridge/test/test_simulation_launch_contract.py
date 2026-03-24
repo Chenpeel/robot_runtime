@@ -8,6 +8,12 @@ from pathlib import Path
 class TestSimulationLaunchContract(unittest.TestCase):
     """固定仿真域对外 contract 的最小统一语义。"""
 
+    def _assert_launch_argument_declared(self, source: str, variable_name: str):
+        self.assertRegex(
+            source,
+            rf"(?m)^\s*{variable_name}\s*=\s*DeclareLaunchArgument\(",
+        )
+
     def test_cpp_bridge_uses_unified_servo_command_topic_name(self):
         launch_source = Path(
             os.path.join(
@@ -42,6 +48,18 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
+            launch_source,
+        )
+        self.assertNotIn(
+            "{'joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')}",
+            launch_source,
+        )
+        self.assertNotIn(
+            "{'joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')}",
+            launch_source,
+        )
+        self.assertNotIn(
+            "{'publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
             launch_source,
         )
         self.assertIn(
@@ -91,6 +109,27 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertIn(
             'sim_publish_rate_hz: 50.0',
             default_params,
+        )
+
+    def test_launch_surface_keeps_sim_domain_args_visible(self):
+        launch_source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/simulation_bridges.launch.py',
+            )
+        ).read_text(encoding='utf-8')
+
+        self._assert_launch_argument_declared(
+            launch_source,
+            'sim_joint_cmd_topic_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
+            'sim_joint_state_fb_topic_arg',
+        )
+        self._assert_launch_argument_declared(
+            launch_source,
+            'sim_publish_rate_hz_arg',
         )
 
 
