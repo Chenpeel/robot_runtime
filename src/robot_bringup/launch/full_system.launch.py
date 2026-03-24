@@ -174,21 +174,6 @@ def generate_launch_description():
         default_value='true',
         description='是否启动simulation域桥接链路',
     )
-    sim_joint_cmd_topic_arg = DeclareLaunchArgument(
-        'sim_joint_cmd_topic',
-        default_value='/sim/joint_cmd',
-        description='仿真侧关节命令话题(std_msgs/Float32MultiArray)',
-    )
-    sim_joint_state_fb_topic_arg = DeclareLaunchArgument(
-        'sim_joint_state_fb_topic',
-        default_value='/sim/joint_state_fb',
-        description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
-    )
-    sim_publish_rate_hz_arg = DeclareLaunchArgument(
-        'sim_publish_rate_hz',
-        default_value='50.0',
-        description='C++仿真桥接发布频率(Hz)',
-    )
     baudrate_arg = DeclareLaunchArgument(
         'baudrate',
         default_value='115200',
@@ -323,9 +308,6 @@ def generate_launch_description():
         ),
         launch_arguments={
             'enable_simulation': LaunchConfiguration('enable_simulation'),
-            'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
-            'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
-            'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
         }.items(),
     )
 
@@ -395,9 +377,6 @@ def generate_launch_description():
         debug_aggregate_max_len_arg,
         bvh_action_file_arg,
         enable_simulation_arg,
-        sim_joint_cmd_topic_arg,
-        sim_joint_state_fb_topic_arg,
-        sim_publish_rate_hz_arg,
         baudrate_arg,
         i2c_address_arg,
         i2c_bus_arg,

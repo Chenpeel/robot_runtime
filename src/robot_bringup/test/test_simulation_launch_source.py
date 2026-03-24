@@ -141,7 +141,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'isaac_enforce_limits':", source)
         self.assertNotIn("'sim_cpp_bridge_debug':", source)
 
-    def test_full_system_forwards_sim_domain_topic_surface(self):
+    def test_full_system_hides_sim_domain_topic_details_from_public_surface(self):
         source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -149,21 +149,12 @@ class TestSimulationLaunchSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self._assert_launch_argument_declared(source, 'sim_joint_cmd_topic_arg')
-        self._assert_launch_argument_declared(source, 'sim_joint_state_fb_topic_arg')
-        self._assert_launch_argument_declared(source, 'sim_publish_rate_hz_arg')
-        self.assertIn(
-            "'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')",
-            source,
-        )
-        self.assertIn(
-            "'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')",
-            source,
-        )
-        self.assertIn(
-            "'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')",
-            source,
-        )
+        self._assert_launch_argument_not_declared(source, 'sim_joint_cmd_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_joint_state_fb_topic_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_publish_rate_hz_arg')
+        self.assertNotIn("'sim_joint_cmd_topic':", source)
+        self.assertNotIn("'sim_joint_state_fb_topic':", source)
+        self.assertNotIn("'sim_publish_rate_hz':", source)
 
     def test_parallel_multi_system_disables_simulation_domain_with_single_switch(self):
         source = Path(

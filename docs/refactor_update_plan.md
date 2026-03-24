@@ -270,6 +270,10 @@
   关，而是改为只保留一个 `enable_simulation` 域级开关；内部两套 bridge
   的 enable 参数现已只保留在
   `simulation_bridge/simulation_bridges.launch.py` 自己的 launch 边界。
+- `robot_bringup/full_system.launch.py` 也已不再继续暴露
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+  `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
+  `robot_bringup/simulation.launch.py` 这个 simulation 域入口中。
 
 动作：
 
