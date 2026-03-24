@@ -45,13 +45,21 @@ class TestSimulationLaunchSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
+        self._assert_launch_argument_declared(source, 'enable_simulation_arg')
+        self._assert_launch_argument_not_declared(source, 'enable_isaac_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_bridge_debug_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
-        self._assert_launch_argument_declared(source, 'enable_sim_cpp_bridge_arg')
+        self._assert_launch_argument_not_declared(source, 'enable_sim_cpp_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self.assertIn(
+            "condition=IfCondition(LaunchConfiguration('enable_simulation'))",
+            source,
+        )
+        self.assertIn("'enable_simulation'", source)
+        self.assertNotIn("'enable_isaac_bridge':", source)
+        self.assertNotIn("'enable_sim_cpp_bridge':", source)
         self.assertNotIn("'isaac_bridge_debug':", source)
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
@@ -113,13 +121,20 @@ class TestSimulationLaunchSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self._assert_launch_argument_declared(source, 'enable_isaac_bridge_arg')
+        self._assert_launch_argument_declared(source, 'enable_simulation_arg')
+        self._assert_launch_argument_not_declared(source, 'enable_isaac_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_bridge_debug_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_command_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_state_topic_arg')
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
-        self._assert_launch_argument_declared(source, 'enable_sim_cpp_bridge_arg')
+        self._assert_launch_argument_not_declared(source, 'enable_sim_cpp_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self.assertIn(
+            "'enable_simulation': LaunchConfiguration('enable_simulation')",
+            source,
+        )
+        self.assertNotIn("'enable_isaac_bridge':", source)
+        self.assertNotIn("'enable_sim_cpp_bridge':", source)
         self.assertNotIn("'isaac_bridge_debug':", source)
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
@@ -149,6 +164,18 @@ class TestSimulationLaunchSource(unittest.TestCase):
             "'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')",
             source,
         )
+
+    def test_parallel_multi_system_disables_simulation_domain_with_single_switch(self):
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/parallel_3dof_multi_system.launch.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("'enable_simulation': 'false'", source)
+        self.assertNotIn("'enable_isaac_bridge': 'false'", source)
+        self.assertNotIn("'enable_sim_cpp_bridge': 'false'", source)
 
 
 if __name__ == '__main__':

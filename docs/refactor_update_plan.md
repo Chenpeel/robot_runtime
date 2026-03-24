@@ -265,6 +265,11 @@
   续暴露 `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-
   specific debug 开关；相关调试参数现已只保留在
   `simulation_bridge/simulation_bridges.launch.py` 自己的 launch 边界。
+- `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
+  续暴露 `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现级启停开
+  关，而是改为只保留一个 `enable_simulation` 域级开关；内部两套 bridge
+  的 enable 参数现已只保留在
+  `simulation_bridge/simulation_bridges.launch.py` 自己的 launch 边界。
 
 动作：
 

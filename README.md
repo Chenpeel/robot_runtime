@@ -191,7 +191,7 @@ ros2 launch robot_bringup full_system.launch.py \
   ws_host:=0.0.0.0 \
   ws_port:=9105 \
   device_id:=robot \
-  enable_isaac_bridge:=true \
+  enable_simulation:=true \
   debug:=true \
   baudrate:=115200
 ```

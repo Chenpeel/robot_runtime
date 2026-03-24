@@ -142,8 +142,7 @@ def generate_launch_description():
             'probe_retry_interval_sec': LaunchConfiguration('probe_retry_interval_sec'),
             'runtime_probe_interval_sec': LaunchConfiguration('runtime_probe_interval_sec'),
             'read_service_timeout_sec': LaunchConfiguration('read_service_timeout_sec'),
-            'enable_isaac_bridge': 'false',
-            'enable_sim_cpp_bridge': 'false',
+            'enable_simulation': 'false',
         }.items(),
     )
 

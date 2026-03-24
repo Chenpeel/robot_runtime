@@ -352,6 +352,10 @@
     `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
     debug 参数；这些调试开关也已收回到 `simulation_bridge` 自己的 launch
     边界。
+  - 当前 `robot_bringup` 也已不再继续暴露
+    `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组内部 bridge 实现级启
+    停开关，而是改为只保留一个 `enable_simulation` 域级开关；内部 enable
+    参数现已只保留在 `simulation_bridge` 自己的 launch 边界。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系

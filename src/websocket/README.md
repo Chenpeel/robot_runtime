@@ -166,7 +166,7 @@ teleop 控制权的最小反馈信息，例如：
 ros2 run simulation_bridge isaac_bridge_node
 
 # 在完整系统中启用（默认已启用）
-ros2 launch robot_bringup full_system.launch.py enable_isaac_bridge:=true
+ros2 launch robot_bringup full_system.launch.py enable_simulation:=true
 ```
 
 默认话题映射：
