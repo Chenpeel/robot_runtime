@@ -285,9 +285,9 @@
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现名开关作为包级
   public surface，而是改为只暴露 `enable_sim_servo_bridge`、
   `enable_sim_joint_bridge` 这组 capability-based 开关；真正面向
-  `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 的实现级 enable
-  参数现已只保留在 `bridge_stack.launch.py` 这个内部 orchestrator 的映
-  射边界。
+  `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 的子 launch enable
+  参数当前也已进一步统一为同一组 capability-based 命名；`bridge_stack.launch.py`
+  现阶段只剩内部编排职责，不再承担实现名到能力名的参数映射。
 - `robot_bringup/full_system.launch.py` 也已不再继续暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到

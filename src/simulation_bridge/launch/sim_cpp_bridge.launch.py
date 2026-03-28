@@ -11,10 +11,10 @@ DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
 
 
 def generate_launch_description():
-    enable_sim_cpp_bridge_arg = DeclareLaunchArgument(
-        'enable_sim_cpp_bridge',
+    enable_sim_joint_bridge_arg = DeclareLaunchArgument(
+        'enable_sim_joint_bridge',
         default_value='false',
-        description='是否启动C++仿真桥接节点(sim_servo_bridge_cpp)',
+        description='是否启用 simulation 域的 joint 级桥接链路',
     )
     sim_cpp_bridge_debug_arg = DeclareLaunchArgument(
         'sim_cpp_bridge_debug',
@@ -42,7 +42,7 @@ def generate_launch_description():
         executable='sim_servo_bridge_node',
         name='sim_servo_bridge',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('enable_sim_cpp_bridge')),
+        condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge')),
         parameters=[
             {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
             {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
@@ -55,7 +55,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        enable_sim_cpp_bridge_arg,
+        enable_sim_joint_bridge_arg,
         sim_cpp_bridge_debug_arg,
         sim_joint_cmd_topic_arg,
         sim_joint_state_fb_topic_arg,

@@ -11,10 +11,10 @@ DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
 
 
 def generate_launch_description():
-    enable_isaac_bridge_arg = DeclareLaunchArgument(
-        'enable_isaac_bridge',
+    enable_sim_servo_bridge_arg = DeclareLaunchArgument(
+        'enable_sim_servo_bridge',
         default_value='true',
-        description='是否启动Isaac-ROS桥接节点',
+        description='是否启用 simulation 域的 servo 级桥接链路',
     )
     isaac_bridge_debug_arg = DeclareLaunchArgument(
         'isaac_bridge_debug',
@@ -42,7 +42,7 @@ def generate_launch_description():
         executable='isaac_bridge_node',
         name='isaac_ros_bridge',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('enable_isaac_bridge')),
+        condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
         parameters=[
             {'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')},
             {'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')},
@@ -54,7 +54,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        enable_isaac_bridge_arg,
+        enable_sim_servo_bridge_arg,
         isaac_bridge_debug_arg,
         sim_servo_command_topic_arg,
         sim_servo_state_topic_arg,

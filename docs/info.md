@@ -89,8 +89,9 @@ Phase E-1 的建议范围控制在：
 - `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
-- `bridge_stack.launch.py` 现在负责把这组 capability-based 开关映射到
-  Isaac 子 launch 与 C++ 子 launch 的内部实现级 enable 参数。
+- `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 现在也已把各自的
+  enable 参数统一为 `enable_sim_servo_bridge`、`enable_sim_joint_bridge`；
+  `bridge_stack.launch.py` 当前只剩内部编排职责。
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
   下沉到 `sim_cpp_bridge.launch.py`，不再作为 package-level public
   surface 暴露。
