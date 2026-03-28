@@ -340,6 +340,13 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 public launch 参数，并已有 source-level
     contract 测试固定最小 public surface。
+  - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
+    `isaac_command_topic`、`isaac_state_topic`、
+    `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数，以及
+    `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
+    debug 开关；这些配置现已进一步下沉到
+    `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch
+    中。
   - 当前 `simulation_bridge/simulation.launch.py` 自己也已不再暴露
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
     参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
@@ -347,11 +354,11 @@
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_command_topic`、`isaac_state_topic`、
     `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置已
-    收回到 `simulation_bridge/simulation.launch.py` 自己的 launch 边界。
+    收回到 `simulation_bridge` 包内子 launch 边界。
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
-    debug 参数；这些调试开关也已收回到
-    `simulation_bridge/simulation.launch.py` 自己的 launch 边界。
+    debug 参数；这些调试开关也已收回到 `simulation_bridge` 包内子
+    launch 边界。
   - 当前 `robot_bringup` 也已不再继续暴露
     `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组内部 bridge 实现级启
     停开关，而是改为只保留一个 `enable_simulation` 域级开关；内部 enable

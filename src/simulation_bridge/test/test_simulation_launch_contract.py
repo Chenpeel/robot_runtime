@@ -37,21 +37,29 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertIn("'bridge_stack.launch.py'", public_launch_source)
         self._assert_launch_argument_declared(
             public_launch_source,
-            'isaac_command_topic_arg',
+            'enable_isaac_bridge_arg',
         )
         self._assert_launch_argument_declared(
+            public_launch_source,
+            'enable_sim_cpp_bridge_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            public_launch_source,
+            'isaac_command_topic_arg',
+        )
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'isaac_bridge_debug_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'isaac_state_topic_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'isaac_enforce_limits_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'sim_cpp_bridge_debug_arg',
         )
@@ -88,9 +96,18 @@ class TestSimulationLaunchContract(unittest.TestCase):
             public_launch_source,
         )
         self.assertIn(
-            "'isaac_command_topic': LaunchConfiguration('isaac_command_topic')",
+            "'enable_isaac_bridge': LaunchConfiguration('enable_isaac_bridge')",
             public_launch_source,
         )
+        self.assertIn(
+            "'enable_sim_cpp_bridge': LaunchConfiguration('enable_sim_cpp_bridge')",
+            public_launch_source,
+        )
+        self.assertNotIn("'isaac_command_topic':", public_launch_source)
+        self.assertNotIn("'isaac_state_topic':", public_launch_source)
+        self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
+        self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
+        self.assertNotIn("'sim_cpp_bridge_debug':", public_launch_source)
         self._assert_launch_argument_not_declared(
             stack_launch_source,
             'sim_joint_cmd_topic_arg',
@@ -143,6 +160,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')",
             stack_launch_source,
         )
+        self.assertNotIn(
+            "'sim_cpp_bridge_debug': LaunchConfiguration('sim_cpp_bridge_debug')",
+            stack_launch_source,
+        )
         self.assertNotIn("executable='sim_servo_bridge_node'", stack_launch_source)
         self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", cpp_launch_source)
         self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", cpp_launch_source)
@@ -164,6 +185,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
+            cpp_launch_source,
+        )
+        self.assertIn(
+            "{'debug': LaunchConfiguration('sim_cpp_bridge_debug')}",
             cpp_launch_source,
         )
         self.assertNotIn(
@@ -252,17 +277,13 @@ class TestSimulationLaunchContract(unittest.TestCase):
 
         self.assertIn("'isaac_bridge.launch.py'", stack_launch_source)
         self.assertIn(
-            "'isaac_command_topic': LaunchConfiguration('isaac_command_topic')",
+            "'enable_isaac_bridge': LaunchConfiguration('enable_isaac_bridge')",
             stack_launch_source,
         )
-        self.assertIn(
-            "'isaac_state_topic': LaunchConfiguration('isaac_state_topic')",
-            stack_launch_source,
-        )
-        self.assertIn(
-            "'isaac_enforce_limits': LaunchConfiguration('isaac_enforce_limits')",
-            stack_launch_source,
-        )
+        self.assertNotIn("'isaac_command_topic':", stack_launch_source)
+        self.assertNotIn("'isaac_state_topic':", stack_launch_source)
+        self.assertNotIn("'isaac_enforce_limits':", stack_launch_source)
+        self.assertNotIn("'isaac_bridge_debug':", stack_launch_source)
         self.assertNotIn("executable='isaac_bridge_node'", stack_launch_source)
         self.assertIn("executable='isaac_bridge_node'", isaac_launch_source)
         self.assertIn(
