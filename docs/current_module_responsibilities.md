@@ -365,6 +365,11 @@
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步
     收回到 `simulation_bridge/simulation_bridges.launch.py` 这个
     simulation 责任域自身的 launch contract 中。
+  - 当前 `simulation_bridge/simulation_bridges.launch.py` 也已不再直接内联
+    Isaac bridge 与 C++ bridge 的节点装配，而是改为只负责仿真域 public
+    参数声明与子链路编排；具体装配现已拆分到
+    `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch
+    中，用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系
@@ -399,9 +404,10 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 作为对外主名，并对旧
     `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
-    保留兼容；其所在 launch surface 也已在 `simulation_bridge` 与
-    `robot_bringup` 层显式声明，并已有 source-level contract 测试固定，但
-    仿真域的其它参数与消息 contract 仍未完全统一。
+    保留兼容；其所在 launch surface 现已只保留在
+    `simulation_bridge` 层显式声明，并已有 source-level contract 测试固
+    定；同时其节点装配也已拆到 `sim_cpp_bridge.launch.py` 子 launch 中，
+    但仿真域的其它参数与消息 contract 仍未完全统一。
   - 当前通过 `robot_bringup` 的整机 launch 启停，仍未完全收口到统一的
     `simulation_bridge` 包边界。
 - 与长期规划的关系

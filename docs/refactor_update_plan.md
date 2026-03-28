@@ -278,6 +278,11 @@
   `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步收
   回到 `simulation_bridge/simulation_bridges.launch.py` 这个 simulation
   责任域自身的 launch contract 中。
+- `simulation_bridge/simulation_bridges.launch.py` 当前也已不再直接内联
+  Isaac bridge 与 C++ bridge 两个节点定义，而是改为只负责仿真域 public
+  参数声明与子链路编排；具体节点装配现已拆分到
+  `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch 中，
+  用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
 
 动作：
 

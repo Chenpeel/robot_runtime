@@ -1,13 +1,10 @@
 """simulation_bridge 仿真节点启动文件。"""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
-
-DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
-DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -63,37 +60,38 @@ def generate_launch_description():
         description='C++仿真桥接发布频率(Hz)',
     )
 
-    isaac_bridge_node = Node(
-        package='simulation_bridge',
-        executable='isaac_bridge_node',
-        name='isaac_ros_bridge',
-        output='screen',
-        condition=IfCondition(LaunchConfiguration('enable_isaac_bridge')),
-        parameters=[
-            {'isaac_command_topic': LaunchConfiguration('isaac_command_topic')},
-            {'isaac_state_topic': LaunchConfiguration('isaac_state_topic')},
-            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
-            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
-            {'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')},
-            {'debug': LaunchConfiguration('isaac_bridge_debug')},
-        ],
+    isaac_bridge_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('simulation_bridge'),
+                'launch',
+                'isaac_bridge.launch.py',
+            ])
+        ),
+        launch_arguments={
+            'enable_isaac_bridge': LaunchConfiguration('enable_isaac_bridge'),
+            'isaac_bridge_debug': LaunchConfiguration('isaac_bridge_debug'),
+            'isaac_command_topic': LaunchConfiguration('isaac_command_topic'),
+            'isaac_state_topic': LaunchConfiguration('isaac_state_topic'),
+            'isaac_enforce_limits': LaunchConfiguration('isaac_enforce_limits'),
+        }.items(),
     )
 
-    sim_cpp_bridge_node = Node(
-        package='sim_servo_bridge_cpp',
-        executable='sim_servo_bridge_node',
-        name='sim_servo_bridge',
-        output='screen',
-        condition=IfCondition(LaunchConfiguration('enable_sim_cpp_bridge')),
-        parameters=[
-            {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
-            {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
-            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
-            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
-            {'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
-            {'speed': 100},
-            {'debug': LaunchConfiguration('sim_cpp_bridge_debug')},
-        ],
+    sim_cpp_bridge_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('simulation_bridge'),
+                'launch',
+                'sim_cpp_bridge.launch.py',
+            ])
+        ),
+        launch_arguments={
+            'enable_sim_cpp_bridge': LaunchConfiguration('enable_sim_cpp_bridge'),
+            'sim_cpp_bridge_debug': LaunchConfiguration('sim_cpp_bridge_debug'),
+            'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
+            'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
+            'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
+        }.items(),
     )
 
     return LaunchDescription([
@@ -107,6 +105,6 @@ def generate_launch_description():
         sim_joint_cmd_topic_arg,
         sim_joint_state_fb_topic_arg,
         sim_publish_rate_hz_arg,
-        isaac_bridge_node,
-        sim_cpp_bridge_node,
+        isaac_bridge_launch,
+        sim_cpp_bridge_launch,
     ])
