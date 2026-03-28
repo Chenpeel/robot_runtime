@@ -18,16 +18,6 @@ def generate_launch_description():
         default_value='false',
         description='是否启用 simulation 域的 joint 级桥接链路',
     )
-    sim_joint_cmd_topic_arg = DeclareLaunchArgument(
-        'sim_joint_cmd_topic',
-        default_value='/sim/joint_cmd',
-        description='仿真侧关节命令话题(std_msgs/Float32MultiArray)',
-    )
-    sim_joint_state_fb_topic_arg = DeclareLaunchArgument(
-        'sim_joint_state_fb_topic',
-        default_value='/sim/joint_state_fb',
-        description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
-    )
     simulation_bridge_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -39,15 +29,11 @@ def generate_launch_description():
         launch_arguments={
             'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge'),
             'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge'),
-            'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
-            'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
         }.items(),
     )
 
     return LaunchDescription([
         enable_sim_servo_bridge_arg,
         enable_sim_joint_bridge_arg,
-        sim_joint_cmd_topic_arg,
-        sim_joint_state_fb_topic_arg,
         simulation_bridge_stack,
     ])

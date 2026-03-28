@@ -100,6 +100,9 @@ Phase E-1 的建议范围控制在：
 - `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。
+- `simulation_bridge/simulation.launch.py` 现在也已不再暴露
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
+  surface 已进一步收紧为 capability 开关。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
   节上抬到 `robot_bringup`。
 
