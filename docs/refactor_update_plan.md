@@ -237,16 +237,16 @@
   `simulation_bridge` 自己的仿真 launch。
 - `sim_servo_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界。
 - 仿真域对外 launch contract 已开始收紧最基础的 driver-facing 参数命名，
-  例如 C++ 仿真桥已开始以 `servo_command_topic` 作为对外主参数名，并对旧
-  `servo_cmd_topic` 保留过渡兼容。
+  例如 C++ 仿真桥当前已以 `servo_command_topic` 作为正式对外主参数名，
+  不再继续保留旧 `servo_cmd_topic` 兼容。
 - `robot_bringup/simulation.launch.py` 也已开始把 driver-facing 的
   `/servo/command` / `/servo/state` 接线收回为 simulation 域内部固定值，
   不再继续把这两个参数暴露为 bringup 的 public surface。
 - C++ 仿真桥对 simulator-facing 的 public 参数名也已开始向
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
-  `sim_publish_rate_hz` 这组 simulation 域词表收口，并对旧
-  `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
-  保留过渡兼容。
+  `sim_publish_rate_hz` 这组 simulation 域词表收口，且当前已不再继续保留
+  旧 `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
+  兼容分支。
 - `simulation_bridge/simulation.launch.py` 现在已显式声明
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 这组 simulation 域
   public launch 参数，并已有 source-level contract 测试固定这层最小对

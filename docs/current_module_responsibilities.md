@@ -425,17 +425,17 @@
   - 不负责执行仲裁。
 - 当前问题
   - 仍然直接耦合驱动级接口。
-  - 当前虽已开始以 `servo_command_topic` 作为对外主参数名，并对旧
-    `servo_cmd_topic` 保留兼容；同时 simulator-facing 参数也已开始以
+  - 当前虽已开始以 `servo_command_topic` 作为对外主参数名，并已不再继续
+    保留旧 `servo_cmd_topic` 兼容；同时 simulator-facing 参数也已开始以
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
-    `sim_publish_rate_hz` 作为对外主名，并对旧
+    `sim_publish_rate_hz` 作为对外主名，并已不再继续保留旧
     `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
-    保留兼容；其中 `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`
-    这组 package-level contract 现已只保留在 `simulation_bridge`
-    层显式声明，并已有 source-level contract 测试固定，而
-    `sim_publish_rate_hz` 已进一步下沉到 `sim_cpp_bridge.launch.py`
-    子 launch 中；同时其节点装配也已拆到 `sim_cpp_bridge.launch.py`
-    子 launch 中，但仿真域的其它参数与消息 contract 仍未完全统一。
+    兼容分支；其中 `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 这组
+    package-level contract 现已只保留在 `simulation_bridge` 层显式声
+    明，并已有 source-level contract 测试固定，而 `sim_publish_rate_hz`
+    已进一步下沉到 `sim_cpp_bridge.launch.py` 子 launch 中；同时其节点装
+    配也已拆到 `sim_cpp_bridge.launch.py` 子 launch 中，但仿真域的其它参
+    数与消息 contract 仍未完全统一。
   - 当前虽仍由 `robot_bringup` 的整机链路间接触发，但其节点装配与启停已
     先收口到 `simulation_bridge/simulation.launch.py` 与内部
     `bridge_stack.launch.py` 编排中，仍未完全完成的是包边界与实现本体的最

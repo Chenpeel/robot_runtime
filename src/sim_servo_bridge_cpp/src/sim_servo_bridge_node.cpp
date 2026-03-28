@@ -33,16 +33,8 @@ class SimServoBridgeNode : public rclcpp::Node {
       "servo_command_topic", "/servo/command");
     servo_state_topic_ = this->declare_parameter<std::string>(
       "servo_state_topic", "/servo/state");
-    const auto legacy_joint_cmd_topic = this->declare_parameter<std::string>(
-      "joint_cmd_topic", "");
-    const auto legacy_joint_state_fb_topic = this->declare_parameter<std::string>(
-      "joint_state_fb_topic", "");
-    const auto legacy_servo_cmd_topic = this->declare_parameter<std::string>(
-      "servo_cmd_topic", "");
 
     publish_rate_hz_ = this->declare_parameter<double>("sim_publish_rate_hz", 50.0);
-    const auto legacy_publish_rate_hz = this->declare_parameter<double>(
-      "publish_rate_hz", -1.0);
     speed_ = this->declare_parameter<int64_t>("speed", 100);
     servo_type_ = this->declare_parameter<std::string>("servo_type", "bus");
     min_pulse_us_ = this->declare_parameter<double>("min_pulse_us", 500.0);
@@ -57,76 +49,6 @@ class SimServoBridgeNode : public rclcpp::Node {
     const auto servo_offsets_us = this->declare_parameter<std::vector<double>>(
       "servo_offsets_us", std::vector<double>{});
     debug_ = this->declare_parameter<bool>("debug", false);
-
-    if (!legacy_joint_cmd_topic.empty() && joint_cmd_topic_ == "/sim/joint_cmd") {
-      joint_cmd_topic_ = legacy_joint_cmd_topic;
-      RCLCPP_WARN(
-        this->get_logger(),
-        "parameter joint_cmd_topic is deprecated, use sim_joint_cmd_topic instead");
-    } else if (
-      !legacy_joint_cmd_topic.empty() &&
-      legacy_joint_cmd_topic != joint_cmd_topic_)
-    {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "ignoring deprecated joint_cmd_topic=%s because sim_joint_cmd_topic=%s is set",
-        legacy_joint_cmd_topic.c_str(),
-        joint_cmd_topic_.c_str());
-    }
-
-    if (
-      !legacy_joint_state_fb_topic.empty() &&
-      joint_state_fb_topic_ == "/sim/joint_state_fb")
-    {
-      joint_state_fb_topic_ = legacy_joint_state_fb_topic;
-      RCLCPP_WARN(
-        this->get_logger(),
-        "parameter joint_state_fb_topic is deprecated, use sim_joint_state_fb_topic instead");
-    } else if (
-      !legacy_joint_state_fb_topic.empty() &&
-      legacy_joint_state_fb_topic != joint_state_fb_topic_)
-    {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "ignoring deprecated joint_state_fb_topic=%s because sim_joint_state_fb_topic=%s is set",
-        legacy_joint_state_fb_topic.c_str(),
-        joint_state_fb_topic_.c_str());
-    }
-
-    if (
-      !legacy_servo_cmd_topic.empty() &&
-      servo_command_topic_ == "/servo/command")
-    {
-      servo_command_topic_ = legacy_servo_cmd_topic;
-      RCLCPP_WARN(
-        this->get_logger(),
-        "parameter servo_cmd_topic is deprecated, use servo_command_topic instead");
-    } else if (
-      !legacy_servo_cmd_topic.empty() &&
-      legacy_servo_cmd_topic != servo_command_topic_)
-    {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "ignoring deprecated servo_cmd_topic=%s because servo_command_topic=%s is set",
-        legacy_servo_cmd_topic.c_str(),
-        servo_command_topic_.c_str());
-    }
-
-    if (legacy_publish_rate_hz >= 0.0 && publish_rate_hz_ == 50.0) {
-      publish_rate_hz_ = legacy_publish_rate_hz;
-      RCLCPP_WARN(
-        this->get_logger(),
-        "parameter publish_rate_hz is deprecated, use sim_publish_rate_hz instead");
-    } else if (
-      legacy_publish_rate_hz >= 0.0 &&
-      std::abs(legacy_publish_rate_hz - publish_rate_hz_) > 1e-9)
-    {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "ignoring deprecated publish_rate_hz=%.3f because sim_publish_rate_hz=%.3f is set",
-        legacy_publish_rate_hz,
-        publish_rate_hz_);
-    }
 
     validate_and_fix_parameters(default_mapping);
     load_servo_offsets(servo_ids_with_offset, servo_offsets_us);
@@ -173,7 +95,7 @@ class SimServoBridgeNode : public rclcpp::Node {
     if (publish_rate_hz_ <= 0.0) {
       RCLCPP_WARN(
         this->get_logger(),
-        "publish_rate_hz=%.3f invalid, reset to 50.0",
+        "sim_publish_rate_hz=%.3f invalid, reset to 50.0",
         publish_rate_hz_);
       publish_rate_hz_ = 50.0;
     }

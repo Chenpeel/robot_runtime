@@ -232,20 +232,36 @@ class TestSimulationLaunchContract(unittest.TestCase):
             '"servo_command_topic", "/servo/command"',
             cpp_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             '"joint_cmd_topic", ""',
             cpp_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             '"joint_state_fb_topic", ""',
             cpp_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             '"servo_cmd_topic", ""',
             cpp_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             '"publish_rate_hz", -1.0',
+            cpp_source,
+        )
+        self.assertNotIn(
+            'parameter joint_cmd_topic is deprecated',
+            cpp_source,
+        )
+        self.assertNotIn(
+            'parameter joint_state_fb_topic is deprecated',
+            cpp_source,
+        )
+        self.assertNotIn(
+            'parameter servo_cmd_topic is deprecated',
+            cpp_source,
+        )
+        self.assertNotIn(
+            'parameter publish_rate_hz is deprecated',
             cpp_source,
         )
         self.assertIn(
