@@ -27,14 +27,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
                 '../launch/simulation.launch.py',
             )
         ).read_text(encoding='utf-8')
-        stack_launch_source = Path(
-            os.path.join(
-                os.path.dirname(__file__),
-                '../launch/bridge_stack.launch.py',
-            )
-        ).read_text(encoding='utf-8')
 
-        self.assertIn("'bridge_stack.launch.py'", public_launch_source)
+        self.assertIn("'isaac_bridge.launch.py'", public_launch_source)
+        self.assertIn("'sim_cpp_bridge.launch.py'", public_launch_source)
+        self.assertNotIn("'bridge_stack.launch.py'", public_launch_source)
         self._assert_launch_argument_declared(
             public_launch_source,
             'enable_sim_servo_bridge_arg',
@@ -109,24 +105,12 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
         self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
         self.assertNotIn("'sim_cpp_bridge_debug':", public_launch_source)
-        self._assert_launch_argument_not_declared(
-            stack_launch_source,
-            'sim_joint_cmd_topic_arg',
-        )
-        self._assert_launch_argument_not_declared(
-            stack_launch_source,
-            'sim_joint_state_fb_topic_arg',
-        )
-        self._assert_launch_argument_not_declared(
-            stack_launch_source,
-            'isaac_command_topic_arg',
-        )
 
-    def test_internal_stack_routes_to_cpp_bridge_with_unified_servo_contract(self):
-        stack_launch_source = Path(
+    def test_public_simulation_launch_routes_to_cpp_bridge_with_unified_servo_contract(self):
+        public_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/bridge_stack.launch.py',
+                '../launch/simulation.launch.py',
             )
         ).read_text(encoding='utf-8')
         cpp_launch_source = Path(
@@ -148,20 +132,20 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'sim_cpp_bridge.launch.py'", stack_launch_source)
+        self.assertIn("'sim_cpp_bridge.launch.py'", public_launch_source)
         self.assertIn(
             "'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge')",
-            stack_launch_source,
+            public_launch_source,
         )
-        self.assertNotIn("'enable_sim_cpp_bridge':", stack_launch_source)
-        self.assertNotIn("'sim_joint_cmd_topic':", stack_launch_source)
-        self.assertNotIn("'sim_joint_state_fb_topic':", stack_launch_source)
-        self.assertNotIn("'sim_publish_rate_hz':", stack_launch_source)
+        self.assertNotIn("'enable_sim_cpp_bridge':", public_launch_source)
+        self.assertNotIn("'sim_joint_cmd_topic':", public_launch_source)
+        self.assertNotIn("'sim_joint_state_fb_topic':", public_launch_source)
+        self.assertNotIn("'sim_publish_rate_hz':", public_launch_source)
         self.assertNotIn(
             "'sim_cpp_bridge_debug': LaunchConfiguration('sim_cpp_bridge_debug')",
-            stack_launch_source,
+            public_launch_source,
         )
-        self.assertNotIn("executable='sim_servo_bridge_node'", stack_launch_source)
+        self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
         self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", cpp_launch_source)
         self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", cpp_launch_source)
         self.assertIn(
@@ -282,11 +266,11 @@ class TestSimulationLaunchContract(unittest.TestCase):
             default_params,
         )
 
-    def test_internal_stack_routes_to_isaac_bridge_with_local_details(self):
-        stack_launch_source = Path(
+    def test_public_simulation_launch_routes_to_isaac_bridge_with_local_details(self):
+        public_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/bridge_stack.launch.py',
+                '../launch/simulation.launch.py',
             )
         ).read_text(encoding='utf-8')
         isaac_launch_source = Path(
@@ -302,17 +286,17 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'isaac_bridge.launch.py'", stack_launch_source)
+        self.assertIn("'isaac_bridge.launch.py'", public_launch_source)
         self.assertIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
-            stack_launch_source,
+            public_launch_source,
         )
-        self.assertNotIn("'enable_isaac_bridge':", stack_launch_source)
-        self.assertNotIn("'isaac_command_topic':", stack_launch_source)
-        self.assertNotIn("'isaac_state_topic':", stack_launch_source)
-        self.assertNotIn("'isaac_enforce_limits':", stack_launch_source)
-        self.assertNotIn("'isaac_bridge_debug':", stack_launch_source)
-        self.assertNotIn("executable='isaac_bridge_node'", stack_launch_source)
+        self.assertNotIn("'enable_isaac_bridge':", public_launch_source)
+        self.assertNotIn("'isaac_command_topic':", public_launch_source)
+        self.assertNotIn("'isaac_state_topic':", public_launch_source)
+        self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
+        self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
+        self.assertNotIn("executable='isaac_bridge_node'", public_launch_source)
         self.assertIn("executable='isaac_bridge_node'", isaac_launch_source)
         self.assertIn(
             "{'debug': LaunchConfiguration('isaac_bridge_debug')}",

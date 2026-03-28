@@ -376,9 +376,7 @@
     public surface，而是改为只暴露 `enable_sim_servo_bridge`、
     `enable_sim_joint_bridge` 这组 capability-based 开关；真正面向
     `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 的子 launch
-    enable 参数当前也已进一步统一为同一组 capability-based 命名；
-    `bridge_stack.launch.py` 现阶段只剩内部编排职责，不再承担实现名到能力
-    名的参数映射。
+    enable 参数当前也已进一步统一为同一组 capability-based 命名。
   - 当前 `robot_bringup/full_system.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
@@ -390,14 +388,10 @@
     `sim_publish_rate_hz` 当前都已进一步下沉到
     `sim_cpp_bridge.launch.py` 这个内部子链路边界。
   - 当前 `simulation_bridge` 包内也已补出 `simulation.launch.py` 作为包级
-    public 入口；`bridge_stack.launch.py` 现已下沉为内部 bridge
-    stack 编排文件，由 `robot_bringup/simulation.launch.py` 只 include
-    这个包级 public 入口。
-  - 当前 `simulation_bridge/bridge_stack.launch.py` 也已不再直接内联
-    Isaac bridge 与 C++ bridge 的节点装配，而是改为只负责仿真域 public
-    参数声明与子链路编排；具体装配现已拆分到
-    `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch
-    中，用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
+    public 入口；当前由 `robot_bringup/simulation.launch.py` 只 include
+    这个包级 public 入口，而 `simulation.launch.py` 已直接编排
+    `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch，
+    用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系
@@ -439,9 +433,9 @@
     配也已拆到 `sim_cpp_bridge.launch.py` 子 launch 中，但仿真域的其它参
     数与消息 contract 仍未完全统一。
   - 当前虽仍由 `robot_bringup` 的整机链路间接触发，但其节点装配与启停已
-    先收口到 `simulation_bridge/simulation.launch.py` 与内部
-    `bridge_stack.launch.py` 编排中，仍未完全完成的是包边界与实现本体的最
-    终合并，而不再是 launch 入口归属本身。
+    先收口到 `simulation_bridge/simulation.launch.py` 与其内部子 launch
+    编排中，仍未完全完成的是包边界与实现本体的最终合并，而不再是
+    launch 入口归属本身。
 - 与长期规划的关系
   - 长期应被纳入统一的 `simulation_bridge` 责任域。
 

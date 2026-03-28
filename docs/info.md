@@ -91,7 +91,7 @@ Phase E-1 的建议范围控制在：
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
 - `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 现在也已把各自的
   enable 参数统一为 `enable_sim_servo_bridge`、`enable_sim_joint_bridge`；
-  `bridge_stack.launch.py` 当前只剩内部编排职责。
+  `simulation.launch.py` 当前已可直接编排两个子 launch。
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
   下沉到 `sim_cpp_bridge.launch.py`，不再作为 package-level public
   surface 暴露。
@@ -104,13 +104,14 @@ Phase E-1 的建议范围控制在：
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。
+- `bridge_stack.launch.py` 当前也已移除，`simulation.launch.py` 直接 include
+  `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子链路。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
   节上抬到 `robot_bringup`。
 
 建议优先修改的文件：
 
 - `src/simulation_bridge/launch/simulation.launch.py`
-- `src/simulation_bridge/launch/bridge_stack.launch.py`
 - `src/robot_bringup/launch/simulation.launch.py`
 - `src/robot_bringup/launch/full_system.launch.py`
 - `src/simulation_bridge/simulation_bridge/isaac_bridge_node.py`
