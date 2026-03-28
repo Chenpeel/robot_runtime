@@ -257,6 +257,11 @@
   `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
   debug 开关；这些配置现已进一步下沉到
   `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch 中。
+- `isaac_bridge.launch.py` 与 `isaac_bridge_node.py` 当前也已把
+  simulator-facing 的 topic 参数名从 `isaac_command_topic`、
+  `isaac_state_topic` 进一步收口为 `sim_servo_command_topic`、
+  `sim_servo_state_topic`，用于和 `sim_joint_*` 这组 simulation 域词表保
+  持同一命名方向。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
   现已只保留在 `sim_cpp_bridge.launch.py` 这个内部子链路边界。

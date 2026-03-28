@@ -21,16 +21,20 @@ class IsaacROSBridge(Node):
     def __init__(self):
         super().__init__('isaac_ros_bridge')
 
-        self.declare_parameter('isaac_command_topic', '/sim/servo_command')
-        self.declare_parameter('isaac_state_topic', '/sim/servo_state')
+        self.declare_parameter('sim_servo_command_topic', '/sim/servo_command')
+        self.declare_parameter('sim_servo_state_topic', '/sim/servo_state')
         self.declare_parameter('servo_command_topic', '/servo/command')
         self.declare_parameter('servo_state_topic', '/servo/state')
         self.declare_parameter('default_speed', 100)
         self.declare_parameter('enforce_position_limits', True)
         self.declare_parameter('debug', False)
 
-        self.isaac_command_topic = self.get_parameter('isaac_command_topic').value
-        self.isaac_state_topic = self.get_parameter('isaac_state_topic').value
+        self.sim_servo_command_topic = self.get_parameter(
+            'sim_servo_command_topic'
+        ).value
+        self.sim_servo_state_topic = self.get_parameter(
+            'sim_servo_state_topic'
+        ).value
         self.servo_command_topic = self.get_parameter('servo_command_topic').value
         self.servo_state_topic = self.get_parameter('servo_state_topic').value
         self.default_speed = int(self.get_parameter('default_speed').value)
@@ -44,16 +48,16 @@ class IsaacROSBridge(Node):
             self.servo_command_topic,
             10
         )
-        self.isaac_state_pub = self.create_publisher(
+        self.sim_servo_state_pub = self.create_publisher(
             ServoState,
-            self.isaac_state_topic,
+            self.sim_servo_state_topic,
             10
         )
 
-        self.isaac_command_sub = self.create_subscription(
+        self.sim_servo_command_sub = self.create_subscription(
             ServoCommand,
-            self.isaac_command_topic,
-            self.isaac_command_callback,
+            self.sim_servo_command_topic,
+            self.sim_servo_command_callback,
             10
         )
         self.servo_state_sub = self.create_subscription(
@@ -68,12 +72,12 @@ class IsaacROSBridge(Node):
 
         self.get_logger().info(
             'Isaac桥接已启动: '
-            f'{self.isaac_command_topic} -> {self.servo_command_topic}, '
-            f'{self.servo_state_topic} -> {self.isaac_state_topic}'
+            f'{self.sim_servo_command_topic} -> {self.servo_command_topic}, '
+            f'{self.servo_state_topic} -> {self.sim_servo_state_topic}'
         )
 
-    def isaac_command_callback(self, msg: ServoCommand):
-        """处理Isaac下发的舵机命令。"""
+    def sim_servo_command_callback(self, msg: ServoCommand):
+        """处理仿真侧下发的舵机命令。"""
         servo_type = normalize_servo_type(msg.servo_type)
         if servo_type is None:
             self.get_logger().warn(
@@ -106,7 +110,7 @@ class IsaacROSBridge(Node):
 
         if self.debug:
             self.get_logger().info(
-                '转发Isaac命令: '
+                '转发仿真舵机命令: '
                 f'type={forward_msg.servo_type}, '
                 f'id={forward_msg.servo_id}, '
                 f'pos={forward_msg.position}, '
@@ -114,7 +118,7 @@ class IsaacROSBridge(Node):
             )
 
     def servo_state_callback(self, msg: ServoState):
-        """将底层舵机状态转发到Isaac侧。"""
+        """将底层舵机状态转发到仿真侧。"""
         servo_type = normalize_servo_type(msg.servo_type)
         if servo_type is None:
             return
@@ -138,7 +142,7 @@ class IsaacROSBridge(Node):
         if self._is_zero_stamp(msg.stamp.sec, msg.stamp.nanosec):
             state_msg.stamp = self.get_clock().now().to_msg()
 
-        self.isaac_state_pub.publish(state_msg)
+        self.sim_servo_state_pub.publish(state_msg)
         self.state_forward_count += 1
 
         if self.debug:

@@ -21,15 +21,15 @@ def generate_launch_description():
         default_value='false',
         description='Isaac-ROS桥接节点调试模式',
     )
-    isaac_command_topic_arg = DeclareLaunchArgument(
-        'isaac_command_topic',
+    sim_servo_command_topic_arg = DeclareLaunchArgument(
+        'sim_servo_command_topic',
         default_value='/sim/servo_command',
-        description='Isaac侧舵机命令话题',
+        description='仿真侧舵机命令话题',
     )
-    isaac_state_topic_arg = DeclareLaunchArgument(
-        'isaac_state_topic',
+    sim_servo_state_topic_arg = DeclareLaunchArgument(
+        'sim_servo_state_topic',
         default_value='/sim/servo_state',
-        description='Isaac侧舵机状态话题',
+        description='仿真侧舵机状态话题',
     )
     isaac_enforce_limits_arg = DeclareLaunchArgument(
         'isaac_enforce_limits',
@@ -44,8 +44,8 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(LaunchConfiguration('enable_isaac_bridge')),
         parameters=[
-            {'isaac_command_topic': LaunchConfiguration('isaac_command_topic')},
-            {'isaac_state_topic': LaunchConfiguration('isaac_state_topic')},
+            {'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')},
+            {'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')},
             {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
             {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')},
@@ -56,8 +56,8 @@ def generate_launch_description():
     return LaunchDescription([
         enable_isaac_bridge_arg,
         isaac_bridge_debug_arg,
-        isaac_command_topic_arg,
-        isaac_state_topic_arg,
+        sim_servo_command_topic_arg,
+        sim_servo_state_topic_arg,
         isaac_enforce_limits_arg,
         isaac_bridge_node,
     ])

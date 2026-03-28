@@ -94,6 +94,9 @@ Phase E-1 的建议范围控制在：
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
   下沉到 `sim_cpp_bridge.launch.py`，不再作为 package-level public
   surface 暴露。
+- `isaac_bridge.launch.py` 与 `isaac_bridge_node.py` 现在也已把
+  simulator-facing topic 参数从 `isaac_*` 收口为 `sim_servo_*`，继续朝
+  simulation 域统一词表推进。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
   节上抬到 `robot_bringup`。
 
