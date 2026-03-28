@@ -336,26 +336,27 @@
     一部分 simulator-facing 参数收口到 simulation 词表，但 Python / C++
     两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
     接口。
-  - 当前 `simulation_bridge` 已显式声明
+  - 当前 `simulation_bridge/simulation.launch.py` 已显式声明
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 public launch 参数，并已有 source-level
     contract 测试固定最小 public surface。
-  - 当前 `simulation_bridge` 自己也已不再暴露
+  - 当前 `simulation_bridge/simulation.launch.py` 自己也已不再暴露
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
     参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
     也不再感知这两个内部常量。
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_command_topic`、`isaac_state_topic`、
     `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置已
-    收回到 `simulation_bridge` 自己的 launch 边界。
+    收回到 `simulation_bridge/simulation.launch.py` 自己的 launch 边界。
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
-    debug 参数；这些调试开关也已收回到 `simulation_bridge` 自己的 launch
-    边界。
+    debug 参数；这些调试开关也已收回到
+    `simulation_bridge/simulation.launch.py` 自己的 launch 边界。
   - 当前 `robot_bringup` 也已不再继续暴露
     `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组内部 bridge 实现级启
     停开关，而是改为只保留一个 `enable_simulation` 域级开关；内部 enable
-    参数现已只保留在 `simulation_bridge` 自己的 launch 边界。
+    参数现已只保留在 `simulation_bridge/simulation.launch.py` 自己的
+    launch 边界。
   - 当前 `robot_bringup/full_system.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
@@ -363,8 +364,12 @@
   - 当前 `robot_bringup/simulation.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步
-    收回到 `simulation_bridge/simulation_bridges.launch.py` 这个
-    simulation 责任域自身的 launch contract 中。
+    收回到 `simulation_bridge/simulation.launch.py` 这个 simulation
+    责任域自身的 launch contract 中。
+  - 当前 `simulation_bridge` 包内也已补出 `simulation.launch.py` 作为包级
+    public 入口；`simulation_bridges.launch.py` 现已下沉为内部 bridge
+    stack 编排文件，由 `robot_bringup/simulation.launch.py` 只 include
+    这个包级 public 入口。
   - 当前 `simulation_bridge/simulation_bridges.launch.py` 也已不再直接内联
     Isaac bridge 与 C++ bridge 的节点装配，而是改为只负责仿真域 public
     参数声明与子链路编排；具体装配现已拆分到

@@ -21,7 +21,7 @@ def generate_launch_description():
             PathJoinSubstitution([
                 FindPackageShare('simulation_bridge'),
                 'launch',
-                'simulation_bridges.launch.py',
+                'simulation.launch.py',
             ])
         ),
         condition=IfCondition(LaunchConfiguration('enable_simulation')),

@@ -37,6 +37,17 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'servo_command_topic':", source)
         self.assertNotIn("'servo_state_topic':", source)
 
+    def test_simulation_launch_uses_simulation_bridge_public_entry(self):
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/simulation.launch.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn("'simulation.launch.py'", source)
+        self.assertNotIn("'simulation_bridges.launch.py'", source)
+
     def test_simulation_launch_hides_isaac_topic_details_from_public_surface(self):
         source = Path(
             os.path.join(
