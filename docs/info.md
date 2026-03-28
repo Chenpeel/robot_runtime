@@ -91,6 +91,9 @@ Phase E-1 的建议范围控制在：
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
 - `bridge_stack.launch.py` 现在负责把这组 capability-based 开关映射到
   Isaac 子 launch 与 C++ 子 launch 的内部实现级 enable 参数。
+- `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
+  下沉到 `sim_cpp_bridge.launch.py`，不再作为 package-level public
+  surface 暴露。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
   节上抬到 `robot_bringup`。
 

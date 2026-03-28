@@ -79,7 +79,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             public_launch_source,
             'sim_joint_state_fb_topic_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'sim_publish_rate_hz_arg',
         )
@@ -99,10 +99,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')",
             public_launch_source,
         )
-        self.assertIn(
-            "'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')",
-            public_launch_source,
-        )
+        self.assertNotIn("'sim_publish_rate_hz':", public_launch_source)
         self.assertIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
             public_launch_source,
@@ -166,10 +163,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')",
             stack_launch_source,
         )
-        self.assertIn(
-            "'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')",
-            stack_launch_source,
-        )
+        self.assertNotIn("'sim_publish_rate_hz':", stack_launch_source)
         self.assertNotIn(
             "'sim_cpp_bridge_debug': LaunchConfiguration('sim_cpp_bridge_debug')",
             stack_launch_source,

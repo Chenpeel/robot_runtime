@@ -28,12 +28,6 @@ def generate_launch_description():
         default_value='/sim/joint_state_fb',
         description='仿真侧关节反馈话题(std_msgs/Float32MultiArray)',
     )
-    sim_publish_rate_hz_arg = DeclareLaunchArgument(
-        'sim_publish_rate_hz',
-        default_value='50.0',
-        description='C++仿真桥接发布频率(Hz)',
-    )
-
     simulation_bridge_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -47,7 +41,6 @@ def generate_launch_description():
             'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge'),
             'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
             'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
-            'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
         }.items(),
     )
 
@@ -56,6 +49,5 @@ def generate_launch_description():
         enable_sim_joint_bridge_arg,
         sim_joint_cmd_topic_arg,
         sim_joint_state_fb_topic_arg,
-        sim_publish_rate_hz_arg,
         simulation_bridge_stack,
     ])

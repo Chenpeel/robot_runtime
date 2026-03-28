@@ -337,9 +337,8 @@
     两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
     接口。
   - 当前 `simulation_bridge/simulation.launch.py` 已显式声明
-    `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
-    `sim_publish_rate_hz` 这组 public launch 参数，并已有 source-level
-    contract 测试固定最小 public surface。
+    `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 这组 public launch
+    参数，并已有 source-level contract 测试固定最小 public surface。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `isaac_command_topic`、`isaac_state_topic`、
     `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数，以及
@@ -347,6 +346,9 @@
     debug 开关；这些配置现已进一步下沉到
     `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch
     中。
+  - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
+    `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
+    数现已只保留在 `sim_cpp_bridge.launch.py` 这个内部子链路边界。
   - 当前 `simulation_bridge/simulation.launch.py` 自己也已不再暴露
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
     参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
@@ -375,9 +377,11 @@
     `robot_bringup/simulation.launch.py` 这个 simulation 域入口中。
   - 当前 `robot_bringup/simulation.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
-    `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已进一步
-    收回到 `simulation_bridge/simulation.launch.py` 这个 simulation
-    责任域自身的 launch contract 中。
+    `sim_publish_rate_hz` 这组 simulation 域细节参数；其中
+    `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 现已进一步收回到
+    `simulation_bridge/simulation.launch.py` 这个 simulation 责任域自身的
+    launch contract 中，而 `sim_publish_rate_hz` 已进一步下沉到
+    `sim_cpp_bridge.launch.py` 这个内部子链路边界。
   - 当前 `simulation_bridge` 包内也已补出 `simulation.launch.py` 作为包级
     public 入口；`bridge_stack.launch.py` 现已下沉为内部 bridge
     stack 编排文件，由 `robot_bringup/simulation.launch.py` 只 include
@@ -421,10 +425,12 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 作为对外主名，并对旧
     `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz`
-    保留兼容；其所在 launch surface 现已只保留在
-    `simulation_bridge` 层显式声明，并已有 source-level contract 测试固
-    定；同时其节点装配也已拆到 `sim_cpp_bridge.launch.py` 子 launch 中，
-    但仿真域的其它参数与消息 contract 仍未完全统一。
+    保留兼容；其中 `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`
+    这组 package-level contract 现已只保留在 `simulation_bridge`
+    层显式声明，并已有 source-level contract 测试固定，而
+    `sim_publish_rate_hz` 已进一步下沉到 `sim_cpp_bridge.launch.py`
+    子 launch 中；同时其节点装配也已拆到 `sim_cpp_bridge.launch.py`
+    子 launch 中，但仿真域的其它参数与消息 contract 仍未完全统一。
   - 当前虽仍由 `robot_bringup` 的整机链路间接触发，但其节点装配与启停已
     先收口到 `simulation_bridge/simulation.launch.py` 与内部
     `bridge_stack.launch.py` 编排中，仍未完全完成的是包边界与实现本体的最
