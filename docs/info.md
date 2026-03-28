@@ -84,6 +84,16 @@ Phase E-1 的建议范围控制在：
 - 明确哪些能力属于 Python Isaac bridge，哪些能力暂时仍由 C++ bridge 承接。
 - 继续让 `robot_bringup` 只感知“simulation 责任域入口”，而不是感知仿真域内部两套实现的细碎差异。
 
+当前进度补充：
+
+- `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
+  `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
+  `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
+- `bridge_stack.launch.py` 现在负责把这组 capability-based 开关映射到
+  Isaac 子 launch 与 C++ 子 launch 的内部实现级 enable 参数。
+- 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
+  节上抬到 `robot_bringup`。
+
 建议优先修改的文件：
 
 - `src/simulation_bridge/launch/simulation.launch.py`

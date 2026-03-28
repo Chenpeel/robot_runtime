@@ -17,7 +17,7 @@ def generate_launch_description():
             ])
         ),
         launch_arguments={
-            'enable_isaac_bridge': LaunchConfiguration('enable_isaac_bridge'),
+            'enable_isaac_bridge': LaunchConfiguration('enable_sim_servo_bridge'),
         }.items(),
     )
 
@@ -30,7 +30,7 @@ def generate_launch_description():
             ])
         ),
         launch_arguments={
-            'enable_sim_cpp_bridge': LaunchConfiguration('enable_sim_cpp_bridge'),
+            'enable_sim_cpp_bridge': LaunchConfiguration('enable_sim_joint_bridge'),
             'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic'),
             'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic'),
             'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz'),
