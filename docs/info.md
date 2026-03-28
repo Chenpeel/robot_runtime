@@ -86,7 +86,8 @@ Phase E-1 的建议范围控制在：
 
 建议优先修改的文件：
 
-- `src/simulation_bridge/launch/simulation_bridges.launch.py`
+- `src/simulation_bridge/launch/simulation.launch.py`
+- `src/simulation_bridge/launch/bridge_stack.launch.py`
 - `src/robot_bringup/launch/simulation.launch.py`
 - `src/robot_bringup/launch/full_system.launch.py`
 - `src/simulation_bridge/simulation_bridge/isaac_bridge_node.py`

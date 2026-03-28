@@ -47,6 +47,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
 
         self.assertIn("'simulation.launch.py'", source)
         self.assertNotIn("'simulation_bridges.launch.py'", source)
+        self.assertNotIn("'bridge_stack.launch.py'", source)
 
     def test_simulation_launch_hides_isaac_topic_details_from_public_surface(self):
         source = Path(

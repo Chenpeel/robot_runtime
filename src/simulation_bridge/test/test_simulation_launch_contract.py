@@ -30,11 +30,11 @@ class TestSimulationLaunchContract(unittest.TestCase):
         stack_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/simulation_bridges.launch.py',
+                '../launch/bridge_stack.launch.py',
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'simulation_bridges.launch.py'", public_launch_source)
+        self.assertIn("'bridge_stack.launch.py'", public_launch_source)
         self._assert_launch_argument_declared(
             public_launch_source,
             'isaac_command_topic_arg',
@@ -104,7 +104,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         stack_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/simulation_bridges.launch.py',
+                '../launch/bridge_stack.launch.py',
             )
         ).read_text(encoding='utf-8')
         cpp_launch_source = Path(
@@ -240,7 +240,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         stack_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/simulation_bridges.launch.py',
+                '../launch/bridge_stack.launch.py',
             )
         ).read_text(encoding='utf-8')
         isaac_launch_source = Path(

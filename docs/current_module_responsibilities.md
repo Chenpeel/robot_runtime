@@ -367,10 +367,10 @@
     收回到 `simulation_bridge/simulation.launch.py` 这个 simulation
     责任域自身的 launch contract 中。
   - 当前 `simulation_bridge` 包内也已补出 `simulation.launch.py` 作为包级
-    public 入口；`simulation_bridges.launch.py` 现已下沉为内部 bridge
+    public 入口；`bridge_stack.launch.py` 现已下沉为内部 bridge
     stack 编排文件，由 `robot_bringup/simulation.launch.py` 只 include
     这个包级 public 入口。
-  - 当前 `simulation_bridge/simulation_bridges.launch.py` 也已不再直接内联
+  - 当前 `simulation_bridge/bridge_stack.launch.py` 也已不再直接内联
     Isaac bridge 与 C++ bridge 的节点装配，而是改为只负责仿真域 public
     参数声明与子链路编排；具体装配现已拆分到
     `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子 launch
