@@ -89,13 +89,13 @@ Phase E-1 的建议范围控制在：
 - `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
-- `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 现在也已把各自的
+- `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 现在也已把各自的
   enable 参数统一为 `enable_sim_servo_bridge`、`enable_sim_joint_bridge`；
   `simulation.launch.py` 当前已可直接编排两个子 launch。
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
-  下沉到 `sim_cpp_bridge.launch.py`，不再作为 package-level public
+  下沉到 `sim_joint_bridge.launch.py`，不再作为 package-level public
   surface 暴露。
-- `isaac_bridge.launch.py` 与 `isaac_bridge_node.py` 现在也已把
+- `sim_servo_bridge.launch.py` 与 `isaac_bridge_node.py` 现在也已把
   simulator-facing topic 参数从 `isaac_*` 收口为 `sim_servo_*`，继续朝
   simulation 域统一词表推进。
 - `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
@@ -105,7 +105,7 @@ Phase E-1 的建议范围控制在：
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。
 - `bridge_stack.launch.py` 当前也已移除，`simulation.launch.py` 直接 include
-  `isaac_bridge.launch.py` 与 `sim_cpp_bridge.launch.py` 两个子链路。
+  `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子链路。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
   节上抬到 `robot_bringup`。
 

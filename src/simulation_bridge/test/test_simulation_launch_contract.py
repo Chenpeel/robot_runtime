@@ -28,8 +28,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'isaac_bridge.launch.py'", public_launch_source)
-        self.assertIn("'sim_cpp_bridge.launch.py'", public_launch_source)
+        self.assertIn("'sim_servo_bridge.launch.py'", public_launch_source)
+        self.assertIn("'sim_joint_bridge.launch.py'", public_launch_source)
+        self.assertNotIn("'isaac_bridge.launch.py'", public_launch_source)
+        self.assertNotIn("'sim_cpp_bridge.launch.py'", public_launch_source)
         self.assertNotIn("'bridge_stack.launch.py'", public_launch_source)
         self._assert_launch_argument_declared(
             public_launch_source,
@@ -116,7 +118,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         cpp_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/sim_cpp_bridge.launch.py',
+                '../launch/sim_joint_bridge.launch.py',
             )
         ).read_text(encoding='utf-8')
         cpp_source = Path(
@@ -132,7 +134,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'sim_cpp_bridge.launch.py'", public_launch_source)
+        self.assertIn("'sim_joint_bridge.launch.py'", public_launch_source)
         self.assertIn(
             "'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge')",
             public_launch_source,
@@ -276,7 +278,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         isaac_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../launch/isaac_bridge.launch.py',
+                '../launch/sim_servo_bridge.launch.py',
             )
         ).read_text(encoding='utf-8')
         isaac_node_source = Path(
@@ -286,7 +288,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("'isaac_bridge.launch.py'", public_launch_source)
+        self.assertIn("'sim_servo_bridge.launch.py'", public_launch_source)
         self.assertIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
             public_launch_source,

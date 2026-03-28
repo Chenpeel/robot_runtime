@@ -18,24 +18,24 @@ def generate_launch_description():
         default_value='false',
         description='是否启用 simulation 域的 joint 级桥接链路',
     )
-    isaac_bridge_launch = IncludeLaunchDescription(
+    sim_servo_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare('simulation_bridge'),
                 'launch',
-                'isaac_bridge.launch.py',
+                'sim_servo_bridge.launch.py',
             ])
         ),
         launch_arguments={
             'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge'),
         }.items(),
     )
-    sim_cpp_bridge_launch = IncludeLaunchDescription(
+    sim_joint_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare('simulation_bridge'),
                 'launch',
-                'sim_cpp_bridge.launch.py',
+                'sim_joint_bridge.launch.py',
             ])
         ),
         launch_arguments={
@@ -46,6 +46,6 @@ def generate_launch_description():
     return LaunchDescription([
         enable_sim_servo_bridge_arg,
         enable_sim_joint_bridge_arg,
-        isaac_bridge_launch,
-        sim_cpp_bridge_launch,
+        sim_servo_bridge_launch,
+        sim_joint_bridge_launch,
     ])

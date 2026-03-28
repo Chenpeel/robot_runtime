@@ -1,4 +1,4 @@
-"""C++ simulation bridge launch owned by simulation_bridge."""
+"""Joint-level simulation bridge launch owned by simulation_bridge."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
