@@ -420,8 +420,10 @@
     `simulation_bridge` 层显式声明，并已有 source-level contract 测试固
     定；同时其节点装配也已拆到 `sim_cpp_bridge.launch.py` 子 launch 中，
     但仿真域的其它参数与消息 contract 仍未完全统一。
-  - 当前通过 `robot_bringup` 的整机 launch 启停，仍未完全收口到统一的
-    `simulation_bridge` 包边界。
+  - 当前虽仍由 `robot_bringup` 的整机链路间接触发，但其节点装配与启停已
+    先收口到 `simulation_bridge/simulation.launch.py` 与内部
+    `bridge_stack.launch.py` 编排中，仍未完全完成的是包边界与实现本体的最
+    终合并，而不再是 launch 入口归属本身。
 - 与长期规划的关系
   - 长期应被纳入统一的 `simulation_bridge` 责任域。
 
