@@ -101,6 +101,10 @@ Phase E-1 的建议范围控制在：
 - `sim_servo_bridge_node.py` 当前也已改为依赖
   `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
   `isaac_bridge_*` 命名。
+- `sim_servo_bridge.launch.py` 当前也已把内部调试 / 限幅参数从
+  `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
+  `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
+  仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
 - `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。

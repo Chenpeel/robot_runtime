@@ -16,10 +16,10 @@ def generate_launch_description():
         default_value='true',
         description='是否启用 simulation 域的 servo 级桥接链路',
     )
-    isaac_bridge_debug_arg = DeclareLaunchArgument(
-        'isaac_bridge_debug',
+    sim_servo_bridge_debug_arg = DeclareLaunchArgument(
+        'sim_servo_bridge_debug',
         default_value='false',
-        description='Isaac-ROS桥接节点调试模式',
+        description='仿真servo桥接节点调试模式',
     )
     sim_servo_command_topic_arg = DeclareLaunchArgument(
         'sim_servo_command_topic',
@@ -31,10 +31,10 @@ def generate_launch_description():
         default_value='/sim/servo_state',
         description='仿真侧舵机状态话题',
     )
-    isaac_enforce_limits_arg = DeclareLaunchArgument(
-        'isaac_enforce_limits',
+    sim_servo_enforce_limits_arg = DeclareLaunchArgument(
+        'sim_servo_enforce_limits',
         default_value='true',
-        description='Isaac桥接是否强制位置限幅',
+        description='仿真servo桥接是否强制位置限幅',
     )
 
     sim_servo_bridge_node = Node(
@@ -48,16 +48,16 @@ def generate_launch_description():
             {'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')},
             {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
             {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
-            {'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')},
-            {'debug': LaunchConfiguration('isaac_bridge_debug')},
+            {'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')},
+            {'debug': LaunchConfiguration('sim_servo_bridge_debug')},
         ],
     )
 
     return LaunchDescription([
         enable_sim_servo_bridge_arg,
-        isaac_bridge_debug_arg,
+        sim_servo_bridge_debug_arg,
         sim_servo_command_topic_arg,
         sim_servo_state_topic_arg,
-        isaac_enforce_limits_arg,
+        sim_servo_enforce_limits_arg,
         sim_servo_bridge_node,
     ])

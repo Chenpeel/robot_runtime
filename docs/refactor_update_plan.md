@@ -266,6 +266,10 @@
 - `sim_servo_bridge_node.py` 当前也已改为依赖
   `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
   `isaac_bridge_*` 这组旧模块名。
+- `sim_servo_bridge.launch.py` 当前也已把内部调试 / 限幅参数从
+  `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
+  `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
+  仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
   现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
@@ -276,11 +280,13 @@
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `isaac_command_topic`、`isaac_state_topic`、
   `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置现已
-  收回到 `simulation_bridge` 包内子 launch 边界中。
+  收回到 `simulation_bridge` 包内子 launch 边界中；其中 Python servo 子
+  链路内部当前已进一步统一为 `sim_servo_enforce_limits`。
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-
   specific debug 开关；相关调试参数现已只保留在
-  `simulation_bridge` 包内子 launch 边界。
+  `simulation_bridge` 包内子 launch 边界，其中 Python servo 子链路内部
+  当前已进一步统一为 `sim_servo_bridge_debug`。
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现级启停开
   关，而是改为只保留一个 `enable_simulation` 域级开关。

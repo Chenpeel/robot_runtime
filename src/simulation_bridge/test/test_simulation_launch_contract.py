@@ -106,6 +106,8 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_state_topic':", public_launch_source)
         self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
         self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
+        self.assertNotIn("'sim_servo_enforce_limits':", public_launch_source)
+        self.assertNotIn("'sim_servo_bridge_debug':", public_launch_source)
         self.assertNotIn("'sim_cpp_bridge_debug':", public_launch_source)
 
     def test_public_simulation_launch_routes_to_cpp_bridge_with_unified_servo_contract(self):
@@ -298,19 +300,37 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_state_topic':", public_launch_source)
         self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
         self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
+        self.assertNotIn("'sim_servo_enforce_limits':", public_launch_source)
+        self.assertNotIn("'sim_servo_bridge_debug':", public_launch_source)
         self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
         self.assertIn("executable='sim_servo_bridge_node'", sim_servo_launch_source)
         self.assertIn(
-            "{'debug': LaunchConfiguration('isaac_bridge_debug')}",
+            "{'debug': LaunchConfiguration('sim_servo_bridge_debug')}",
             sim_servo_launch_source,
         )
         self._assert_launch_argument_declared(
             sim_servo_launch_source,
             'enable_sim_servo_bridge_arg',
         )
+        self._assert_launch_argument_declared(
+            sim_servo_launch_source,
+            'sim_servo_bridge_debug_arg',
+        )
+        self._assert_launch_argument_declared(
+            sim_servo_launch_source,
+            'sim_servo_enforce_limits_arg',
+        )
         self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
             'enable_isaac_bridge_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            sim_servo_launch_source,
+            'isaac_bridge_debug_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            sim_servo_launch_source,
+            'isaac_enforce_limits_arg',
         )
         self.assertIn(
             "{'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')}",
@@ -329,7 +349,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             sim_servo_launch_source,
         )
         self.assertIn(
-            "{'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')}",
+            "{'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')}",
             sim_servo_launch_source,
         )
         self.assertIn(
