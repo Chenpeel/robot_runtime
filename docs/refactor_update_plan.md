@@ -282,6 +282,9 @@
   Python servo 子链路复用同一节点身份。
 - C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
   保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+- `sim_joint_bridge.launch.py` 当前也已显式加载
+  `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
+  所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
   现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
@@ -381,6 +384,8 @@
 3. 不把 `/servo/command` 直发当作新架构的长期方案。
 4. 不让驱动层承接控制权仲裁。
 5. 不在没有 profiling 结果前推动语言重写。
+6. 某一块重构完成且旧目录、旧副本、旧入口已经无引用时，要及时删除，不长
+   期保留废弃目录等待后续“顺手再清”。
 
 
 ## 7. 简短结论

@@ -168,6 +168,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "package='sim_joint_bridge_cpp'",
             cpp_launch_source,
         )
+        self.assertIn(
+            "FindPackageShare('sim_joint_bridge_cpp')",
+            cpp_launch_source,
+        )
+        self.assertIn(
+            "'default_params.yaml'",
+            cpp_launch_source,
+        )
         self.assertNotIn(
             "package='sim_servo_bridge_cpp'",
             cpp_launch_source,
@@ -190,6 +198,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             "{'debug': LaunchConfiguration('sim_joint_bridge_debug')}",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'speed': 100}",
             cpp_launch_source,
         )
         self._assert_launch_argument_declared(

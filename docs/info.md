@@ -39,6 +39,9 @@
 - 不为了“形式统一”先做大规模目录迁移。
 - 不把过渡兼容代码写成长期架构事实。
 - 不把 demo、调试、仿真临时链路重新混回正式主链路。
+- 某一块重构完成且旧目录、旧副本、旧入口已经无引用时，应及时删除，不长
+  期保留“等以后再清理”的废弃目录；目录级清理应作为对应重构阶段的收尾动
+  作，而不是无限后延。
 
 
 ## 3. 当前阶段判断
@@ -119,6 +122,9 @@ Phase E-1 的建议范围控制在：
   兼容分支，只保留当前 simulation 词表。
 - C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
   保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+- `sim_joint_bridge.launch.py` 当前也已显式加载
+  `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
+  所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。

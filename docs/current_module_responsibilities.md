@@ -371,6 +371,9 @@
     免继续和 Python servo 子链路复用同一节点身份。
   - 当前 C++ 子链路的 ROS 包名也已收口为 `sim_joint_bridge_cpp`，但目录
     仍暂保留在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+  - 当前 `sim_joint_bridge.launch.py` 也已显式加载
+    `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
+    数所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
     数现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。

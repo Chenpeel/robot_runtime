@@ -3,11 +3,17 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
 DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
+DEFAULT_PARAMS_FILE = PathJoinSubstitution([
+    FindPackageShare('sim_joint_bridge_cpp'),
+    'config',
+    'default_params.yaml',
+])
 
 
 def generate_launch_description():
@@ -44,12 +50,12 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge')),
         parameters=[
+            DEFAULT_PARAMS_FILE,
             {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
             {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
             {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
             {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
-            {'speed': 100},
             {'debug': LaunchConfiguration('sim_joint_bridge_debug')},
         ],
     )
