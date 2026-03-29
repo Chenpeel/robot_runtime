@@ -254,7 +254,23 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_source,
         )
         self.assertIn(
+            '"servo_type", "bus"',
+            cpp_source,
+        )
+        self.assertIn(
             '"servo_command_topic", "/servo/command"',
+            cpp_source,
+        )
+        self.assertIn(
+            'cmd_msg.servo_type = servo_type_;',
+            cpp_source,
+        )
+        self.assertIn(
+            'msg->servo_type != servo_type_',
+            cpp_source,
+        )
+        self.assertNotIn(
+            'msg->servo_type != "bus"',
             cpp_source,
         )
         self.assertNotIn(
@@ -307,6 +323,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             'sim_publish_rate_hz: 50.0',
+            default_params,
+        )
+        self.assertIn(
+            'servo_type: "bus"',
             default_params,
         )
         self.assertIn(

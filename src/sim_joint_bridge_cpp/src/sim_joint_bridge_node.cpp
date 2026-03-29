@@ -117,6 +117,14 @@ class SimJointBridgeNode : public rclcpp::Node {
       std::swap(min_pulse_us_, max_pulse_us_);
     }
 
+    if (servo_type_ != "bus" && servo_type_ != "pca") {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "servo_type='%s' invalid, reset to 'bus'",
+        servo_type_.c_str());
+      servo_type_ = "bus";
+    }
+
     if (joint_to_servo_id_.size() != kJointCount) {
       RCLCPP_WARN(
         this->get_logger(),
@@ -189,7 +197,7 @@ class SimJointBridgeNode : public rclcpp::Node {
   }
 
   void on_servo_state(const servo_msgs::msg::ServoState::SharedPtr msg) {
-    if (!msg || msg->servo_type != "bus") {
+    if (!msg || msg->servo_type != servo_type_) {
       return;
     }
 
