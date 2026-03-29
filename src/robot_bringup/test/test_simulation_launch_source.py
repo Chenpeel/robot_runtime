@@ -65,6 +65,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
         self._assert_launch_argument_not_declared(source, 'enable_sim_cpp_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_joint_bridge_debug_arg')
         self.assertIn(
             "condition=IfCondition(LaunchConfiguration('enable_simulation'))",
             source,
@@ -76,6 +77,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
         self.assertNotIn("'isaac_enforce_limits':", source)
+        self.assertNotIn("'sim_joint_bridge_debug':", source)
         self.assertNotIn("'sim_cpp_bridge_debug':", source)
 
     def test_simulation_launch_hides_sim_domain_topic_details_from_public_surface(self):
@@ -132,6 +134,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self._assert_launch_argument_not_declared(source, 'isaac_enforce_limits_arg')
         self._assert_launch_argument_not_declared(source, 'enable_sim_cpp_bridge_arg')
         self._assert_launch_argument_not_declared(source, 'sim_cpp_bridge_debug_arg')
+        self._assert_launch_argument_not_declared(source, 'sim_joint_bridge_debug_arg')
         self.assertIn(
             "'enable_simulation': LaunchConfiguration('enable_simulation')",
             source,
@@ -142,6 +145,7 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'isaac_command_topic':", source)
         self.assertNotIn("'isaac_state_topic':", source)
         self.assertNotIn("'isaac_enforce_limits':", source)
+        self.assertNotIn("'sim_joint_bridge_debug':", source)
         self.assertNotIn("'sim_cpp_bridge_debug':", source)
 
     def test_full_system_hides_sim_domain_topic_details_from_public_surface(self):

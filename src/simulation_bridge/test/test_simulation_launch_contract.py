@@ -108,6 +108,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
         self.assertNotIn("'sim_servo_enforce_limits':", public_launch_source)
         self.assertNotIn("'sim_servo_bridge_debug':", public_launch_source)
+        self.assertNotIn("'sim_joint_bridge_debug':", public_launch_source)
         self.assertNotIn("'sim_cpp_bridge_debug':", public_launch_source)
 
     def test_public_simulation_launch_routes_to_cpp_bridge_with_unified_servo_contract(self):
@@ -149,6 +150,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "'sim_cpp_bridge_debug': LaunchConfiguration('sim_cpp_bridge_debug')",
             public_launch_source,
         )
+        self.assertNotIn(
+            "'sim_joint_bridge_debug': LaunchConfiguration('sim_joint_bridge_debug')",
+            public_launch_source,
+        )
         self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
         self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", cpp_launch_source)
         self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", cpp_launch_source)
@@ -173,16 +178,24 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_launch_source,
         )
         self.assertIn(
-            "{'debug': LaunchConfiguration('sim_cpp_bridge_debug')}",
+            "{'debug': LaunchConfiguration('sim_joint_bridge_debug')}",
             cpp_launch_source,
         )
         self._assert_launch_argument_declared(
             cpp_launch_source,
             'enable_sim_joint_bridge_arg',
         )
+        self._assert_launch_argument_declared(
+            cpp_launch_source,
+            'sim_joint_bridge_debug_arg',
+        )
         self._assert_launch_argument_not_declared(
             cpp_launch_source,
             'enable_sim_cpp_bridge_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            cpp_launch_source,
+            'sim_cpp_bridge_debug_arg',
         )
         self.assertNotIn(
             "{'servo_command_topic': LaunchConfiguration('servo_command_topic')}",
