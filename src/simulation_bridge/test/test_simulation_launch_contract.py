@@ -258,11 +258,27 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_source,
         )
         self.assertIn(
+            '"default_speed", 100',
+            cpp_source,
+        )
+        self.assertIn(
             '"servo_command_topic", "/servo/command"',
             cpp_source,
         )
         self.assertIn(
             'cmd_msg.servo_type = servo_type_;',
+            cpp_source,
+        )
+        self.assertIn(
+            'default_speed_ <= 0',
+            cpp_source,
+        )
+        self.assertIn(
+            'cmd_msg.speed = static_cast<uint16_t>(',
+            cpp_source,
+        )
+        self.assertIn(
+            'std::clamp<int64_t>(default_speed_, 0, std::numeric_limits<uint16_t>::max())',
             cpp_source,
         )
         self.assertIn(
@@ -315,6 +331,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             'servo_command_topic: "/servo/command"',
+            default_params,
+        )
+        self.assertIn(
+            'default_speed: 100',
             default_params,
         )
         self.assertIn(

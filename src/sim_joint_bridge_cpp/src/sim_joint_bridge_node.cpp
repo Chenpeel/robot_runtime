@@ -35,7 +35,7 @@ class SimJointBridgeNode : public rclcpp::Node {
       "servo_state_topic", "/servo/state");
 
     publish_rate_hz_ = this->declare_parameter<double>("sim_publish_rate_hz", 50.0);
-    speed_ = this->declare_parameter<int64_t>("speed", 100);
+    default_speed_ = this->declare_parameter<int64_t>("default_speed", 100);
     servo_type_ = this->declare_parameter<std::string>("servo_type", "bus");
     min_pulse_us_ = this->declare_parameter<double>("min_pulse_us", 500.0);
     max_pulse_us_ = this->declare_parameter<double>("max_pulse_us", 2500.0);
@@ -123,6 +123,14 @@ class SimJointBridgeNode : public rclcpp::Node {
         "servo_type='%s' invalid, reset to 'bus'",
         servo_type_.c_str());
       servo_type_ = "bus";
+    }
+
+    if (default_speed_ <= 0) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "default_speed=%ld invalid, reset to 100",
+        default_speed_);
+      default_speed_ = 100;
     }
 
     if (joint_to_servo_id_.size() != kJointCount) {
@@ -273,7 +281,7 @@ class SimJointBridgeNode : public rclcpp::Node {
       cmd_msg.servo_id = static_cast<uint16_t>(servo_id);
       cmd_msg.position = static_cast<uint16_t>(std::lround(clamped_us));
       cmd_msg.speed = static_cast<uint16_t>(
-        std::clamp<int64_t>(speed_, 0, std::numeric_limits<uint16_t>::max()));
+        std::clamp<int64_t>(default_speed_, 0, std::numeric_limits<uint16_t>::max()));
       cmd_msg.stamp = stamp;
       servo_cmd_pub_->publish(cmd_msg);
       ++command_publish_count_;
@@ -301,7 +309,7 @@ class SimJointBridgeNode : public rclcpp::Node {
   double max_pulse_us_{2500.0};
   double center_pulse_us_{1500.0};
   double us_per_rad_{636.6197723675814};
-  int64_t speed_{100};
+  int64_t default_speed_{100};
   bool debug_{false};
 
   std::vector<int64_t> joint_to_servo_id_;

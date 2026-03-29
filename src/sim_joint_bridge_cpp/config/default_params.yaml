@@ -5,7 +5,7 @@ sim_joint_bridge:
     servo_command_topic: "/servo/command"
     servo_state_topic: "/servo/state"
     sim_publish_rate_hz: 50.0
-    speed: 100
+    default_speed: 100
     servo_type: "bus"
     min_pulse_us: 500.0
     max_pulse_us: 2500.0

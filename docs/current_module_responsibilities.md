@@ -382,6 +382,9 @@
   - 当前 `sim_joint_bridge_cpp` 也已把 `servo_type` 参数收紧为收发两侧共
     用的同一语义：既控制下发 `ServoCommand.servo_type`，也控制回读
     `ServoState` 的过滤条件；非法值会回退到 `bus`。
+  - 当前 `sim_joint_bridge_cpp` 也已把内部 `speed` 参数收口为
+    `default_speed`，并在非法值时回退到 `100`，与 Python
+    `sim_servo_bridge_node.py` 的默认速度语义保持同一方向。
   - 当前 `sim_servo_bridge.launch.py` 也已显式加载
     `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的
     默认参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点
