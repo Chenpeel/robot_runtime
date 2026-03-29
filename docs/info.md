@@ -126,6 +126,10 @@ Phase E-1 的建议范围控制在：
 - `sim_joint_bridge.launch.py` 当前也已显式加载
   `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
   所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
+- `sim_servo_bridge.launch.py` 当前也已显式加载
+  `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的默认
+  参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点默认值
+  里。
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。
@@ -141,6 +145,7 @@ Phase E-1 的建议范围控制在：
 - `src/robot_bringup/launch/full_system.launch.py`
 - `src/simulation_bridge/simulation_bridge/sim_servo_bridge_node.py`
 - `src/simulation_bridge/simulation_bridge/sim_servo_bridge_utils.py`
+- `src/simulation_bridge/config/default_params.yaml`
 - `src/sim_joint_bridge_cpp/src/sim_joint_bridge_node.cpp`
 - `src/sim_joint_bridge_cpp/config/default_params.yaml`
 

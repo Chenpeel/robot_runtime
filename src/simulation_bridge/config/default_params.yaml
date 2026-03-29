@@ -1,0 +1,9 @@
+sim_servo_bridge:
+  ros__parameters:
+    sim_servo_command_topic: "/sim/servo_command"
+    sim_servo_state_topic: "/sim/servo_state"
+    servo_command_topic: "/servo/command"
+    servo_state_topic: "/servo/state"
+    default_speed: 100
+    enforce_position_limits: true
+    debug: false

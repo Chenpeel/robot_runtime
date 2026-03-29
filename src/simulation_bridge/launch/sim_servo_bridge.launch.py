@@ -3,11 +3,15 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
-DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
-DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
+DEFAULT_PARAMS_FILE = PathJoinSubstitution([
+    FindPackageShare('simulation_bridge'),
+    'config',
+    'default_params.yaml',
+])
 
 
 def generate_launch_description():
@@ -44,10 +48,9 @@ def generate_launch_description():
         output='screen',
         condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
         parameters=[
+            DEFAULT_PARAMS_FILE,
             {'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')},
             {'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')},
-            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
-            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')},
             {'debug': LaunchConfiguration('sim_servo_bridge_debug')},
         ],

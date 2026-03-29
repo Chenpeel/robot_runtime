@@ -375,6 +375,10 @@
   - 当前 `sim_joint_bridge.launch.py` 也已显式加载
     `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
     数所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
+  - 当前 `sim_servo_bridge.launch.py` 也已显式加载
+    `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的
+    默认参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点
+    默认值里。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
     数现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。

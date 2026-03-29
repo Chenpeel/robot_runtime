@@ -329,6 +329,12 @@ class TestSimulationLaunchContract(unittest.TestCase):
                 '../launch/sim_servo_bridge.launch.py',
             )
         ).read_text(encoding='utf-8')
+        default_params = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../config/default_params.yaml',
+            )
+        ).read_text(encoding='utf-8')
         sim_servo_node_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -350,6 +356,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'sim_servo_bridge_debug':", public_launch_source)
         self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
         self.assertIn("executable='sim_servo_bridge_node'", sim_servo_launch_source)
+        self.assertIn(
+            "FindPackageShare('simulation_bridge')",
+            sim_servo_launch_source,
+        )
+        self.assertIn(
+            "'default_params.yaml'",
+            sim_servo_launch_source,
+        )
         self.assertIn(
             "{'debug': LaunchConfiguration('sim_servo_bridge_debug')}",
             sim_servo_launch_source,
@@ -394,9 +408,33 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "{'isaac_state_topic': LaunchConfiguration('isaac_state_topic')}",
             sim_servo_launch_source,
         )
+        self.assertNotIn(
+            "{'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC}",
+            sim_servo_launch_source,
+        )
+        self.assertNotIn(
+            "{'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC}",
+            sim_servo_launch_source,
+        )
         self.assertIn(
             "{'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')}",
             sim_servo_launch_source,
+        )
+        self.assertIn(
+            'sim_servo_bridge:',
+            default_params,
+        )
+        self.assertIn(
+            'default_speed: 100',
+            default_params,
+        )
+        self.assertIn(
+            'servo_command_topic: "/servo/command"',
+            default_params,
+        )
+        self.assertIn(
+            'servo_state_topic: "/servo/state"',
+            default_params,
         )
         self.assertIn(
             "self.declare_parameter('sim_servo_command_topic', '/sim/servo_command')",
