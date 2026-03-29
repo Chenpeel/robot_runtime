@@ -258,7 +258,7 @@
   `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
   debug 开关；这些配置现已进一步下沉到
   `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch 中。
-- `sim_servo_bridge.launch.py` 与 `isaac_bridge_node.py` 当前也已把
+- `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 当前也已把
   simulator-facing 的 topic 参数名从 `isaac_command_topic`、
   `isaac_state_topic` 进一步收口为 `sim_servo_command_topic`、
   `sim_servo_state_topic`，用于和 `sim_joint_*` 这组 simulation 域词表保

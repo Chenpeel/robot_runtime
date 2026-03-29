@@ -268,23 +268,23 @@ class TestSimulationLaunchContract(unittest.TestCase):
             default_params,
         )
 
-    def test_public_simulation_launch_routes_to_isaac_bridge_with_local_details(self):
+    def test_public_simulation_launch_routes_to_sim_servo_bridge_with_local_details(self):
         public_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
                 '../launch/simulation.launch.py',
             )
         ).read_text(encoding='utf-8')
-        isaac_launch_source = Path(
+        sim_servo_launch_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
                 '../launch/sim_servo_bridge.launch.py',
             )
         ).read_text(encoding='utf-8')
-        isaac_node_source = Path(
+        sim_servo_node_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../simulation_bridge/isaac_bridge_node.py',
+                '../simulation_bridge/sim_servo_bridge_node.py',
             )
         ).read_text(encoding='utf-8')
 
@@ -298,71 +298,71 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_state_topic':", public_launch_source)
         self.assertNotIn("'isaac_enforce_limits':", public_launch_source)
         self.assertNotIn("'isaac_bridge_debug':", public_launch_source)
-        self.assertNotIn("executable='isaac_bridge_node'", public_launch_source)
-        self.assertIn("executable='isaac_bridge_node'", isaac_launch_source)
+        self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
+        self.assertIn("executable='sim_servo_bridge_node'", sim_servo_launch_source)
         self.assertIn(
             "{'debug': LaunchConfiguration('isaac_bridge_debug')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self._assert_launch_argument_declared(
-            isaac_launch_source,
+            sim_servo_launch_source,
             'enable_sim_servo_bridge_arg',
         )
         self._assert_launch_argument_not_declared(
-            isaac_launch_source,
+            sim_servo_launch_source,
             'enable_isaac_bridge_arg',
         )
         self.assertIn(
             "{'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self.assertIn(
             "{'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self.assertNotIn(
             "{'isaac_command_topic': LaunchConfiguration('isaac_command_topic')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self.assertNotIn(
             "{'isaac_state_topic': LaunchConfiguration('isaac_state_topic')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self.assertIn(
             "{'enforce_position_limits': LaunchConfiguration('isaac_enforce_limits')}",
-            isaac_launch_source,
+            sim_servo_launch_source,
         )
         self.assertIn(
             "self.declare_parameter('sim_servo_command_topic', '/sim/servo_command')",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertIn(
             "self.declare_parameter('sim_servo_state_topic', '/sim/servo_state')",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertIn(
             "self.sim_servo_command_topic = self.get_parameter(",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertIn(
             "'sim_servo_command_topic'",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertIn(
             "self.sim_servo_state_topic = self.get_parameter(",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertIn(
             "'sim_servo_state_topic'",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertNotIn(
             "self.declare_parameter('isaac_command_topic'",
-            isaac_node_source,
+            sim_servo_node_source,
         )
         self.assertNotIn(
             "self.declare_parameter('isaac_state_topic'",
-            isaac_node_source,
+            sim_servo_node_source,
         )
 
 

@@ -30,7 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'isaac_bridge_node = simulation_bridge.isaac_bridge_node:main',
+            'sim_servo_bridge_node = simulation_bridge.sim_servo_bridge_node:main',
         ],
     },
 )

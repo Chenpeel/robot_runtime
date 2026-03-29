@@ -1,4 +1,4 @@
-"""Isaac-ROS桥接节点。
+"""Servo-level simulation bridge node。
 
 用于在仿真侧和 ROS 舵机总线侧之间做消息转发:
 - /sim/servo_command -> /servo/command
@@ -15,11 +15,11 @@ from .isaac_bridge_utils import normalize_servo_type
 from .isaac_bridge_utils import normalize_speed
 
 
-class IsaacROSBridge(Node):
-    """Isaac-ROS消息桥接节点。"""
+class SimServoBridge(Node):
+    """Servo级仿真桥接节点。"""
 
     def __init__(self):
-        super().__init__('isaac_ros_bridge')
+        super().__init__('sim_servo_bridge')
 
         self.declare_parameter('sim_servo_command_topic', '/sim/servo_command')
         self.declare_parameter('sim_servo_state_topic', '/sim/servo_state')
@@ -71,7 +71,7 @@ class IsaacROSBridge(Node):
         self.state_forward_count = 0
 
         self.get_logger().info(
-            'Isaac桥接已启动: '
+            '仿真servo桥接已启动: '
             f'{self.sim_servo_command_topic} -> {self.servo_command_topic}, '
             f'{self.servo_state_topic} -> {self.sim_servo_state_topic}'
         )
@@ -163,7 +163,7 @@ class IsaacROSBridge(Node):
 def main(args=None):
     """入口函数。"""
     rclpy.init(args=args)
-    node = IsaacROSBridge()
+    node = SimServoBridge()
 
     try:
         rclpy.spin(node)

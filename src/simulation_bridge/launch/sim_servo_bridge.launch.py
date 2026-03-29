@@ -37,10 +37,10 @@ def generate_launch_description():
         description='Isaac桥接是否强制位置限幅',
     )
 
-    isaac_bridge_node = Node(
+    sim_servo_bridge_node = Node(
         package='simulation_bridge',
-        executable='isaac_bridge_node',
-        name='isaac_ros_bridge',
+        executable='sim_servo_bridge_node',
+        name='sim_servo_bridge',
         output='screen',
         condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
         parameters=[
@@ -59,5 +59,5 @@ def generate_launch_description():
         sim_servo_command_topic_arg,
         sim_servo_state_topic_arg,
         isaac_enforce_limits_arg,
-        isaac_bridge_node,
+        sim_servo_bridge_node,
     ])

@@ -163,7 +163,7 @@ teleop 控制权的最小反馈信息，例如：
 
 ```bash
 # 仅启动桥接节点
-ros2 run simulation_bridge isaac_bridge_node
+ros2 run simulation_bridge sim_servo_bridge_node
 
 # 在完整系统中启用（默认已启用）
 ros2 launch robot_bringup full_system.launch.py enable_simulation:=true

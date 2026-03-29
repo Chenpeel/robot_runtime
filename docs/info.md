@@ -95,7 +95,7 @@ Phase E-1 的建议范围控制在：
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
   下沉到 `sim_joint_bridge.launch.py`，不再作为 package-level public
   surface 暴露。
-- `sim_servo_bridge.launch.py` 与 `isaac_bridge_node.py` 现在也已把
+- `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 现在也已把
   simulator-facing topic 参数从 `isaac_*` 收口为 `sim_servo_*`，继续朝
   simulation 域统一词表推进。
 - `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
@@ -114,7 +114,7 @@ Phase E-1 的建议范围控制在：
 - `src/simulation_bridge/launch/simulation.launch.py`
 - `src/robot_bringup/launch/simulation.launch.py`
 - `src/robot_bringup/launch/full_system.launch.py`
-- `src/simulation_bridge/simulation_bridge/isaac_bridge_node.py`
+- `src/simulation_bridge/simulation_bridge/sim_servo_bridge_node.py`
 - `src/sim_servo_bridge_cpp/src/sim_servo_bridge_node.cpp`
 - `src/sim_servo_bridge_cpp/config/default_params.yaml`
 
