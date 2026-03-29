@@ -157,9 +157,9 @@ teleop 控制权的最小反馈信息，例如：
 - `known_teleop_active`
 - `control_confirmed`
 
-### 5. Isaac-ROS 仿真桥接
+### 5. 仿真 servo 桥接
 
-用于 Isaac 仿真侧与 ROS 舵机链路直连：
+用于仿真侧 servo 话题与 ROS 舵机链路直连：
 
 ```bash
 # 仅启动桥接节点

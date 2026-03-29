@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='chenpeel',
     maintainer_email='chenpeel@foxmail.com',
-    description='仿真桥接包，承接 Isaac 等仿真环境与当前舵机链路之间的消息互转',
+    description='仿真桥接包，承接 simulation 域与当前舵机链路之间的消息互转',
     license='MIT',
     extras_require={
         'test': [

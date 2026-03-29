@@ -360,6 +360,9 @@
     `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
     `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
     仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
+  - 当前 `simulation_bridge` 的包元数据描述与运行说明也已改用
+    simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
+    为 Isaac 专名节点。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
     数现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
