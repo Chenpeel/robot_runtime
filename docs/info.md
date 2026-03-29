@@ -120,8 +120,9 @@ Phase E-1 的建议范围控制在：
 - `sim_joint_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。
-- C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
-  保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+- C++ 子链路当前也已把目录从 `src/sim_servo_bridge_cpp` 迁到
+  `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点身
+  份已回到同一套 `sim_joint_*` 词表。
 - `sim_joint_bridge.launch.py` 当前也已显式加载
   `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
   所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
@@ -140,8 +141,8 @@ Phase E-1 的建议范围控制在：
 - `src/robot_bringup/launch/full_system.launch.py`
 - `src/simulation_bridge/simulation_bridge/sim_servo_bridge_node.py`
 - `src/simulation_bridge/simulation_bridge/sim_servo_bridge_utils.py`
-- `src/sim_servo_bridge_cpp/src/sim_joint_bridge_node.cpp`
-- `src/sim_servo_bridge_cpp/config/default_params.yaml`
+- `src/sim_joint_bridge_cpp/src/sim_joint_bridge_node.cpp`
+- `src/sim_joint_bridge_cpp/config/default_params.yaml`
 
 实施后必须同步更新：
 

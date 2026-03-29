@@ -236,7 +236,7 @@
 - `robot_bringup/full_system.launch.py` 已切到 include
   `simulation_bridge` 自己的仿真 launch。
 - `sim_joint_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界；
-  当前目录仍暂保留在 `src/sim_servo_bridge_cpp`。
+  但当前目录迁移也已完成，代码现位于 `src/sim_joint_bridge_cpp`。
 - 仿真域对外 launch contract 已开始收紧最基础的 driver-facing 参数命名，
   例如 C++ 仿真桥当前已以 `servo_command_topic` 作为正式对外主参数名，
   不再继续保留旧 `servo_cmd_topic` 兼容。
@@ -280,8 +280,9 @@
 - `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
-- C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
-  保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+- C++ 子链路当前也已把目录从 `src/sim_servo_bridge_cpp` 迁到
+  `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点身
+  份已回到同一套 `sim_joint_*` 词表。
 - `sim_joint_bridge.launch.py` 当前也已显式加载
   `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
   所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。

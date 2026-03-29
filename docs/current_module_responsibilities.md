@@ -369,8 +369,9 @@
   - 当前 `sim_joint_bridge_cpp` 也已把 joint 子链路的可执行名、节点名与默
     认参数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避
     免继续和 Python servo 子链路复用同一节点身份。
-  - 当前 C++ 子链路的 ROS 包名也已收口为 `sim_joint_bridge_cpp`，但目录
-    仍暂保留在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
+  - 当前 C++ 子链路也已把目录从 `src/sim_servo_bridge_cpp` 迁到
+    `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点
+    身份已回到同一套 `sim_joint_*` 词表。
   - 当前 `sim_joint_bridge.launch.py` 也已显式加载
     `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
     数所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
@@ -427,7 +428,7 @@
 - 状态
   - 已实现，可选启用，处于过渡态。
 - 当前承接位置
-  - 目录：`src/sim_servo_bridge_cpp`
+  - 目录：`src/sim_joint_bridge_cpp`
   - ROS 包名：`sim_joint_bridge_cpp`
 - 当前主要职责
   - 将 `/sim/joint_cmd` 转换为 `/servo/command`。

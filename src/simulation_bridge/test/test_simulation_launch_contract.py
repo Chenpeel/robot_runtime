@@ -127,13 +127,13 @@ class TestSimulationLaunchContract(unittest.TestCase):
         cpp_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../../sim_servo_bridge_cpp/src/sim_joint_bridge_node.cpp',
+                '../../sim_joint_bridge_cpp/src/sim_joint_bridge_node.cpp',
             )
         ).read_text(encoding='utf-8')
         default_params = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../../sim_servo_bridge_cpp/config/default_params.yaml',
+                '../../sim_joint_bridge_cpp/config/default_params.yaml',
             )
         ).read_text(encoding='utf-8')
 
