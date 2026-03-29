@@ -31,7 +31,7 @@
 3. `robot_bringup` 已经独立承接整机主 launch，并开始按硬件、遥控、仿真拆
    分启动入口。
 4. `sensor_hardware` 已经独立成 ROS 包，主 launch 也已切到新包。
-5. `simulation_bridge` 已经独立承接 Isaac 仿真桥，但 `sim_servo_bridge_cpp`
+5. `simulation_bridge` 已经独立承接 Isaac 仿真桥，但 `sim_joint_bridge_cpp`
    仍是单独的 C++ 仿真桥，仿真域还没有完全收口。
 6. `execution_manager` 已经落地最小可运行实现，并切到 `motion_msgs`，但
    还没有 `task_service_bridge`、`task_api_msgs` 等更正式的上层入口。
@@ -228,14 +228,15 @@
 
 目标：
 
-- 将 Isaac 桥与 `sim_servo_bridge_cpp` 这类逻辑从 teleop 包边界中抽离出来。
+- 将 Isaac 桥与 `sim_joint_bridge_cpp` 这类逻辑从 teleop 包边界中抽离出来。
 
 当前状态：
 
 - `simulation_bridge` 包已创建，并承接了 Isaac 仿真桥。
 - `robot_bringup/full_system.launch.py` 已切到 include
   `simulation_bridge` 自己的仿真 launch。
-- `sim_servo_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界。
+- `sim_joint_bridge_cpp` 仍是独立 C++ 包，仿真域仍未完全收口到统一包边界；
+  当前目录仍暂保留在 `src/sim_servo_bridge_cpp`。
 - 仿真域对外 launch contract 已开始收紧最基础的 driver-facing 参数命名，
   例如 C++ 仿真桥当前已以 `servo_command_topic` 作为正式对外主参数名，
   不再继续保留旧 `servo_cmd_topic` 兼容。
@@ -276,9 +277,11 @@
 - `sim_joint_bridge.launch.py` 当前也已把内部调试参数从
   `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
   仿真子链路内部词表从实现名收向 simulation capability。
-- `sim_servo_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
+- `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
+- C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
+  保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
   现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。

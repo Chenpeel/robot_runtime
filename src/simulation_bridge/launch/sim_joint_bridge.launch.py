@@ -38,7 +38,7 @@ def generate_launch_description():
     )
 
     sim_joint_bridge_node = Node(
-        package='sim_servo_bridge_cpp',
+        package='sim_joint_bridge_cpp',
         executable='sim_joint_bridge_node',
         name='sim_joint_bridge',
         output='screen',

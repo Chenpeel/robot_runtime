@@ -70,7 +70,7 @@
 
 - 从全局蓝本看，仿真链路应当形成独立责任域：
   `motion_control / execution_manager <-> simulation_bridge <-> simulator`
-- 从当前事实看，`simulation_bridge` 与 `sim_servo_bridge_cpp` 仍然是分裂状态。
+- 从当前事实看，`simulation_bridge` 与 `sim_joint_bridge_cpp` 仍然是分裂状态。
 - 当前整机编排虽然已经通过 `robot_bringup` 统一 include 仿真 launch，但仿真域内部仍保留两套 bridge 实现细节和参数语义。
 - 与继续深挖 teleop requester / lease 细节相比，仿真域收口更符合当前阶段的全局推进顺序，也更不容易和刚完成的执行边界收紧重复。
 
@@ -79,7 +79,7 @@
 
 Phase E-1 的建议范围控制在：
 
-- 统一 `simulation_bridge` 与 `sim_servo_bridge_cpp` 的 launch contract。
+- 统一 `simulation_bridge` 与 `sim_joint_bridge_cpp` 的 launch contract。
 - 统一仿真域暴露给 `robot_bringup` 的参数名、默认 topic 和开关语义。
 - 明确哪些能力属于 Python Isaac bridge，哪些能力暂时仍由 C++ bridge 承接。
 - 继续让 `robot_bringup` 只感知“simulation 责任域入口”，而不是感知仿真域内部两套实现的细碎差异。
@@ -111,12 +111,14 @@ Phase E-1 的建议范围控制在：
 - `sim_joint_bridge.launch.py` 当前也已把内部调试参数从
   `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
   仿真子链路内部词表从实现名收向 simulation capability。
-- `sim_servo_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
+- `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
-- `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
+- `sim_joint_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。
+- C++ 子链路的 ROS 包名当前也已收口为 `sim_joint_bridge_cpp`，但目录仍暂
+  保持在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。

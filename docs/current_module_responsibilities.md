@@ -34,7 +34,7 @@
   - `parallel_3dof_controller`
 - 仿真桥接
   - `simulation_bridge`
-  - `sim_servo_bridge_cpp`
+  - `sim_joint_bridge_cpp`
 - 接口、工具与描述资源
   - `motion_msgs`
   - `servo_msgs`
@@ -329,9 +329,9 @@
   - 不负责执行仲裁。
   - 不负责控制算法。
 - 当前问题
-  - 当前只收口了 Python Isaac 桥，`sim_servo_bridge_cpp` 仍是独立 C++ 包。
+  - 当前只收口了 Python Isaac 桥，`sim_joint_bridge_cpp` 仍是独立 C++ 包。
   - 整机编排虽已迁到 `robot_bringup`，但仿真域仍是跨
-    `simulation_bridge` 与 `sim_servo_bridge_cpp` 组合。
+    `simulation_bridge` 与 `sim_joint_bridge_cpp` 组合。
   - 仿真域内部虽然已开始统一 launch contract，并已将 driver-facing 参数与
     一部分 simulator-facing 参数收口到 simulation 词表，但 Python / C++
     两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
@@ -366,9 +366,11 @@
   - 当前 `sim_joint_bridge.launch.py` 也已把内部调试参数从
     `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
     仿真子链路内部词表从实现名收向 simulation capability。
-  - 当前 `sim_servo_bridge_cpp` 也已把 joint 子链路的可执行名、节点名与默
+  - 当前 `sim_joint_bridge_cpp` 也已把 joint 子链路的可执行名、节点名与默
     认参数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避
     免继续和 Python servo 子链路复用同一节点身份。
+  - 当前 C++ 子链路的 ROS 包名也已收口为 `sim_joint_bridge_cpp`，但目录
+    仍暂保留在 `src/sim_servo_bridge_cpp`，避免当前阶段引入目录级迁移。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
     数现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
@@ -417,13 +419,13 @@
   - 已开始形成 `simulation_bridge` 正式责任域。
   - 后续需要继续把 C++ 仿真桥与 launch 组织一起收口。
 
-### 3.8 `sim_servo_bridge_cpp`
+### 3.8 `sim_joint_bridge_cpp`
 
 - 状态
   - 已实现，可选启用，处于过渡态。
 - 当前承接位置
   - 目录：`src/sim_servo_bridge_cpp`
-  - ROS 包名：`sim_servo_bridge_cpp`
+  - ROS 包名：`sim_joint_bridge_cpp`
 - 当前主要职责
   - 将 `/sim/joint_cmd` 转换为 `/servo/command`。
   - 将 `/servo/state` 转换为 `/sim/joint_state_fb`。
@@ -473,7 +475,7 @@
   - 作为当前硬件链路的正式接口。
 - 当前主要输入输出
   - 被 `servo_hardware`、`execution_manager`、`simulation_bridge`、
-    `sim_servo_bridge_cpp` 等包共同使用。
+    `sim_joint_bridge_cpp` 等包共同使用。
 - 当前非职责
   - 不表达任务语义。
   - 不表达运动学层命令。
@@ -594,7 +596,7 @@
 - `sensor_hardware`
   - 当前事实：已独立成 ROS 包
   - 长期去向：独立成 `sensor_hardware` ROS 包
-- `sim_servo_bridge_cpp`
+- `sim_joint_bridge_cpp`
   - 当前事实：仍是独立 C++ 仿真桥
   - 长期去向：继续向 `simulation_bridge` 责任域收口
 
