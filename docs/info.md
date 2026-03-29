@@ -98,6 +98,9 @@ Phase E-1 的建议范围控制在：
 - `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 现在也已把
   simulator-facing topic 参数从 `isaac_*` 收口为 `sim_servo_*`，继续朝
   simulation 域统一词表推进。
+- `sim_servo_bridge_node.py` 当前也已改为依赖
+  `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
+  `isaac_bridge_*` 命名。
 - `sim_servo_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。
@@ -115,6 +118,7 @@ Phase E-1 的建议范围控制在：
 - `src/robot_bringup/launch/simulation.launch.py`
 - `src/robot_bringup/launch/full_system.launch.py`
 - `src/simulation_bridge/simulation_bridge/sim_servo_bridge_node.py`
+- `src/simulation_bridge/simulation_bridge/sim_servo_bridge_utils.py`
 - `src/sim_servo_bridge_cpp/src/sim_servo_bridge_node.cpp`
 - `src/sim_servo_bridge_cpp/config/default_params.yaml`
 

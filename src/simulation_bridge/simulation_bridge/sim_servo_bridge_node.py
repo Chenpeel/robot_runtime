@@ -10,9 +10,9 @@ from rclpy.node import Node
 
 from servo_msgs.msg import ServoCommand, ServoState
 
-from .isaac_bridge_utils import clamp_servo_position
-from .isaac_bridge_utils import normalize_servo_type
-from .isaac_bridge_utils import normalize_speed
+from .sim_servo_bridge_utils import clamp_servo_position
+from .sim_servo_bridge_utils import normalize_servo_type
+from .sim_servo_bridge_utils import normalize_speed
 
 
 class SimServoBridge(Node):

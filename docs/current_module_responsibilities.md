@@ -353,6 +353,9 @@
     `isaac_state_topic` 进一步收口为 `sim_servo_command_topic`、
     `sim_servo_state_topic`，用于和 `sim_joint_*` 这组 simulation 域词表
     保持同一命名方向。
+  - 当前 `sim_servo_bridge_node.py` 也已改为依赖
+    `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
+    `isaac_bridge_*` 这组旧模块名。
   - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
     数现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。

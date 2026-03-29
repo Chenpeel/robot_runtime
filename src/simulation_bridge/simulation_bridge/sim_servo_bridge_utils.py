@@ -1,4 +1,4 @@
-"""Isaac-ROS桥接工具函数。"""
+"""仿真servo桥接工具函数。"""
 
 from typing import Optional
 
