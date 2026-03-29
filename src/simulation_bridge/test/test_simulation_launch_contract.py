@@ -158,12 +158,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("executable='sim_joint_bridge_node'", public_launch_source)
         self.assertNotIn("package='sim_servo_bridge_cpp'", public_launch_source)
         self.assertNotIn("package='sim_joint_bridge_cpp'", public_launch_source)
-        self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", cpp_launch_source)
-        self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", cpp_launch_source)
-        self.assertIn(
-            "{'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC}",
-            cpp_launch_source,
-        )
         self.assertIn(
             "package='sim_joint_bridge_cpp'",
             cpp_launch_source,
@@ -178,10 +172,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertNotIn(
             "package='sim_servo_bridge_cpp'",
-            cpp_launch_source,
-        )
-        self.assertIn(
-            "{'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC}",
             cpp_launch_source,
         )
         self.assertIn(
@@ -226,6 +216,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertNotIn(
             "{'servo_state_topic': LaunchConfiguration('servo_state_topic')}",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC}",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC}",
             cpp_launch_source,
         )
         self.assertNotIn(
@@ -301,6 +299,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             'servo_command_topic: "/servo/command"',
+            default_params,
+        )
+        self.assertIn(
+            'servo_state_topic: "/servo/state"',
             default_params,
         )
         self.assertIn(

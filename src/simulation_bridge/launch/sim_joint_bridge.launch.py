@@ -7,8 +7,6 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'
-DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'
 DEFAULT_PARAMS_FILE = PathJoinSubstitution([
     FindPackageShare('sim_joint_bridge_cpp'),
     'config',
@@ -53,8 +51,6 @@ def generate_launch_description():
             DEFAULT_PARAMS_FILE,
             {'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')},
             {'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')},
-            {'servo_command_topic': DEFAULT_DRIVER_COMMAND_TOPIC},
-            {'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC},
             {'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')},
             {'debug': LaunchConfiguration('sim_joint_bridge_debug')},
         ],

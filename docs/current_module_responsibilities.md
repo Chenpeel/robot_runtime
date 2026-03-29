@@ -375,6 +375,10 @@
   - 当前 `sim_joint_bridge.launch.py` 也已显式加载
     `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
     数所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
+  - 当前 `sim_joint_bridge.launch.py` 也已不再继续内联
+    `servo_command_topic`、`servo_state_topic` 这组 driver-facing 固定接
+    线，改为统一由 `sim_joint_bridge_cpp/config/default_params.yaml` 持有
+    默认值。
   - 当前 `sim_servo_bridge.launch.py` 也已显式加载
     `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的
     默认参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点
