@@ -15,10 +15,10 @@
 #include "servo_msgs/msg/servo_state.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 
-class SimServoBridgeNode : public rclcpp::Node {
+class SimJointBridgeNode : public rclcpp::Node {
  public:
-  SimServoBridgeNode()
-  : Node("sim_servo_bridge"),
+  SimJointBridgeNode()
+  : Node("sim_joint_bridge"),
     latest_joint_cmd_rad_{},
     latest_joint_state_rad_{} {
     const auto default_mapping = std::vector<int64_t>{
@@ -65,21 +65,21 @@ class SimServoBridgeNode : public rclcpp::Node {
     joint_cmd_sub_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
       joint_cmd_topic_,
       10,
-      std::bind(&SimServoBridgeNode::on_joint_cmd, this, std::placeholders::_1));
+      std::bind(&SimJointBridgeNode::on_joint_cmd, this, std::placeholders::_1));
 
     servo_state_sub_ = this->create_subscription<servo_msgs::msg::ServoState>(
       servo_state_topic_,
       100,
-      std::bind(&SimServoBridgeNode::on_servo_state, this, std::placeholders::_1));
+      std::bind(&SimJointBridgeNode::on_servo_state, this, std::placeholders::_1));
 
     const auto publish_period = std::chrono::duration<double>(1.0 / publish_rate_hz_);
     publish_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(publish_period),
-      std::bind(&SimServoBridgeNode::on_publish_timer, this));
+      std::bind(&SimJointBridgeNode::on_publish_timer, this));
 
     RCLCPP_INFO(
       this->get_logger(),
-      "sim_servo_bridge_node started: %s -> %s, %s -> %s, rate=%.2fHz",
+      "sim_joint_bridge_node started: %s -> %s, %s -> %s, rate=%.2fHz",
       joint_cmd_topic_.c_str(),
       servo_command_topic_.c_str(),
       servo_state_topic_.c_str(),
@@ -320,7 +320,7 @@ class SimServoBridgeNode : public rclcpp::Node {
 
 int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<SimServoBridgeNode>());
+  rclcpp::spin(std::make_shared<SimJointBridgeNode>());
   rclcpp::shutdown();
   return 0;
 }

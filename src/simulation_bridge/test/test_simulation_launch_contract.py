@@ -127,7 +127,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         cpp_source = Path(
             os.path.join(
                 os.path.dirname(__file__),
-                '../../sim_servo_bridge_cpp/src/sim_servo_bridge_node.cpp',
+                '../../sim_servo_bridge_cpp/src/sim_joint_bridge_node.cpp',
             )
         ).read_text(encoding='utf-8')
         default_params = Path(
@@ -155,6 +155,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             public_launch_source,
         )
         self.assertNotIn("executable='sim_servo_bridge_node'", public_launch_source)
+        self.assertNotIn("executable='sim_joint_bridge_node'", public_launch_source)
         self.assertIn("DEFAULT_DRIVER_COMMAND_TOPIC = '/servo/command'", cpp_launch_source)
         self.assertIn("DEFAULT_DRIVER_STATE_TOPIC = '/servo/state'", cpp_launch_source)
         self.assertIn(
@@ -217,7 +218,9 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "{'publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
             cpp_launch_source,
         )
-        self.assertIn("executable='sim_servo_bridge_node'", cpp_launch_source)
+        self.assertIn("executable='sim_joint_bridge_node'", cpp_launch_source)
+        self.assertIn("name='sim_joint_bridge'", cpp_launch_source)
+        self.assertNotIn("name='sim_servo_bridge'", cpp_launch_source)
         self.assertIn(
             '"sim_joint_cmd_topic", "/sim/joint_cmd"',
             cpp_source,
@@ -280,6 +283,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             'sim_publish_rate_hz: 50.0',
+            default_params,
+        )
+        self.assertIn(
+            'sim_joint_bridge:',
+            default_params,
+        )
+        self.assertNotIn(
+            'sim_servo_bridge:',
             default_params,
         )
 

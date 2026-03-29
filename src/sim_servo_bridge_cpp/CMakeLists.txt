@@ -10,15 +10,15 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(servo_msgs REQUIRED)
 
-add_executable(sim_servo_bridge_node src/sim_servo_bridge_node.cpp)
-target_compile_features(sim_servo_bridge_node PUBLIC cxx_std_17)
-ament_target_dependencies(sim_servo_bridge_node
+add_executable(sim_joint_bridge_node src/sim_joint_bridge_node.cpp)
+target_compile_features(sim_joint_bridge_node PUBLIC cxx_std_17)
+ament_target_dependencies(sim_joint_bridge_node
   rclcpp
   std_msgs
   servo_msgs
 )
 
-install(TARGETS sim_servo_bridge_node
+install(TARGETS sim_joint_bridge_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -1,4 +1,4 @@
-sim_servo_bridge:
+sim_joint_bridge:
   ros__parameters:
     sim_joint_cmd_topic: "/sim/joint_cmd"
     sim_joint_state_fb_topic: "/sim/joint_state_fb"

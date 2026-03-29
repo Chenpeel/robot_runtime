@@ -276,6 +276,9 @@
 - `sim_joint_bridge.launch.py` 当前也已把内部调试参数从
   `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
   仿真子链路内部词表从实现名收向 simulation capability。
+- `sim_servo_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
+  数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
+  Python servo 子链路复用同一节点身份。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
   现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
