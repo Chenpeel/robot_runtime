@@ -50,16 +50,15 @@ class BvhActionPlayer:
             return override_path
 
         if get_package_share_directory:
-            for package_name in ('record_load_action', 'websocket_bridge'):
-                try:
-                    share_dir = get_package_share_directory(package_name)
-                    candidate = os.path.join(
-                        share_dir, 'config', 'bvh_action_map.json'
-                    )
-                    if os.path.exists(candidate):
-                        return candidate
-                except Exception:
-                    continue
+            try:
+                share_dir = get_package_share_directory('record_load_action')
+                candidate = os.path.join(
+                    share_dir, 'config', 'bvh_action_map.json'
+                )
+                if os.path.exists(candidate):
+                    return candidate
+            except Exception:
+                pass
 
         candidate = Path(__file__).resolve().parent.parent / 'config' / 'bvh_action_map.json'
         if candidate.exists():

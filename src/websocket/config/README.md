@@ -109,6 +109,6 @@ source install/setup.bash
 
 ## BVH 动作配置
 
-BVH 动作配置已迁移至 `record_load_action` 包，详见：
+BVH 动作配置仅存在于 `record_load_action` 包，不再置于 `websocket_bridge` share 目录，详见：
 
 - `src/record_load_action/README.md`
