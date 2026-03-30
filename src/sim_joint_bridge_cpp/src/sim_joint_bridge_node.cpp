@@ -25,16 +25,16 @@ class SimJointBridgeNode : public rclcpp::Node {
       1, 2, 3, 4, 5, 6, 7, 8, -1, 9, 10, 11, 12, 13, 14, -1
     };
 
-    joint_cmd_topic_ = this->declare_parameter<std::string>(
+    sim_joint_cmd_topic_ = this->declare_parameter<std::string>(
       "sim_joint_cmd_topic", "/sim/joint_cmd");
-    joint_state_fb_topic_ = this->declare_parameter<std::string>(
+    sim_joint_state_fb_topic_ = this->declare_parameter<std::string>(
       "sim_joint_state_fb_topic", "/sim/joint_state_fb");
     servo_command_topic_ = this->declare_parameter<std::string>(
       "servo_command_topic", "/servo/command");
     servo_state_topic_ = this->declare_parameter<std::string>(
       "servo_state_topic", "/servo/state");
 
-    publish_rate_hz_ = this->declare_parameter<double>("sim_publish_rate_hz", 50.0);
+    sim_publish_rate_hz_ = this->declare_parameter<double>("sim_publish_rate_hz", 50.0);
     default_speed_ = this->declare_parameter<int64_t>("default_speed", 100);
     servo_type_ = this->declare_parameter<std::string>("servo_type", "bus");
     min_pulse_us_ = this->declare_parameter<double>("min_pulse_us", 500.0);
@@ -60,10 +60,10 @@ class SimJointBridgeNode : public rclcpp::Node {
     servo_cmd_pub_ = this->create_publisher<servo_msgs::msg::ServoCommand>(
       servo_command_topic_, 100);
     joint_state_fb_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-      joint_state_fb_topic_, 10);
+      sim_joint_state_fb_topic_, 10);
 
     joint_cmd_sub_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
-      joint_cmd_topic_,
+      sim_joint_cmd_topic_,
       10,
       std::bind(&SimJointBridgeNode::on_joint_cmd, this, std::placeholders::_1));
 
@@ -72,7 +72,7 @@ class SimJointBridgeNode : public rclcpp::Node {
       100,
       std::bind(&SimJointBridgeNode::on_servo_state, this, std::placeholders::_1));
 
-    const auto publish_period = std::chrono::duration<double>(1.0 / publish_rate_hz_);
+    const auto publish_period = std::chrono::duration<double>(1.0 / sim_publish_rate_hz_);
     publish_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(publish_period),
       std::bind(&SimJointBridgeNode::on_publish_timer, this));
@@ -80,11 +80,11 @@ class SimJointBridgeNode : public rclcpp::Node {
     RCLCPP_INFO(
       this->get_logger(),
       "sim_joint_bridge_node started: %s -> %s, %s -> %s, rate=%.2fHz",
-      joint_cmd_topic_.c_str(),
+      sim_joint_cmd_topic_.c_str(),
       servo_command_topic_.c_str(),
       servo_state_topic_.c_str(),
-      joint_state_fb_topic_.c_str(),
-      publish_rate_hz_);
+      sim_joint_state_fb_topic_.c_str(),
+      sim_publish_rate_hz_);
   }
 
  private:
@@ -92,12 +92,12 @@ class SimJointBridgeNode : public rclcpp::Node {
   static constexpr int64_t kIgnoreServoId = -1;
 
   void validate_and_fix_parameters(const std::vector<int64_t> & default_mapping) {
-    if (publish_rate_hz_ <= 0.0) {
+    if (sim_publish_rate_hz_ <= 0.0) {
       RCLCPP_WARN(
         this->get_logger(),
         "sim_publish_rate_hz=%.3f invalid, reset to 50.0",
-        publish_rate_hz_);
-      publish_rate_hz_ = 50.0;
+        sim_publish_rate_hz_);
+      sim_publish_rate_hz_ = 50.0;
     }
 
     if (std::abs(us_per_rad_) < 1e-6) {
@@ -298,13 +298,13 @@ class SimJointBridgeNode : public rclcpp::Node {
     ++state_publish_count_;
   }
 
-  std::string joint_cmd_topic_;
-  std::string joint_state_fb_topic_;
+  std::string sim_joint_cmd_topic_;
+  std::string sim_joint_state_fb_topic_;
   std::string servo_command_topic_;
   std::string servo_state_topic_;
   std::string servo_type_;
 
-  double publish_rate_hz_{50.0};
+  double sim_publish_rate_hz_{50.0};
   double min_pulse_us_{500.0};
   double max_pulse_us_{2500.0};
   double center_pulse_us_{1500.0};

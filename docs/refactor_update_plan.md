@@ -282,6 +282,9 @@
 - `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
+- `sim_joint_bridge_cpp` 当前也已把内部成员命名进一步对齐到
+  `sim_joint_*` 参数词表，减少源码内部仍用泛化 `joint_*` / `publish_rate_*`
+  变量名带来的语义漂移。
 - C++ 子链路当前也已把目录从 `src/sim_servo_bridge_cpp` 迁到
   `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点身
   份已回到同一套 `sim_joint_*` 词表。
