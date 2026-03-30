@@ -2,7 +2,6 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -15,11 +14,6 @@ DEFAULT_PARAMS_FILE = PathJoinSubstitution([
 
 
 def generate_launch_description():
-    enable_sim_servo_bridge_arg = DeclareLaunchArgument(
-        'enable_sim_servo_bridge',
-        default_value='true',
-        description='是否启用 simulation 域的 servo 级桥接链路',
-    )
     sim_servo_bridge_debug_arg = DeclareLaunchArgument(
         'sim_servo_bridge_debug',
         default_value='false',
@@ -46,7 +40,6 @@ def generate_launch_description():
         executable='sim_servo_bridge_node',
         name='sim_servo_bridge',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
         parameters=[
             DEFAULT_PARAMS_FILE,
             {'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')},
@@ -57,7 +50,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        enable_sim_servo_bridge_arg,
         sim_servo_bridge_debug_arg,
         sim_servo_command_topic_arg,
         sim_servo_state_topic_arg,

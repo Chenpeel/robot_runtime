@@ -93,10 +93,18 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'sim_joint_state_fb_topic':", public_launch_source)
         self.assertNotIn("'sim_publish_rate_hz':", public_launch_source)
         self.assertIn(
-            "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
+            "condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge'))",
             public_launch_source,
         )
         self.assertIn(
+            "condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge'))",
+            public_launch_source,
+        )
+        self.assertNotIn(
+            "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
+            public_launch_source,
+        )
+        self.assertNotIn(
             "'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge')",
             public_launch_source,
         )
@@ -139,6 +147,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
 
         self.assertIn("'sim_joint_bridge.launch.py'", public_launch_source)
         self.assertIn(
+            "condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge'))",
+            public_launch_source,
+        )
+        self.assertNotIn(
             "'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge')",
             public_launch_source,
         )
@@ -194,7 +206,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "{'speed': 100}",
             cpp_launch_source,
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             cpp_launch_source,
             'enable_sim_joint_bridge_arg',
         )
@@ -209,6 +221,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self._assert_launch_argument_not_declared(
             cpp_launch_source,
             'sim_cpp_bridge_debug_arg',
+        )
+        self.assertNotIn(
+            "LaunchConfiguration('enable_sim_joint_bridge')",
+            cpp_launch_source,
         )
         self.assertNotIn(
             "{'servo_command_topic': LaunchConfiguration('servo_command_topic')}",
@@ -386,6 +402,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
 
         self.assertIn("'sim_servo_bridge.launch.py'", public_launch_source)
         self.assertIn(
+            "condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge'))",
+            public_launch_source,
+        )
+        self.assertNotIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
             public_launch_source,
         )
@@ -410,7 +430,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "{'debug': LaunchConfiguration('sim_servo_bridge_debug')}",
             sim_servo_launch_source,
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
             'enable_sim_servo_bridge_arg',
         )
@@ -433,6 +453,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
             'isaac_enforce_limits_arg',
+        )
+        self.assertNotIn(
+            "LaunchConfiguration('enable_sim_servo_bridge')",
+            sim_servo_launch_source,
         )
         self.assertIn(
             "{'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')}",

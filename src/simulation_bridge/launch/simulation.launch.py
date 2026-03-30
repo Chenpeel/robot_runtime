@@ -2,6 +2,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
@@ -26,9 +27,7 @@ def generate_launch_description():
                 'sim_servo_bridge.launch.py',
             ])
         ),
-        launch_arguments={
-            'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge'),
-        }.items(),
+        condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
     )
     sim_joint_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -38,9 +37,7 @@ def generate_launch_description():
                 'sim_joint_bridge.launch.py',
             ])
         ),
-        launch_arguments={
-            'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge'),
-        }.items(),
+        condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge')),
     )
 
     return LaunchDescription([
