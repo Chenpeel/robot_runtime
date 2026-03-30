@@ -138,6 +138,8 @@
   - 遥控、调试、状态桥接和 BVH 仍混在同一个包内。
   - demo/BVH 虽已不再复用 teleop 执行入口，但能力本身仍挂在
     `websocket_bridge` 包内，尚未真正从 teleop 主链路边界里抽离。
+  - 不过 BVH 配置所有权当前也已完全收回 `record_load_action`；
+    `websocket_bridge` 运行时不再继续作为 `bvh_action_map.json` 的兜底来源。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
     但当前还没有更正式的抢占策略和上层接口约束。
@@ -533,6 +535,7 @@
 - 当前主要职责
   - 承载 BVH 资源配置。
   - 提供 BVH 动作播放与静态转换工具。
+  - 作为 `bvh_action_map.json` 的唯一配置所有者与默认解析入口。
 - 当前主要输入
   - BVH 动作文件
   - WebSocket 侧触发的播放请求

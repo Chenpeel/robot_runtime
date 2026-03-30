@@ -177,6 +177,9 @@
 - `websocket_bridge` 内部的 demo/BVH 回放链路也已开始默认改走
   `/execution/motion/command`，不再复用 teleop 命令入口，降低 demo 能力与
   teleop 控制权约束的耦合。
+- BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
+  `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源，继续减少 demo
+  能力对 teleop 包边界的历史耦合。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 

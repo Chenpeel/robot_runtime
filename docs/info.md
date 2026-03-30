@@ -59,6 +59,8 @@
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
 - BVH/demo 回放已默认改走 `/execution/motion/command`，不再复用 teleop 命令入口。
+- BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
+  `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
 
 这意味着：
 

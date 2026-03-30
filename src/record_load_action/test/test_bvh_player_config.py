@@ -1,8 +1,17 @@
-from record_load_action import bvh_player
-from record_load_action.bvh_player import BvhActionPlayer
+"""record_load_action BVH 配置解析测试。"""
+
+import os
+import sys
+
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../record_load_action'))
+
+import bvh_player
+from bvh_player import BvhActionPlayer
 
 
 def test_bvh_config_resolves_from_record_package(monkeypatch, tmp_path):
+    """BVH 配置默认只从 record_load_action 侧解析。"""
     share_dir = tmp_path / 'record_load_action'
     config_dir = share_dir / 'config'
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -12,7 +21,7 @@ def test_bvh_config_resolves_from_record_package(monkeypatch, tmp_path):
     def fake_get_package_share_directory(name: str) -> str:
         if name == 'record_load_action':
             return str(share_dir)
-        raise RuntimeError('unexpected share lookup: ' + name)
+        raise RuntimeError(f'unexpected share lookup: {name}')
 
     monkeypatch.setattr(
         bvh_player,
@@ -22,4 +31,5 @@ def test_bvh_config_resolves_from_record_package(monkeypatch, tmp_path):
 
     player = BvhActionPlayer(lambda *_: None)
     resolved = player._resolve_config_path('')
+
     assert str(config_file) == resolved
