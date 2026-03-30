@@ -333,12 +333,12 @@
   关，而是改为只保留一个 `enable_simulation` 域级开关。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再以
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现名开关作为包级
-  public surface，而是改为只暴露 `enable_sim_servo_bridge`、
-  `enable_sim_joint_bridge` 这组 capability-based 开关；这组 capability
-  的启停条件当前也已直接上移到 `simulation.launch.py` 的 package-level
-  include 上，而 `sim_servo_bridge.launch.py` 与
-  `sim_joint_bridge.launch.py` 已不再重复声明自己的 `enable_*`
-  子 launch 参数，仿真域内部 contract 进一步缩小。
+  public surface，而是进一步回到单一 domain entry；原先过渡存在的
+  `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部
+  capability-based 开关当前也已从 package-level public launch 退场，
+  `simulation.launch.py` 直接编排 `sim_servo_bridge.launch.py` 与
+  `sim_joint_bridge.launch.py` 两条内部子链路，仿真域 package-level
+  contract 进一步缩小。
 - `robot_bringup/full_system.launch.py` 也已不再继续暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到

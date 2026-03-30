@@ -92,11 +92,11 @@ Phase E-1 的建议范围控制在：
 - `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
-- `simulation_bridge/simulation.launch.py` 现在也已把
-  `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组 capability 开关
-  的启停条件直接挂在 package-level include 上；`sim_servo_bridge.launch.py`
-  与 `sim_joint_bridge.launch.py` 不再重复声明各自的 `enable_*` 参数，内部
-  launch contract 进一步收紧。
+- `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
+  `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
+  开关保留为 package-level public surface，而是回到纯 assembly 入口，直接
+  编排 `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两条内部子
+  链路。
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
   下沉到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，不再
   作为 package-level public surface 暴露；`sim_joint_bridge.launch.py`
@@ -152,7 +152,7 @@ Phase E-1 的建议范围控制在：
   `simulation_bridge/config/default_params.yaml` 与节点默认参数。
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
-  surface 已进一步收紧为 capability 开关。
+  surface 已进一步收紧为单一 domain entry。
 - `bridge_stack.launch.py` 当前也已移除，`simulation.launch.py` 直接 include
   `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子链路。
 - 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细

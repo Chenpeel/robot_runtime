@@ -33,11 +33,11 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'isaac_bridge.launch.py'", public_launch_source)
         self.assertNotIn("'sim_cpp_bridge.launch.py'", public_launch_source)
         self.assertNotIn("'bridge_stack.launch.py'", public_launch_source)
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'enable_sim_servo_bridge_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             public_launch_source,
             'enable_sim_joint_bridge_arg',
         )
@@ -92,14 +92,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
         self.assertNotIn("'sim_joint_cmd_topic':", public_launch_source)
         self.assertNotIn("'sim_joint_state_fb_topic':", public_launch_source)
         self.assertNotIn("'sim_publish_rate_hz':", public_launch_source)
-        self.assertIn(
-            "condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge'))",
-            public_launch_source,
-        )
-        self.assertIn(
-            "condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge'))",
-            public_launch_source,
-        )
+        self.assertNotIn("IfCondition(", public_launch_source)
         self.assertNotIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
             public_launch_source,
@@ -146,10 +139,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("'sim_joint_bridge.launch.py'", public_launch_source)
-        self.assertIn(
-            "condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge'))",
-            public_launch_source,
-        )
         self.assertNotIn(
             "'enable_sim_joint_bridge': LaunchConfiguration('enable_sim_joint_bridge')",
             public_launch_source,
@@ -421,10 +410,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("'sim_servo_bridge.launch.py'", public_launch_source)
-        self.assertIn(
-            "condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge'))",
-            public_launch_source,
-        )
         self.assertNotIn(
             "'enable_sim_servo_bridge': LaunchConfiguration('enable_sim_servo_bridge')",
             public_launch_source,

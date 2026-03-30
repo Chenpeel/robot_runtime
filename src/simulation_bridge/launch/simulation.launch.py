@@ -1,24 +1,13 @@
 """Public simulation launch owned by simulation_bridge."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    enable_sim_servo_bridge_arg = DeclareLaunchArgument(
-        'enable_sim_servo_bridge',
-        default_value='true',
-        description='是否启用 simulation 域的 servo 级桥接链路',
-    )
-    enable_sim_joint_bridge_arg = DeclareLaunchArgument(
-        'enable_sim_joint_bridge',
-        default_value='false',
-        description='是否启用 simulation 域的 joint 级桥接链路',
-    )
     sim_servo_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -27,7 +16,6 @@ def generate_launch_description():
                 'sim_servo_bridge.launch.py',
             ])
         ),
-        condition=IfCondition(LaunchConfiguration('enable_sim_servo_bridge')),
     )
     sim_joint_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -37,12 +25,9 @@ def generate_launch_description():
                 'sim_joint_bridge.launch.py',
             ])
         ),
-        condition=IfCondition(LaunchConfiguration('enable_sim_joint_bridge')),
     )
 
     return LaunchDescription([
-        enable_sim_servo_bridge_arg,
-        enable_sim_joint_bridge_arg,
         sim_servo_bridge_launch,
         sim_joint_bridge_launch,
     ])
