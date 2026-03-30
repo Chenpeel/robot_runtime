@@ -107,16 +107,16 @@ Phase E-1 的建议范围控制在：
 - `sim_servo_bridge_node.py` 当前也已改为依赖
   `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
   `isaac_bridge_*` 命名。
-- `sim_servo_bridge.launch.py` 当前也已把内部调试 / 限幅参数从
-  `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
-  `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
-  仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
+- `sim_servo_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
+  / 限幅 launch 参数；这组默认值此前已从 `isaac_bridge_debug`、
+  `isaac_enforce_limits` 收口到 `debug`、`enforce_position_limits`，现在
+  统一由 `simulation_bridge/config/default_params.yaml` 与节点默认参数持有。
 - `simulation_bridge` 的包元数据描述与运行说明当前也已改用
   simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
   为 Isaac 专名节点。
-- `sim_joint_bridge.launch.py` 当前也已把内部调试参数从
-  `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
-  仿真子链路内部词表从实现名收向 simulation capability。
+- `sim_joint_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
+  launch 参数；对应默认值现在统一由
+  `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
 - `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。

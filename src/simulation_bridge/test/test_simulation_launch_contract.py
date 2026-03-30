@@ -186,10 +186,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "package='sim_servo_bridge_cpp'",
             cpp_launch_source,
         )
-        self.assertIn(
-            "{'debug': LaunchConfiguration('sim_joint_bridge_debug')}",
-            cpp_launch_source,
-        )
         self.assertNotIn(
             "{'speed': 100}",
             cpp_launch_source,
@@ -198,7 +194,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_launch_source,
             'enable_sim_joint_bridge_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
             cpp_launch_source,
             'sim_joint_bridge_debug_arg',
         )
@@ -224,6 +220,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertNotIn(
             "LaunchConfiguration('enable_sim_joint_bridge')",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "LaunchConfiguration('sim_joint_bridge_debug')",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'debug': LaunchConfiguration('sim_joint_bridge_debug')}",
             cpp_launch_source,
         )
         self.assertNotIn(
@@ -374,6 +378,10 @@ class TestSimulationLaunchContract(unittest.TestCase):
             default_params,
         )
         self.assertIn(
+            'debug: false',
+            default_params,
+        )
+        self.assertIn(
             'servo_type: "bus"',
             default_params,
         )
@@ -438,17 +446,9 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "'default_params.yaml'",
             sim_servo_launch_source,
         )
-        self.assertIn(
-            "{'debug': LaunchConfiguration('sim_servo_bridge_debug')}",
-            sim_servo_launch_source,
-        )
         self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
             'enable_sim_servo_bridge_arg',
-        )
-        self._assert_launch_argument_declared(
-            sim_servo_launch_source,
-            'sim_servo_bridge_debug_arg',
         )
         self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
@@ -458,7 +458,11 @@ class TestSimulationLaunchContract(unittest.TestCase):
             sim_servo_launch_source,
             'sim_servo_state_topic_arg',
         )
-        self._assert_launch_argument_declared(
+        self._assert_launch_argument_not_declared(
+            sim_servo_launch_source,
+            'sim_servo_bridge_debug_arg',
+        )
+        self._assert_launch_argument_not_declared(
             sim_servo_launch_source,
             'sim_servo_enforce_limits_arg',
         )
@@ -476,6 +480,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertNotIn(
             "LaunchConfiguration('enable_sim_servo_bridge')",
+            sim_servo_launch_source,
+        )
+        self.assertNotIn(
+            "LaunchConfiguration('sim_servo_bridge_debug')",
+            sim_servo_launch_source,
+        )
+        self.assertNotIn(
+            "LaunchConfiguration('sim_servo_enforce_limits')",
             sim_servo_launch_source,
         )
         self.assertNotIn(
@@ -502,7 +514,7 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "{'servo_state_topic': DEFAULT_DRIVER_STATE_TOPIC}",
             sim_servo_launch_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             "{'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')}",
             sim_servo_launch_source,
         )
@@ -520,6 +532,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertIn(
             'servo_state_topic: "/servo/state"',
+            default_params,
+        )
+        self.assertIn(
+            'enforce_position_limits: true',
+            default_params,
+        )
+        self.assertIn(
+            'debug: false',
             default_params,
         )
         self.assertIn(

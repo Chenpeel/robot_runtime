@@ -358,16 +358,17 @@
   - 当前 `sim_servo_bridge_node.py` 也已改为依赖
     `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
     `isaac_bridge_*` 这组旧模块名。
-  - 当前 `sim_servo_bridge.launch.py` 也已把内部调试 / 限幅参数从
-    `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
-    `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
-    仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
+  - 当前 `sim_servo_bridge.launch.py` 也已不再继续声明 bridge-specific 的调
+    试 / 限幅 launch 参数；这组默认值此前已从 `isaac_bridge_debug`、
+    `isaac_enforce_limits` 收口到 `debug`、`enforce_position_limits`，现
+    在统一由 `simulation_bridge/config/default_params.yaml` 与节点默认参数
+    持有。
   - 当前 `simulation_bridge` 的包元数据描述与运行说明也已改用
     simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
     为 Isaac 专名节点。
-  - 当前 `sim_joint_bridge.launch.py` 也已把内部调试参数从
-    `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
-    仿真子链路内部词表从实现名收向 simulation capability。
+  - 当前 `sim_joint_bridge.launch.py` 也已不再继续声明 bridge-specific 的调
+    试 launch 参数；对应默认值现在统一由
+    `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
   - 当前 `sim_joint_bridge_cpp` 也已把 joint 子链路的可执行名、节点名与默
     认参数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避
     免继续和 Python servo 子链路复用同一节点身份。
@@ -411,14 +412,14 @@
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_command_topic`、`isaac_state_topic`、
     `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置已
-    收回到 `simulation_bridge` 包内子 launch 边界；其中 Python servo 子链
-    路内部当前已进一步统一为 `sim_servo_enforce_limits`。
+    收回到 `simulation_bridge` 包内参数文件与节点默认参数；其中 Python
+    servo 子链路内部当前已进一步统一为 `enforce_position_limits`。
   - 当前 `robot_bringup` 也已不再继续暴露
     `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
-    debug 参数；这些调试开关也已收回到 `simulation_bridge` 包内子
-    launch 边界，其中 Python servo 子链路内部当前已进一步统一为
-    `sim_servo_bridge_debug`，C++ joint 子链路内部当前已进一步统一为
-    `sim_joint_bridge_debug`。
+    debug 参数；这些调试开关也已收回到 `simulation_bridge` 与
+    `sim_joint_bridge_cpp` 包内参数文件与节点默认参数，其中 Python servo
+    子链路内部当前已进一步统一为 `debug`，C++ joint 子链路内部当前也已统
+    一为 `debug`。
   - 当前 `robot_bringup` 也已不再继续暴露
     `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组内部 bridge 实现级启
     停开关，而是改为只保留一个 `enable_simulation` 域级开关。

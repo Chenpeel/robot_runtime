@@ -269,16 +269,16 @@
 - `sim_servo_bridge_node.py` 当前也已改为依赖
   `sim_servo_bridge_utils.py`；对应工具模块与测试文件不再继续保留
   `isaac_bridge_*` 这组旧模块名。
-- `sim_servo_bridge.launch.py` 当前也已把内部调试 / 限幅参数从
-  `isaac_bridge_debug`、`isaac_enforce_limits` 收口为
-  `sim_servo_bridge_debug`、`sim_servo_enforce_limits`，继续把 Python
-  仿真子链路内部词表从 Isaac 实现名收向 simulation capability。
+- `sim_servo_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
+  / 限幅 launch 参数；这组默认值此前已从 `isaac_bridge_debug`、
+  `isaac_enforce_limits` 收口到 `debug`、`enforce_position_limits`，现在
+  统一由 `simulation_bridge/config/default_params.yaml` 与节点默认参数持有。
 - `simulation_bridge` 的包元数据描述与运行说明当前也已改用
   simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
   为 Isaac 专名节点。
-- `sim_joint_bridge.launch.py` 当前也已把内部调试参数从
-  `sim_cpp_bridge_debug` 收口为 `sim_joint_bridge_debug`，继续把 C++
-  仿真子链路内部词表从实现名收向 simulation capability。
+- `sim_joint_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
+  launch 参数；对应默认值现在统一由
+  `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
 - `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
@@ -320,14 +320,14 @@
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `isaac_command_topic`、`isaac_state_topic`、
   `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数；这些配置现已
-  收回到 `simulation_bridge` 包内子 launch 边界中；其中 Python servo 子
-  链路内部当前已进一步统一为 `sim_servo_enforce_limits`。
+  收回到 `simulation_bridge` 包内参数文件与节点默认参数中；其中 Python
+  servo 子链路内部当前已进一步统一为 `enforce_position_limits`。
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-
   specific debug 开关；相关调试参数现已只保留在
-  `simulation_bridge` 包内子 launch 边界，其中 Python servo 子链路内部
-  当前已进一步统一为 `sim_servo_bridge_debug`，C++ joint 子链路内部当前
-  已进一步统一为 `sim_joint_bridge_debug`。
+  `simulation_bridge` 与 `sim_joint_bridge_cpp` 包内参数文件与节点默认参数
+  中；其中 Python servo 子链路内部当前已进一步统一为 `debug`，
+  C++ joint 子链路内部当前也已统一为 `debug`。
 - `robot_bringup/simulation.launch.py` 与 `full_system.launch.py` 也已不再继
   续暴露 `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现级启停开
   关，而是改为只保留一个 `enable_simulation` 域级开关。
