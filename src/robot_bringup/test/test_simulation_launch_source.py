@@ -175,6 +175,33 @@ class TestSimulationLaunchSource(unittest.TestCase):
         self.assertNotIn("'enable_isaac_bridge': 'false'", source)
         self.assertNotIn("'enable_sim_cpp_bridge': 'false'", source)
 
+    def test_parallel_multi_system_reuses_protocol_cache_default(self):
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../launch/parallel_3dof_multi_system.launch.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn(
+            'from robot_bringup.launch_utils import get_protocol_cache_default',
+            source,
+        )
+        self.assertIn(
+            'from robot_bringup.launch_utils import resolve_bus_config_file',
+            source,
+        )
+        self.assertIn(
+            'protocol_cache_default = '
+            'get_protocol_cache_default(resolve_bus_config_file())',
+            source,
+        )
+        self.assertIn("default_value=protocol_cache_default,", source)
+        self.assertNotIn(
+            '/root/ros_ws/src/websocket/config/bus_protocol_cache.json',
+            source,
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

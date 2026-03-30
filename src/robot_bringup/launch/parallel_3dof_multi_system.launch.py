@@ -6,9 +6,14 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
+from robot_bringup.launch_utils import get_protocol_cache_default
+from robot_bringup.launch_utils import resolve_bus_config_file
+
 
 def generate_launch_description():
     """Generate 3DOF multi-instance system launch description."""
+    protocol_cache_default = get_protocol_cache_default(resolve_bus_config_file())
+
     debug_arg = DeclareLaunchArgument(
         'debug',
         default_value='true',
@@ -51,7 +56,7 @@ def generate_launch_description():
     )
     protocol_cache_file_arg = DeclareLaunchArgument(
         'protocol_cache_file',
-        default_value='/root/ros_ws/src/websocket/config/bus_protocol_cache.json',
+        default_value=protocol_cache_default,
         description='总线协议探测缓存文件路径',
     )
     manual_protocol_map_file_arg = DeclareLaunchArgument(

@@ -57,6 +57,9 @@
   - 将整机编排拆为 hardware、teleop、simulation 三个子 launch。
   - 组合 `execution_manager`、`websocket_bridge`、`servo_hardware`、
     `sensor_hardware` 与 `simulation_bridge` 等运行链路。
+  - 已开始在 `full_system`、`parallel_3dof_multi_system` 等场景入口复用
+    `launch_utils` 统一解析总线协议缓存默认路径，避免场景 launch 硬编码旧的
+    `websocket` 源码树绝对路径。
   - 已开始收回 simulation 域内部的 driver-facing 接线细节，避免整机层继续
     把 `/servo/command` / `/servo/state` 当成仿真入口的公共参数面。
 - 当前主要输入

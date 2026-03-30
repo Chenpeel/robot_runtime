@@ -83,6 +83,8 @@
 
 - `robot_bringup` 包已创建，并承接整机主入口 `full_system.launch.py`。
 - 整机入口已拆为 hardware、teleop、simulation 三个子 launch 再组合。
+- 场景化 launch 当前也已开始复用 `robot_bringup.launch_utils` 统一解析总线协议
+  缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `websocket_bridge` 不再默认承接系统级编排。
 
 动作：

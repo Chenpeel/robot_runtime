@@ -49,6 +49,8 @@
 截至 2026-03-24，当前重构已经完成的关键基础包括：
 
 - `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / simulation 三个子域。
+- `robot_bringup` 场景化 launch 当前也已开始复用 `launch_utils` 统一解析总线
+  协议缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `execution_manager` 已建立最小执行边界，teleop 与 motion 已不再都直接碰驱动层。
 - `sensor_hardware` 已独立成 ROS 包。
 - teleop 控制权链已落地显式 claim / keepalive / release。
