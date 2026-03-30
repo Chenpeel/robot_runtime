@@ -19,16 +19,6 @@ def generate_launch_description():
         default_value='false',
         description='仿真servo桥接节点调试模式',
     )
-    sim_servo_command_topic_arg = DeclareLaunchArgument(
-        'sim_servo_command_topic',
-        default_value='/sim/servo_command',
-        description='仿真侧舵机命令话题',
-    )
-    sim_servo_state_topic_arg = DeclareLaunchArgument(
-        'sim_servo_state_topic',
-        default_value='/sim/servo_state',
-        description='仿真侧舵机状态话题',
-    )
     sim_servo_enforce_limits_arg = DeclareLaunchArgument(
         'sim_servo_enforce_limits',
         default_value='true',
@@ -42,8 +32,6 @@ def generate_launch_description():
         output='screen',
         parameters=[
             DEFAULT_PARAMS_FILE,
-            {'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')},
-            {'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')},
             {'enforce_position_limits': LaunchConfiguration('sim_servo_enforce_limits')},
             {'debug': LaunchConfiguration('sim_servo_bridge_debug')},
         ],
@@ -51,8 +39,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         sim_servo_bridge_debug_arg,
-        sim_servo_command_topic_arg,
-        sim_servo_state_topic_arg,
         sim_servo_enforce_limits_arg,
         sim_servo_bridge_node,
     ])

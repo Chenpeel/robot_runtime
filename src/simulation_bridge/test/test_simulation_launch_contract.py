@@ -187,18 +187,6 @@ class TestSimulationLaunchContract(unittest.TestCase):
             cpp_launch_source,
         )
         self.assertIn(
-            "{'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')}",
-            cpp_launch_source,
-        )
-        self.assertIn(
-            "{'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')}",
-            cpp_launch_source,
-        )
-        self.assertIn(
-            "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
-            cpp_launch_source,
-        )
-        self.assertIn(
             "{'debug': LaunchConfiguration('sim_joint_bridge_debug')}",
             cpp_launch_source,
         )
@@ -216,6 +204,18 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self._assert_launch_argument_not_declared(
             cpp_launch_source,
+            'sim_joint_cmd_topic_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            cpp_launch_source,
+            'sim_joint_state_fb_topic_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            cpp_launch_source,
+            'sim_publish_rate_hz_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            cpp_launch_source,
             'enable_sim_cpp_bridge_arg',
         )
         self._assert_launch_argument_not_declared(
@@ -224,6 +224,18 @@ class TestSimulationLaunchContract(unittest.TestCase):
         )
         self.assertNotIn(
             "LaunchConfiguration('enable_sim_joint_bridge')",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'sim_joint_cmd_topic': LaunchConfiguration('sim_joint_cmd_topic')}",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'sim_joint_state_fb_topic': LaunchConfiguration('sim_joint_state_fb_topic')}",
+            cpp_launch_source,
+        )
+        self.assertNotIn(
+            "{'sim_publish_rate_hz': LaunchConfiguration('sim_publish_rate_hz')}",
             cpp_launch_source,
         )
         self.assertNotIn(
@@ -438,6 +450,14 @@ class TestSimulationLaunchContract(unittest.TestCase):
             sim_servo_launch_source,
             'sim_servo_bridge_debug_arg',
         )
+        self._assert_launch_argument_not_declared(
+            sim_servo_launch_source,
+            'sim_servo_command_topic_arg',
+        )
+        self._assert_launch_argument_not_declared(
+            sim_servo_launch_source,
+            'sim_servo_state_topic_arg',
+        )
         self._assert_launch_argument_declared(
             sim_servo_launch_source,
             'sim_servo_enforce_limits_arg',
@@ -458,11 +478,11 @@ class TestSimulationLaunchContract(unittest.TestCase):
             "LaunchConfiguration('enable_sim_servo_bridge')",
             sim_servo_launch_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             "{'sim_servo_command_topic': LaunchConfiguration('sim_servo_command_topic')}",
             sim_servo_launch_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             "{'sim_servo_state_topic': LaunchConfiguration('sim_servo_state_topic')}",
             sim_servo_launch_source,
         )

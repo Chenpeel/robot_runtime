@@ -251,14 +251,16 @@
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 这组 simulation 域
   topic 参数；这些 simulator-facing 细节现已进一步下沉到
-  `sim_joint_bridge.launch.py` 这个内部子链路边界，并已有 source-level
-  contract 测试固定这层更小的 package-level public surface。
+  `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，并已有
+  source-level contract 测试固定这层更小的 package-level public surface。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `isaac_command_topic`、`isaac_state_topic`、
   `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数，以及
   `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
-  debug 开关；这些配置现已进一步下沉到
-  `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch 中。
+  debug 开关；其中 bridge-specific 的调试/限幅开关现已进一步下沉到
+  `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch
+  中，而 simulator-facing 默认 topic / 频率则进一步收回到包内默认参数与
+  节点默认参数。
 - `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 当前也已把
   simulator-facing 的 topic 参数名从 `isaac_command_topic`、
   `isaac_state_topic` 进一步收口为 `sim_servo_command_topic`、
@@ -289,6 +291,10 @@
 - `sim_joint_bridge.launch.py` 当前也已不再继续内联
   `servo_command_topic`、`servo_state_topic` 这组 driver-facing 固定接线，
   改为统一由 `sim_joint_bridge_cpp/config/default_params.yaml` 持有默认值。
+- `sim_joint_bridge.launch.py` 当前也已不再重复声明
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+  `sim_publish_rate_hz` 这组 simulator-facing 默认值，进一步把默认值所有权
+  收回到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数。
 - `sim_joint_bridge_cpp` 当前也已把 `servo_type` 参数收紧为收发两侧共用的同
   一语义：既控制下发 `ServoCommand.servo_type`，也控制回读 `ServoState`
   的过滤条件；非法值会回退到 `bus`。
@@ -299,9 +305,14 @@
   `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的默认
   参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点默认值
   里。
+- `sim_servo_bridge.launch.py` 当前也已不再重复声明
+  `sim_servo_command_topic`、`sim_servo_state_topic` 这组 simulator-facing
+  默认值，进一步把默认值所有权收回到
+  `simulation_bridge/config/default_params.yaml` 与节点默认参数。
 - `simulation_bridge/simulation.launch.py` 当前也已不再继续暴露
   `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参数
-  现已只保留在 `sim_joint_bridge.launch.py` 这个内部子链路边界。
+  现已只保留在 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参
+  数。
 - `simulation_bridge/simulation.launch.py` 也已不再把
   `servo_command_topic`、`servo_state_topic` 作为 public launch 参数暴露，
   而是回收为 simulation 域内部固定 driver 接线；对应地

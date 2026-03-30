@@ -98,8 +98,9 @@ Phase E-1 的建议范围控制在：
   与 `sim_joint_bridge.launch.py` 不再重复声明各自的 `enable_*` 参数，内部
   launch contract 进一步收紧。
 - `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
-  下沉到 `sim_joint_bridge.launch.py`，不再作为 package-level public
-  surface 暴露。
+  下沉到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，不再
+  作为 package-level public surface 暴露；`sim_joint_bridge.launch.py`
+  当前也不再重复声明这组默认值。
 - `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 现在也已把
   simulator-facing topic 参数从 `isaac_*` 收口为 `sim_servo_*`，继续朝
   simulation 域统一词表推进。
@@ -131,6 +132,10 @@ Phase E-1 的建议范围控制在：
 - `sim_joint_bridge.launch.py` 当前也已不再继续内联
   `servo_command_topic`、`servo_state_topic` 这组 driver-facing 固定接线，
   改为统一由 `sim_joint_bridge_cpp/config/default_params.yaml` 持有默认值。
+- `sim_joint_bridge.launch.py` 当前也已不再重复声明
+  `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
+  `sim_publish_rate_hz` 这组 simulator-facing 默认值，进一步把默认值所有权
+  收回到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数。
 - `sim_joint_bridge_cpp` 当前也已把 `servo_type` 参数收紧为收发两侧共用的同
   一语义：既控制下发 `ServoCommand.servo_type`，也控制回读 `ServoState`
   的过滤条件；非法值会回退到 `bus`。
@@ -141,6 +146,10 @@ Phase E-1 的建议范围控制在：
   `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的默认
   参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点默认值
   里。
+- `sim_servo_bridge.launch.py` 当前也已不再重复声明
+  `sim_servo_command_topic`、`sim_servo_state_topic` 这组 simulator-facing
+  默认值，进一步把默认值所有权收回到
+  `simulation_bridge/config/default_params.yaml` 与节点默认参数。
 - `simulation_bridge/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为 capability 开关。
