@@ -164,6 +164,10 @@
   控制权的耦合。
 - `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
   setpoint 语义，再继续仲裁并转发到驱动层。
+- `execution_manager` 当前也已进一步把仲裁器从命令载荷细节中解耦；
+  `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求
+  一层伪 `CommandFrame` 中间快照，而是由节点在 setpoint 适配后直接送入仲
+  裁，再把被接受的请求转回驱动层命令。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
   `execution_manager` 已优先读取新字段，`websocket_bridge` 与
   `parallel_3dof_controller` 也已开始双写；其中

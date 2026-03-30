@@ -6,16 +6,6 @@ import uuid
 
 
 @dataclass(frozen=True)
-class CommandFrame:
-    """与 ROS 无关的舵机命令快照。"""
-
-    servo_type: str
-    servo_id: int
-    position: int
-    speed: int
-
-
-@dataclass(frozen=True)
 class ArbitrationResult:
     """单次命令仲裁结果。"""
 
@@ -62,14 +52,11 @@ class CommandArbitrator:
     def receive_command(
         self,
         source: str,
-        command: CommandFrame,
         now_sec: float,
         requester_id: str = '',
         lease_id: str = '',
     ) -> ArbitrationResult:
         """处理一条执行请求。"""
-        del command
-
         self._validate_source(source)
         self._refresh_mode(now_sec)
         normalized_requester_id = str(requester_id).strip()

@@ -2,6 +2,5 @@
 
 from .arbitrator import ArbitrationResult
 from .arbitrator import CommandArbitrator
-from .arbitrator import CommandFrame
 
-__all__ = ['ArbitrationResult', 'CommandArbitrator', 'CommandFrame']
+__all__ = ['ArbitrationResult', 'CommandArbitrator']

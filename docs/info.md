@@ -55,6 +55,9 @@
 - teleop `MotionCommand` 已收紧为显式 requester / lease 约束。
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
   `value_encoding` 表达 `MotionCommand` 语义。
+- `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
+  `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
+  层伪 `CommandFrame` 中间快照。
 - BVH/demo 回放已默认改走 `/execution/motion/command`，不再复用 teleop 命令入口。
 
 这意味着：

@@ -9,16 +9,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../execution_manager'))
 
 from arbitrator import CommandArbitrator
-from arbitrator import CommandFrame
-
-
-def _command(servo_id: int = 1) -> CommandFrame:
-    return CommandFrame(
-        servo_type='bus',
-        servo_id=servo_id,
-        position=1500,
-        speed=100,
-    )
 
 
 def _lease_id_factory():
@@ -37,7 +27,7 @@ def test_teleop_preempts_motion_until_timeout():
         motion_timeout_sec=1.0,
     )
 
-    motion_result = arbitrator.receive_command('motion', _command(), 0.0)
+    motion_result = arbitrator.receive_command('motion', 0.0)
     assert motion_result.accepted is True
     assert motion_result.mode == 'motion_active'
 
@@ -52,7 +42,6 @@ def test_teleop_preempts_motion_until_timeout():
 
     teleop_result = arbitrator.receive_command(
         'teleop',
-        _command(),
         0.11,
         requester_id='client-a',
         lease_id=lease_id,
@@ -60,7 +49,7 @@ def test_teleop_preempts_motion_until_timeout():
     assert teleop_result.accepted is True
     assert teleop_result.mode == 'teleop_active'
 
-    blocked_motion = arbitrator.receive_command('motion', _command(), 0.2)
+    blocked_motion = arbitrator.receive_command('motion', 0.2)
     assert blocked_motion.accepted is False
     assert blocked_motion.reason == 'teleop_active'
 
@@ -81,8 +70,8 @@ def test_estop_blocks_all_sources():
         0.05,
         requester_id='client-a',
     )
-    teleop_result = arbitrator.receive_command('teleop', _command(), 0.1)
-    motion_result = arbitrator.receive_command('motion', _command(), 0.1)
+    teleop_result = arbitrator.receive_command('teleop', 0.1)
+    motion_result = arbitrator.receive_command('motion', 0.1)
 
     assert claim_result.accepted is False
     assert claim_result.reason == 'estop'
@@ -111,7 +100,7 @@ def test_tick_returns_idle_after_all_timeouts():
 def test_teleop_command_requires_explicit_claim():
     arbitrator = CommandArbitrator()
 
-    teleop_result = arbitrator.receive_command('teleop', _command(), 0.0)
+    teleop_result = arbitrator.receive_command('teleop', 0.0)
 
     assert teleop_result.accepted is False
     assert teleop_result.reason == 'teleop_control_not_granted'
@@ -129,7 +118,6 @@ def test_teleop_command_rejects_other_holder_or_wrong_lease_when_provided():
 
     wrong_holder = arbitrator.receive_command(
         'teleop',
-        _command(),
         0.1,
         requester_id='client-b',
     )
@@ -138,7 +126,6 @@ def test_teleop_command_rejects_other_holder_or_wrong_lease_when_provided():
 
     wrong_lease = arbitrator.receive_command(
         'teleop',
-        _command(),
         0.2,
         requester_id='client-a',
         lease_id='wrong-lease',
@@ -159,7 +146,6 @@ def test_teleop_command_requires_requester_and_lease_identity():
 
     missing_requester = arbitrator.receive_command(
         'teleop',
-        _command(),
         0.1,
     )
     assert missing_requester.accepted is False
@@ -167,7 +153,6 @@ def test_teleop_command_requires_requester_and_lease_identity():
 
     missing_lease = arbitrator.receive_command(
         'teleop',
-        _command(),
         0.2,
         requester_id='client-a',
     )

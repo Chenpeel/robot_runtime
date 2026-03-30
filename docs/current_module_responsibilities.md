@@ -272,6 +272,8 @@
     lease 校验命令归属，减少“只要 teleop_active 就可发命令”的歧义。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
+  - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间与 teleop
+    身份做仲裁，不再要求一层伪 `CommandFrame` 中间快照。
   - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
     兼容旧字段语义。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到

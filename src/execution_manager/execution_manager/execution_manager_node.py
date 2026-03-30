@@ -9,7 +9,6 @@ from servo_msgs.msg import ServoCommand
 from std_msgs.msg import Bool
 
 from .arbitrator import CommandArbitrator
-from .arbitrator import CommandFrame
 from .command_adapter import motion_command_to_setpoint
 from .command_adapter import setpoint_to_servo_fields
 
@@ -102,15 +101,8 @@ class ExecutionManagerNode(Node):
         setpoint = motion_command_to_setpoint(msg)
         requester_id = str(getattr(msg, 'requester_id', '') or '').strip()
         lease_id = str(getattr(msg, 'lease_id', '') or '').strip()
-        frame = CommandFrame(
-            servo_type=setpoint.actuator_type,
-            servo_id=setpoint.actuator_id,
-            position=setpoint.target_raw,
-            speed=setpoint.duration_ms,
-        )
         result = self.arbitrator.receive_command(
             source,
-            frame,
             now_sec,
             requester_id=requester_id,
             lease_id=lease_id,
