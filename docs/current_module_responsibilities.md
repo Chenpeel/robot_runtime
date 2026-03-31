@@ -108,6 +108,9 @@
   - 通过 `record_load_action` 触发 BVH 动作播放时，已开始默认将 demo/BVH
     生成的 `MotionCommand` 输出到 motion 执行入口，而不再复用 teleop 命令入
     口。
+  - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前会被桥接层直
+    接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停
+    止。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
@@ -143,6 +146,8 @@
     `websocket_bridge` 包内，尚未真正从 teleop 主链路边界里抽离。
   - 不过 BVH 配置所有权当前也已完全收回 `record_load_action`；
     `websocket_bridge` 运行时不再继续作为 `bvh_action_map.json` 的兜底来源。
+  - 同时桥接层当前也已开始在运行时阻止 demo/BVH 穿透活跃 teleop 控制窗
+    口，但这仍属于包内局部约束，而不是能力边界本身已经彻底拆开。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
     但当前还没有更正式的抢占策略和上层接口约束。

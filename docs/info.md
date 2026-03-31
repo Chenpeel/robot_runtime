@@ -63,6 +63,8 @@
 - BVH/demo 回放已默认改走 `/execution/motion/command`，不再复用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
+- 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
+  接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public
   surface 在本轮也已基本收口完成；当前剩余更多是最终包边界合并与必要维
   护，而不再是主推进阻塞项。

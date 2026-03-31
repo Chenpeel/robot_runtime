@@ -338,6 +338,7 @@ class WebSocketROS2Bridge(Node):
             self.bvh_player.stop()
             return
 
+        self._ensure_bvh_play_allowed()
         self.bvh_player.play(
             action,
             loop=loop,
@@ -415,9 +416,23 @@ class WebSocketROS2Bridge(Node):
     def execution_state_callback(self, msg: ExecutionState):
         """处理 execution_manager 状态反馈。"""
         try:
+            was_teleop_active = self._teleop_control_is_active()
             state = self._execution_state_msg_to_dict(msg)
             changed = state != self.latest_execution_state
             self.latest_execution_state = state
+
+            if (
+                changed
+                and not was_teleop_active
+                and self._teleop_control_is_active()
+                and self.bvh_player
+            ):
+                self.bvh_player.stop()
+                self._debug_log(
+                    "bvh_play",
+                    "stopped because teleop control became active",
+                    self.debug,
+                )
 
             if self.ws_server:
                 self.ws_server.update_execution_state(state)
@@ -681,6 +696,29 @@ class WebSocketROS2Bridge(Node):
                 'lease_id': lease_id,
                 'teleop_holder_id': holder_id,
                 'teleop_lease_id': current_lease_id,
+                'teleop_active': teleop_active,
+                'active_source': active_source,
+            },
+        )
+
+    def _ensure_bvh_play_allowed(self) -> None:
+        execution_state = dict(self.latest_execution_state)
+        teleop_active = bool(execution_state.get('teleop_active'))
+        active_source = str(execution_state.get('active_source') or '')
+
+        if not teleop_active or active_source != 'teleop':
+            return
+
+        raise TeleopControlRejectedException(
+            message='bvh play rejected: bvh_blocked_by_active_teleop',
+            details={
+                'reason': 'bvh_blocked_by_active_teleop',
+                'teleop_holder_id': str(
+                    execution_state.get('teleop_holder_id') or ''
+                ),
+                'teleop_lease_id': str(
+                    execution_state.get('teleop_lease_id') or ''
+                ),
                 'teleop_active': teleop_active,
                 'active_source': active_source,
             },

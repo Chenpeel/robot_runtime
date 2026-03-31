@@ -320,6 +320,8 @@ class WebSocketHandler:
         if self.on_bvh_play:
             try:
                 await self.on_bvh_play(payload)
+            except WebSocketException as e:
+                return e.to_response(self.device_id)
             except Exception as e:
                 return ErrorResponse.create(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,

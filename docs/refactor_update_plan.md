@@ -182,6 +182,9 @@
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源，继续减少 demo
   能力对 teleop 包边界的历史耦合。
+- 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
+  接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
+  继续减少 demo 路径对 teleop 主链路的运行时干扰。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 
