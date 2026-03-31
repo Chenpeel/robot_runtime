@@ -546,6 +546,7 @@
   - ROS 包名：`record_load_action`
 - 当前主要职责
   - 承载 BVH 资源配置。
+  - 承载 BVH 运行说明与使用约束说明。
   - 提供 BVH 动作播放与静态转换工具。
   - 作为 `bvh_action_map.json` 的唯一配置所有者与默认解析入口。
 - 当前主要输入

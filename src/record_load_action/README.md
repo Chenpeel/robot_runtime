@@ -60,6 +60,13 @@ Action file (`config/bvh/walking.json`) example:
 }
 ```
 
+## Runtime Behavior
+
+- BVH/demo playback publishes `MotionCommand` to `/execution/motion/command`.
+- It does not reuse the teleop command entry.
+- If teleop is currently active, a new BVH playback request is rejected.
+- If teleop becomes active during playback, the current BVH playback is stopped.
+
 ## Static Conversion (optional)
 
 Runtime playback parses BVH directly in `record_load_action/bvh_player.py`.

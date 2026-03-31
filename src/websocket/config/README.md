@@ -109,12 +109,7 @@ source install/setup.bash
 
 ## BVH 动作配置
 
-BVH 动作配置仅存在于 `record_load_action` 包，不再置于 `websocket_bridge` share 目录，详见：
+BVH 动作配置与运行说明均已收回 `record_load_action` 包，不再由
+`websocket_bridge` 的配置文档承接，详见：
 
 - `src/record_load_action/README.md`
-
-运行时约束补充：
-
-1. BVH/demo 回放默认发布到 `/execution/motion/command`，不再复用 teleop 命令入口。
-2. 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求会被拒绝。
-3. 若 teleop 在 BVH 播放过程中变为活跃态，当前 BVH 播放会被立即停止。
