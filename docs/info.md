@@ -63,6 +63,11 @@
 - BVH/demo 回放已默认改走 `/execution/motion/command`，不再复用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
+- 仿真域 package-level launch contract、默认参数归属与 bringup public
+  surface 在本轮也已基本收口完成；当前剩余更多是最终包边界合并与必要维
+  护，而不再是主推进阻塞项。
+- 对应的 sim source-level contract 测试当前也已减重为以当前 public
+  contract 为主，只保留少量关键旧词表回归断言。
 
 这意味着：
 
@@ -74,25 +79,29 @@
 
 下一优先级定义为：
 
-**Phase E-1：统一仿真域入口与 contract**
+**Phase B/C-Next：继续收缩 `websocket_bridge` 的混合职责**
 
 原因：
 
-- 从全局蓝本看，仿真链路应当形成独立责任域：
-  `motion_control / execution_manager <-> simulation_bridge <-> simulator`
-- 从当前事实看，`simulation_bridge` 与 `sim_joint_bridge_cpp` 仍然是分裂状态。
-- 当前整机编排虽然已经通过 `robot_bringup` 统一 include 仿真 launch，但仿真域内部仍保留两套 bridge 实现细节和参数语义。
-- 与继续深挖 teleop requester / lease 细节相比，仿真域收口更符合当前阶段的全局推进顺序，也更不容易和刚完成的执行边界收紧重复。
+- 从全局蓝本看，`websocket_bridge` 不应长期同时承担 teleop、debug、状
+  态桥接与 demo/BVH 混合职责。
+- 从当前事实看，sim 域本轮已经完成主要收口，继续深挖仿真内部细节的投入
+  产出比已经下降。
+- `execution_manager`、BVH 配置归属与 bringup 编排都已进一步收紧，当前
+  已具备继续压缩 `websocket_bridge` 历史耦合的条件。
 
 
 ## 5. 下一阶段建议范围
 
-Phase E-1 的建议范围控制在：
+下一阶段建议范围控制在：
 
-- 统一 `simulation_bridge` 与 `sim_joint_bridge_cpp` 的 launch contract。
-- 统一仿真域暴露给 `robot_bringup` 的参数名、默认 topic 和开关语义。
-- 明确哪些能力属于 Python Isaac bridge，哪些能力暂时仍由 C++ bridge 承接。
-- 继续让 `robot_bringup` 只感知“simulation 责任域入口”，而不是感知仿真域内部两套实现的细碎差异。
+- 继续从 `websocket_bridge` 收回 demo/BVH 的触发、配置与说明职责，避免它
+  继续作为 teleop 主链路之外能力的历史挂载点。
+- 继续稳定 `motion_msgs/MotionCommand` 在 producer / consumer 两侧对
+  `duration_ms`、`value_encoding` 的主语义优先级，减少过渡式驱动字段长
+  期占据外部接口中心。
+- 仿真域后续只保留必要维护，不再把内部实现细节重新上抬到
+  `robot_bringup` 或 package-level public surface。
 
 当前进度补充：
 
@@ -165,19 +174,19 @@ Phase E-1 的建议范围控制在：
   surface 已进一步收紧为单一 domain entry。
 - `bridge_stack.launch.py` 当前也已移除，`simulation.launch.py` 直接 include
   `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子链路。
-- 后续仍应继续统一仿真域 message contract 与包边界，而不是重新把实现细
-  节上抬到 `robot_bringup`。
+- sim 相关 source-level contract 测试当前也已减重为以当前 public
+  surface 为主，只保留少量关键旧词表回归断言。
+- 后续仍应继续统一仿真域 message contract 与包边界，但这部分当前已不再
+  是主推进面，而是后续阶段的维护与最终合并事项。
 
 建议优先修改的文件：
 
-- `src/simulation_bridge/launch/simulation.launch.py`
-- `src/robot_bringup/launch/simulation.launch.py`
-- `src/robot_bringup/launch/full_system.launch.py`
-- `src/simulation_bridge/simulation_bridge/sim_servo_bridge_node.py`
-- `src/simulation_bridge/simulation_bridge/sim_servo_bridge_utils.py`
-- `src/simulation_bridge/config/default_params.yaml`
-- `src/sim_joint_bridge_cpp/src/sim_joint_bridge_node.cpp`
-- `src/sim_joint_bridge_cpp/config/default_params.yaml`
+- `src/websocket/websocket_bridge/bridge_node.py`
+- `src/websocket/websocket_bridge/ws_server.py`
+- `src/record_load_action/record_load_action/bvh_player.py`
+- `src/record_load_action/README.md`
+- `src/websocket/config/README.md`
+- `src/websocket/test/test_bridge_node_teleop_guard.py`
 
 实施后必须同步更新：
 

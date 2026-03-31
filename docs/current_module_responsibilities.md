@@ -317,7 +317,8 @@
 ### 3.7 `simulation_bridge`
 
 - 状态
-  - 已落地第一版 Python 仿真桥实现，处于收口中的过渡态。
+  - 已落地第一版 Python 仿真桥实现；本轮 launch contract 与默认参数归属
+    已基本收口完成，当前主要剩余最终包边界合并与必要维护。
 - 当前承接位置
   - 目录：`src/simulation_bridge`
   - ROS 包名：`simulation_bridge`
@@ -455,11 +456,14 @@
     这个包级 public 入口，而 `simulation.launch.py` 已直接编排
     `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch，
     用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
+  - 对应的 sim source-level contract 测试当前也已减重为以当前 public
+    contract 为主，只保留少量关键旧词表回归断言。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
 - 与长期规划的关系
   - 已开始形成 `simulation_bridge` 正式责任域。
-  - 后续需要继续把 C++ 仿真桥与 launch 组织一起收口。
+  - 后续需要继续把 C++ 仿真桥与实现本体一起最终收口，但这部分当前已不再
+    是本轮主推进面。
 
 ### 3.8 `sim_joint_bridge_cpp`
 
@@ -630,8 +634,8 @@
   - 长期去向：演进为正式执行边界，并逐步替换上层对 `servo_msgs` 的直接依
     赖
 - `simulation_bridge`
-  - 当前事实：Isaac 仿真桥已独立成 Python 包，但 C++ 仿真桥和整机编排仍
-    未完全收口
+  - 当前事实：Isaac 仿真桥已独立成 Python 包，package-level launch
+    contract 与 bringup public surface 本轮已基本收口完成
   - 长期去向：形成统一的仿真责任域
 - `servo_hardware`
   - 当前事实：执行器驱动包，IMU 入口已不再由它导出
@@ -649,6 +653,7 @@
 当前仓库已经有可运行的遥控、驱动、传感器、仿真和控制原型，但模块边界明显
 还处于过渡态。当前已经完成了两步关键改造：`sensor_hardware` 已独立成包，
 `execution_manager` 也已补出最小执行边界，`simulation_bridge` 已开始承
-接 Isaac 仿真桥。但整体上仍然需要继续面对这些现实问题：`websocket_bridge`
-仍偏大、`parallel_3dof_controller` 仍直接构造驱动级命令、C++ 仿真桥与整
-机编排还未完全收口。长期规划应继续保留，当前事实则由本文负责单独记录。
+接 Isaac 仿真桥，且 sim 域本轮 package-level 收口已基本完成。但整体上仍
+然需要继续面对这些现实问题：`websocket_bridge` 仍偏大、
+`parallel_3dof_controller` 仍直接构造驱动级命令、C++ 仿真桥仍待最终包边
+界合并。长期规划应继续保留，当前事实则由本文负责单独记录。

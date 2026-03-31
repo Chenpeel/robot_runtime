@@ -366,6 +366,9 @@
   个包级 public 入口，而 `simulation.launch.py` 已直接编排
   `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch，用
   于明确 Python 与 C++ 两条桥接链路的内部职责边界。
+- 对应的 sim source-level contract 测试当前也已减重为以当前 public
+  contract 为主，只保留少量关键旧词表回归断言，避免继续大面积固化历史过
+  渡实现细节。
 
 动作：
 
@@ -408,8 +411,9 @@
    - 先补事实文档，停止让规划文档承载当前状态。
 2. 执行边界
    - 这是控制层和桥接层解耦的前提。
-3. 仿真收口
-   - 这是 `websocket_bridge` 降职责的关键一步。
+3. `websocket_bridge` 降职责
+   - 当前 sim 收口已基本完成，下一步更值得继续压缩 teleop/debug/demo 的混
+     合包边界。
 4. 正式命名收敛
    - 只有在前面四步稳定后才值得做。
 
@@ -432,5 +436,6 @@
 长期规划文档仍然有效，但当前仓库离那套目标架构还有几步关键过渡工作。
 因此更合理的做法不是去覆盖旧规划，而是补充一层“当前事实 + 近期执行顺序”
 文档：先把边界整理清楚。当前整机主 launch 已从 `websocket_bridge` 拆到
-`robot_bringup`，下一步继续围绕执行层、硬件包与仿真域做收口，最后再做正
-式命名和远期模块落地。
+`robot_bringup`，仿真域本轮也已基本完成 package-level 收口；下一步更应围
+绕 `websocket_bridge` 降职责与执行边界继续推进，最后再做正式命名和远期模
+块落地。
