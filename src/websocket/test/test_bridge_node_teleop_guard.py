@@ -146,6 +146,72 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
         return _Publisher()
 
+    @staticmethod
+    def _fake_logger():
+        class _Logger:
+            def error(self, *args, **kwargs):
+                del args, kwargs
+
+            def info(self, *args, **kwargs):
+                del args, kwargs
+
+        return _Logger()
+
+    @staticmethod
+    def _fake_logger():
+        class _Logger:
+            def error(self, *args, **kwargs):
+                del args, kwargs
+
+        return _Logger()
+
+    def _servo_bridge(self):
+        bridge = self._bridge(
+            {
+                'teleop_holder_id': 'client-a',
+                'teleop_lease_id': 'lease-1',
+                'teleop_active': True,
+                'active_source': 'teleop',
+            }
+        )
+        bridge.teleop_command_pub = self._fake_publisher()
+        bridge.bvh_command_pub = self._fake_publisher()
+        bridge.get_clock = self._fake_clock
+        bridge.get_logger = self._fake_logger
+        bridge.debug = False
+        bridge._debug_log = lambda *args, **kwargs: None
+        bridge._coerce_float = WebSocketROS2Bridge._coerce_float
+        bridge._coerce_uint16 = WebSocketROS2Bridge._coerce_uint16
+        bridge._map_angle_to_pulse = WebSocketROS2Bridge._map_angle_to_pulse
+        bridge._motion_value_encoding_for_servo_type = (
+            WebSocketROS2Bridge._motion_value_encoding_for_servo_type
+        )
+        bridge._resolve_duration_ms = WebSocketROS2Bridge._resolve_duration_ms
+        bridge._extract_requester_id = WebSocketROS2Bridge._extract_requester_id
+        bridge._extract_lease_id = WebSocketROS2Bridge._extract_lease_id
+        bridge._normalize_motion_position = (
+            lambda **kwargs: WebSocketROS2Bridge._normalize_motion_position(
+                bridge,
+                **kwargs,
+            )
+        )
+        bridge._ensure_teleop_command_allowed = (
+            lambda requester_id, lease_id: (
+                WebSocketROS2Bridge._ensure_teleop_command_allowed(
+                    bridge,
+                    requester_id,
+                    lease_id,
+                )
+            )
+        )
+        bridge._build_motion_command = (
+            lambda **kwargs: WebSocketROS2Bridge._build_motion_command(
+                bridge,
+                **kwargs,
+            )
+        )
+        return bridge
+
     def test_missing_identity_without_active_teleop_is_not_granted(self):
         bridge = self._bridge()
 
@@ -219,6 +285,64 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
         self.assertIsNone(result)
 
+    def test_handle_servo_command_prefers_duration_ms_and_value_encoding(self):
+        bridge = self._servo_bridge()
+
+        asyncio.run(
+            WebSocketROS2Bridge.handle_servo_command(
+                bridge,
+                {
+                    "servo_type": "bus",
+                    "servo_id": 2,
+                    "position": 1500,
+                    "value_encoding": "bus_pulse_us",
+                    "duration_ms": 45,
+                    "speed": 120,
+                },
+                context={
+                    "requester_id": "client-a",
+                    "lease_id": "lease-1",
+                },
+            )
+        )
+
+        self.assertEqual(len(bridge.teleop_command_pub.messages), 1)
+        msg = bridge.teleop_command_pub.messages[0]
+        self.assertEqual(msg.servo_type, "bus")
+        self.assertEqual(msg.servo_id, 2)
+        self.assertEqual(msg.position, 1500)
+        self.assertEqual(msg.value_encoding, "bus_pulse_us")
+        self.assertEqual(msg.duration_ms, 45)
+        self.assertEqual(msg.speed, 45)
+        self.assertEqual(msg.requester_id, "client-a")
+        self.assertEqual(msg.lease_id, "lease-1")
+
+    def test_handle_servo_command_keeps_legacy_angle_fallback(self):
+        bridge = self._servo_bridge()
+
+        asyncio.run(
+            WebSocketROS2Bridge.handle_servo_command(
+                bridge,
+                {
+                    "servo_type": "bus",
+                    "servo_id": 1,
+                    "position": 90,
+                    "speed": 70,
+                },
+                context={
+                    "requester_id": "client-a",
+                    "lease_id": "lease-1",
+                },
+            )
+        )
+
+        self.assertEqual(len(bridge.teleop_command_pub.messages), 1)
+        msg = bridge.teleop_command_pub.messages[0]
+        self.assertEqual(msg.position, 1500)
+        self.assertEqual(msg.value_encoding, "bus_pulse_us")
+        self.assertEqual(msg.duration_ms, 70)
+        self.assertEqual(msg.speed, 70)
+
     def test_bvh_command_uses_motion_publisher_with_empty_identity(self):
         teleop_pub = self._fake_publisher()
         bvh_pub = self._fake_publisher()
@@ -255,6 +379,100 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(msg.speed, 80)
         self.assertEqual(msg.requester_id, '')
         self.assertEqual(msg.lease_id, '')
+
+    def test_normalize_motion_position_keeps_raw_bus_pulse(self):
+        bridge = types.SimpleNamespace()
+        bridge._coerce_float = WebSocketROS2Bridge._coerce_float
+        bridge._coerce_uint16 = WebSocketROS2Bridge._coerce_uint16
+        bridge._map_angle_to_pulse = WebSocketROS2Bridge._map_angle_to_pulse
+
+        position = WebSocketROS2Bridge._normalize_motion_position(
+            bridge,
+            'bus',
+            1500,
+            'bus_pulse_us',
+        )
+
+        self.assertEqual(position, 1500)
+
+    def test_handle_servo_command_converts_bus_angle_and_prefers_duration_ms(self):
+        teleop_pub = self._fake_publisher()
+        bridge = self._bridge(
+            {
+                'teleop_holder_id': 'client-a',
+                'teleop_lease_id': 'lease-1',
+                'teleop_active': True,
+                'active_source': 'teleop',
+            }
+        )
+        bridge.teleop_command_pub = teleop_pub
+        bridge.get_clock = self._fake_clock
+        bridge.get_logger = self._fake_logger
+        bridge.debug = False
+        bridge._debug_log = lambda *args, **kwargs: None
+        bridge._coerce_float = WebSocketROS2Bridge._coerce_float
+        bridge._coerce_uint16 = WebSocketROS2Bridge._coerce_uint16
+        bridge._map_angle_to_pulse = WebSocketROS2Bridge._map_angle_to_pulse
+        bridge._motion_value_encoding_for_servo_type = (
+            WebSocketROS2Bridge._motion_value_encoding_for_servo_type
+        )
+        bridge._resolve_duration_ms = WebSocketROS2Bridge._resolve_duration_ms
+        bridge._normalize_motion_position = (
+            lambda servo_type, raw_position, value_encoding: (
+                WebSocketROS2Bridge._normalize_motion_position(
+                    bridge,
+                    servo_type,
+                    raw_position,
+                    value_encoding,
+                )
+            )
+        )
+        bridge._build_motion_command = (
+            lambda **kwargs: WebSocketROS2Bridge._build_motion_command(
+                bridge,
+                **kwargs,
+            )
+        )
+        bridge._extract_requester_id = WebSocketROS2Bridge._extract_requester_id
+        bridge._extract_lease_id = WebSocketROS2Bridge._extract_lease_id
+        bridge._ensure_teleop_command_allowed = (
+            lambda requester_id, lease_id: (
+                WebSocketROS2Bridge._ensure_teleop_command_allowed(
+                    bridge,
+                    requester_id,
+                    lease_id,
+                )
+            )
+        )
+
+        asyncio.run(
+            WebSocketROS2Bridge.handle_servo_command(
+                bridge,
+                {
+                    'servo_type': 'bus',
+                    'servo_id': 1,
+                    'position': 45,
+                    'speed': 120,
+                    'duration_ms': 45,
+                },
+                context={
+                    'requester_id': 'client-a',
+                    'lease_id': 'lease-1',
+                },
+            )
+        )
+
+        self.assertEqual(len(teleop_pub.messages), 1)
+        msg = teleop_pub.messages[0]
+        self.assertEqual(
+            msg.position,
+            WebSocketROS2Bridge._map_angle_to_pulse(45),
+        )
+        self.assertEqual(msg.value_encoding, 'bus_pulse_us')
+        self.assertEqual(msg.duration_ms, 45)
+        self.assertEqual(msg.speed, 45)
+        self.assertEqual(msg.requester_id, 'client-a')
+        self.assertEqual(msg.lease_id, 'lease-1')
 
     def test_bvh_play_is_rejected_when_teleop_is_active(self):
         class _Player:

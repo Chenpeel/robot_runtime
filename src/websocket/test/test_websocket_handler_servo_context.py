@@ -51,6 +51,29 @@ class TestWebSocketHandlerServoContext(unittest.TestCase):
         self.assertEqual(received_context["requester_id"], "client-a")
         self.assertEqual(received_context["lease_id"], "lease-1")
 
+    def test_servo_control_ack_returns_normalized_semantic_fields(self):
+        response = asyncio.run(
+            self.handler.handle_message(
+                json.dumps({
+                    "type": "servo_control",
+                    "b": -1,
+                    "c": 1,
+                    "p": 1500,
+                    "s": 120,
+                }),
+            )
+        )
+
+        response_data = json.loads(response)
+        command = response_data["command"]
+        self.assertEqual(response_data["type"], "servo_control_ack")
+        self.assertEqual(command["servo_type"], "bus")
+        self.assertEqual(command["servo_id"], 1)
+        self.assertEqual(command["position"], 1500)
+        self.assertEqual(command["value_encoding"], "bus_pulse_us")
+        self.assertEqual(command["duration_ms"], 120)
+        self.assertEqual(command["speed"], 120)
+
     def test_servo_control_returns_explicit_error_when_teleop_rejected(self):
         async def servo_callback(command, context):
             del command, context

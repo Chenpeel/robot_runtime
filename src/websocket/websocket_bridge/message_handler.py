@@ -295,7 +295,9 @@ class MessageHandler:
                 "servo_type": "bus" | "pca",
                 "servo_id": int,
                 "position": int,
-                "speed": int (可选，总线舵机),
+                "value_encoding": str,
+                "duration_ms": int,
+                "speed": int,
                 "port": int (可选，总线舵机)
             }
         """
@@ -330,27 +332,31 @@ class MessageHandler:
             b_flag = int(data.get('b', 0))
             c_val = int(data.get('c', 0))
             p_val = int(data.get('p', 0))
-            s_val = int(data.get('s', 100))  # 速度
             port_val = int(data.get('port', 0))  # 端口
+            duration_ms = self._resolve_duration_ms(
+                data.get('duration_ms'),
+                data.get('s'),
+            )
 
             if b_flag == -1:
-                # 总线舵机
-                # 将微秒转换为角度 (0-180)
-                position = self._us_to_angle(p_val)
                 return {
                     "servo_type": "bus",
                     "servo_id": c_val,
-                    "position": position,
-                    "speed": s_val,
-                    "port": port_val
+                    "position": max(self.BUS_MIN_US, min(self.BUS_MAX_US, p_val)),
+                    "value_encoding": "bus_pulse_us",
+                    "duration_ms": duration_ms,
+                    "speed": duration_ms,
+                    "port": port_val,
                 }
             elif b_flag == 0:
-                # PCA 舵机
                 return {
                     "servo_type": "pca",
                     "servo_id": c_val,
                     "position": p_val,
-                    "port": 0
+                    "value_encoding": "pca_tick",
+                    "duration_ms": duration_ms,
+                    "speed": duration_ms,
+                    "port": 0,
                 }
         except (ValueError, TypeError) as e:
             logger.error(f"解析 BCP 协议失败: {e}")
@@ -402,15 +408,34 @@ class MessageHandler:
             if position is None:
                 return None
 
-            speed = web_servo.get("speed", 100)
             port = web_servo.get("port", 0)
+            duration_ms = self._resolve_duration_ms(
+                web_servo.get("duration_ms"),
+                web_servo.get("speed", outer.get("speed") if outer else None),
+            )
+
+            servo_type = "bus" if is_bus_servo else "pca"
+            if servo_type == "bus":
+                position = self._normalize_bus_position(
+                    position,
+                    value_encoding=(
+                        web_servo.get("value_encoding")
+                        or (outer.get("value_encoding") if outer else None)
+                    ),
+                )
+                value_encoding = "bus_pulse_us"
+            else:
+                position = int(position)
+                value_encoding = "pca_tick"
 
             return {
-                "servo_type": "bus" if is_bus_servo else "pca",
+                "servo_type": servo_type,
                 "servo_id": int(servo_id),
-                "position": int(position),
-                "speed": int(speed),
-                "port": int(port)
+                "position": position,
+                "value_encoding": value_encoding,
+                "duration_ms": duration_ms,
+                "speed": duration_ms,
+                "port": int(port),
             }
         except (ValueError, TypeError) as e:
             logger.error(f"解析 web_servo 失败: {e}")
@@ -452,26 +477,105 @@ class MessageHandler:
 
             # 获取位置信息
             position = None
+            position_key = None
             for key in ['position', 'angle', 'p', 'pulse']:
                 if key in data:
                     position = int(data[key])
+                    position_key = key
                     break
 
             if position is None:
                 return None
 
+            duration_ms = self._resolve_duration_ms(
+                data.get('duration_ms'),
+                data.get('speed'),
+            )
+
+            value_encoding = self._normalize_value_encoding(
+                data.get('value_encoding')
+            )
+            if servo_type == "bus":
+                treat_as_raw = (
+                    value_encoding == "bus_pulse_us"
+                    or position_key in ('pulse',)
+                    or (position_key == 'p' and 'b' in data and int(data['b']) == -1)
+                )
+                position = self._normalize_bus_position(
+                    position,
+                    value_encoding=value_encoding,
+                    treat_as_raw=treat_as_raw,
+                )
+                value_encoding = "bus_pulse_us"
+            else:
+                value_encoding = "pca_tick"
+
             return {
                 "servo_type": servo_type,
                 "servo_id": servo_id,
                 "position": position,
-                "speed": int(data.get('speed', 100)),
-                "port": int(data.get('port', 0))
+                "value_encoding": value_encoding,
+                "duration_ms": duration_ms,
+                "speed": duration_ms,
+                "port": int(data.get('port', 0)),
             }
 
         except (ValueError, TypeError) as e:
             logger.error(f"解析完整格式失败: {e}")
 
         return None
+
+    def _resolve_duration_ms(
+        self,
+        duration_ms: Any,
+        speed: Any,
+        default: int = 100,
+    ) -> int:
+        for candidate in (duration_ms, speed):
+            try:
+                resolved = int(candidate)
+            except (TypeError, ValueError):
+                continue
+            if resolved > 0:
+                return resolved
+        return int(default)
+
+    @staticmethod
+    def _normalize_value_encoding(value: Any) -> str:
+        return str(value or '').strip().lower()
+
+    @staticmethod
+    def _centered_angle_to_us(angle: int) -> int:
+        angle = max(-90, min(90, int(angle)))
+        return int(round(500 + (angle + 90) * (2000.0 / 180.0)))
+
+    def _normalize_bus_position(
+        self,
+        position: Any,
+        value_encoding: Any = None,
+        treat_as_raw: bool = False,
+    ) -> int:
+        raw_position = int(position)
+        normalized_encoding = self._normalize_value_encoding(value_encoding)
+
+        if normalized_encoding == 'bus_pulse_us':
+            if self.BUS_MIN_US <= raw_position <= self.BUS_MAX_US:
+                return raw_position
+            raise ValueError(f'非法 bus pulse_us: {raw_position}')
+
+        if treat_as_raw:
+            return max(self.BUS_MIN_US, min(self.BUS_MAX_US, raw_position))
+
+        if self.BUS_MIN_US <= raw_position <= self.BUS_MAX_US:
+            return raw_position
+
+        if 0 <= raw_position <= 180:
+            return self._angle_to_us(raw_position)
+
+        if -90 <= raw_position < 0:
+            return self._centered_angle_to_us(raw_position)
+
+        raise ValueError(f'非法 bus position: {raw_position}')
 
     def _us_to_angle(self, us: int) -> int:
         """将微秒转换为角度 (0-180)"""

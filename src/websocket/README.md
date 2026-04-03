@@ -127,6 +127,10 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   - 兼容字段：`position`、`speed`
   - 增量语义字段：`value_encoding`、`duration_ms`
   - teleop 身份字段：`requester_id`、`lease_id`
+- `servo_control` 输入当前也开始被标准化为同一套 motion 语义：
+  - bus 输入默认仍可写角度值，但会在桥接前归一为 pulse us
+  - 若显式提供 `value_encoding == "bus_pulse_us"`，则会保留原始脉宽值
+  - 若同时提供 `duration_ms` 与 `speed`，会优先采用 `duration_ms`
 - `bvh_play` 触发的 demo/BVH 回放默认会走 `bvh_command_topic`，即
   `/execution/motion/command`，不再复用 teleop 的 `command_topic`。
 - 当前只保留显式 `type == "bvh_play"` 作为 BVH 触发入口；旧的泛化
@@ -225,7 +229,18 @@ heartbeat:
   "servo_type": "bus",
   "servo_id": 1,
   "position": 90,
-  "speed": 100
+  "duration_ms": 100
+}
+```
+
+显式原始脉宽格式:
+```json
+{
+  "servo_type": "bus",
+  "servo_id": 1,
+  "position": 1500,
+  "value_encoding": "bus_pulse_us",
+  "duration_ms": 100
 }
 ```
 

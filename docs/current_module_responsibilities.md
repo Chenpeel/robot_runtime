@@ -96,6 +96,9 @@
   - 在 `servo_control` 等 teleop 命令链路中，开始把当前连接的
     `requester_id` / `lease_id` 一并透传到 `MotionCommand`，作为当前 teleop
     执行命令的显式身份字段。
+  - `servo_control` 输入当前也已开始被标准化为 `MotionCommand` 风格字段：
+    显式补 `value_encoding` / `duration_ms`，并在 bus 输入为角度时先归一到
+    pulse us 后再下发。
   - 在将 teleop 命令下发到执行层前，先基于最新 `execution_state` 做一层
     holder / lease 预校验；若当前连接缺少 requester / lease 或尚未确认控制
     权，会直接返回错误回包。
@@ -167,8 +170,9 @@
   - 当前 teleop 命令预校验依赖 `websocket_bridge` 持有的最新
     `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
-    双写 `duration_ms` 与 `value_encoding`，但外部消息仍保留
-    `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。
+    双写 `duration_ms` 与 `value_encoding`；同时 WebSocket 输入当前也已开始
+    优先收敛到这组显式语义。但外部消息层仍保留 `servo_type`、`servo_id`、
+    `position`、`speed` 这类过渡定义。
 - 与长期规划的关系
   - 长期上更接近 `teleoperation_bridge` 的前身。
   - 整机主 launch 已迁到 `robot_bringup`。

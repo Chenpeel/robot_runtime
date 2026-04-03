@@ -35,6 +35,8 @@ from .debug_aggregator import DebugAggregator
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
 DEFAULT_BVH_COMMAND_TOPIC = '/execution/motion/command'
 DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
+BUS_MIN_US = 500
+BUS_MAX_US = 2500
 
 
 class WebSocketROS2Bridge(Node):
@@ -227,16 +229,16 @@ class WebSocketROS2Bridge(Node):
         return max(0, min(65535, val))
 
     @staticmethod
-    def _map_centered_angle_to_pulse(angle: float) -> int:
-        """Map angle in [-90, 90] to pulse width 500-2500us."""
-        angle = max(-90.0, min(90.0, angle))
-        return int(round(500 + (angle + 90.0) * (2000.0 / 180.0)))
+    def _map_angle_to_pulse(angle: float) -> int:
+        """Map angle in [0, 180] to pulse width 500-2500us."""
+        angle = max(0.0, min(180.0, angle))
+        return int(round(BUS_MIN_US + angle * (2000.0 / 180.0)))
 
     @staticmethod
     def _map_pulse_to_centered_angle(pulse: float) -> float:
         """Map pulse width 500-2500us to angle in [-90, 90]."""
-        pulse = max(500.0, min(2500.0, float(pulse)))
-        return (pulse - 500.0) * (180.0 / 2000.0) - 90.0
+        pulse = max(float(BUS_MIN_US), min(float(BUS_MAX_US), float(pulse)))
+        return (pulse - BUS_MIN_US) * (180.0 / 2000.0) - 90.0
 
     async def handle_servo_command(
         self,
@@ -252,31 +254,29 @@ class WebSocketROS2Bridge(Node):
                     "servo_type": "bus" | "pca",
                     "servo_id": int,
                     "position": int,
-                    "speed": int (可选，仅总线舵机)
+                    "value_encoding": str (可选，显式目标值编码),
+                    "duration_ms": int (可选，显式执行时长),
+                    "speed": int (兼容字段)
                 }
         """
         try:
             servo_type = servo_cmd.get("servo_type", "bus")
+            value_encoding = str(
+                servo_cmd.get("value_encoding") or ""
+            ).strip().lower()
             raw_position = servo_cmd.get("position")
             if raw_position is None:
                 raise ValueError("缺少 position 字段")
 
-            position_val = self._coerce_float(raw_position, None)
-            if position_val is None:
-                raise ValueError(f"非法 position: {raw_position}")
-
-            if servo_type == "bus":
-                # 仅接受中心角 [-90, 90]，超出范围直接拒绝发送。
-                if position_val < -90.0 or position_val > 90.0:
-                    raise ValueError(
-                        f"bus position 超出范围[-90, 90]: {position_val}"
-                    )
-                position = self._map_centered_angle_to_pulse(position_val)
-            else:
-                # PCA 舵机只接受非负值
-                position = self._coerce_uint16(position_val, 0)
-
-            speed = self._coerce_uint16(servo_cmd.get("speed", 100), 100)
+            position = self._normalize_motion_position(
+                servo_type=servo_type,
+                raw_position=raw_position,
+                value_encoding=value_encoding,
+            )
+            duration_ms = self._resolve_duration_ms(
+                servo_cmd.get("duration_ms"),
+                servo_cmd.get("speed", 100),
+            )
             requester_id = self._extract_requester_id(context)
             lease_id = self._extract_lease_id(context)
             self._ensure_teleop_command_allowed(
@@ -289,7 +289,11 @@ class WebSocketROS2Bridge(Node):
                 servo_type=servo_type,
                 servo_id=servo_cmd["servo_id"],
                 position=position,
-                duration_ms=speed,
+                value_encoding=(
+                    value_encoding
+                    or self._motion_value_encoding_for_servo_type(servo_type)
+                ),
+                duration_ms=duration_ms,
                 requester_id=requester_id,
                 lease_id=lease_id,
             )
@@ -301,7 +305,8 @@ class WebSocketROS2Bridge(Node):
                 "servo_command",
                 (
                     f"{msg.servo_type} ID={msg.servo_id} "
-                    f"POS={msg.position} SPEED={msg.speed} "
+                    f"POS={msg.position} ENC={msg.value_encoding} "
+                    f"DURATION_MS={msg.duration_ms} "
                     f"requester_id={requester_id} lease_id={lease_id}"
                 ),
                 self.debug
@@ -317,6 +322,7 @@ class WebSocketROS2Bridge(Node):
             servo_type=servo_type,
             servo_id=int(servo_id),
             position=int(position),
+            value_encoding=self._motion_value_encoding_for_servo_type(servo_type),
             duration_ms=int(speed),
             requester_id='',
             lease_id='',
@@ -730,11 +736,67 @@ class WebSocketROS2Bridge(Node):
             return 'pca_tick'
         return ''
 
+    @staticmethod
+    def _resolve_duration_ms(value, fallback=100) -> int:
+        primary = WebSocketROS2Bridge._coerce_uint16(value, None)
+        if primary and primary > 0:
+            return primary
+        secondary = WebSocketROS2Bridge._coerce_uint16(fallback, None)
+        if secondary and secondary > 0:
+            return secondary
+        return 100
+
+    def _normalize_motion_position(
+        self,
+        servo_type: str,
+        raw_position,
+        value_encoding: str,
+    ) -> int:
+        normalized_type = str(servo_type).strip().lower()
+        normalized_encoding = str(value_encoding or '').strip().lower()
+        position_val = self._coerce_float(raw_position, None)
+        if position_val is None:
+            raise ValueError(f"非法 position: {raw_position}")
+
+        if normalized_type == "bus":
+            if normalized_encoding == "bus_pulse_us":
+                if BUS_MIN_US <= position_val <= BUS_MAX_US:
+                    return int(round(position_val))
+                raise ValueError(
+                    f"bus_pulse_us 超出范围[{BUS_MIN_US}, {BUS_MAX_US}]: "
+                    f"{position_val}"
+                )
+
+            if normalized_encoding not in ("",):
+                raise ValueError(f"不支持的 bus value_encoding: {value_encoding}")
+
+            if BUS_MIN_US <= position_val <= BUS_MAX_US:
+                return int(round(position_val))
+
+            if 0.0 <= position_val <= 180.0:
+                return self._map_angle_to_pulse(position_val)
+
+            raise ValueError(
+                f"bus position 超出兼容范围[0, 180]或[{BUS_MIN_US}, {BUS_MAX_US}]: "
+                f"{position_val}"
+            )
+
+        if normalized_type == "pca":
+            if normalized_encoding not in ("", "pca_tick"):
+                raise ValueError(f"不支持的 pca value_encoding: {value_encoding}")
+            position = self._coerce_uint16(position_val, None)
+            if position is None:
+                raise ValueError(f"非法 pca position: {raw_position}")
+            return position
+
+        raise ValueError(f"未知 servo_type: {servo_type}")
+
     def _build_motion_command(
         self,
         servo_type: str,
         servo_id: int,
         position: int,
+        value_encoding: str,
         duration_ms: int,
         requester_id: str,
         lease_id: str,
@@ -743,7 +805,10 @@ class WebSocketROS2Bridge(Node):
         msg.servo_type = str(servo_type)
         msg.servo_id = int(servo_id)
         msg.position = int(position)
-        msg.value_encoding = self._motion_value_encoding_for_servo_type(servo_type)
+        msg.value_encoding = (
+            str(value_encoding).strip().lower()
+            or self._motion_value_encoding_for_servo_type(servo_type)
+        )
         msg.duration_ms = int(duration_ms)
         # 过渡期继续镜像到旧字段，便于旧 consumer 保持兼容。
         msg.speed = int(duration_ms)

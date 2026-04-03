@@ -176,6 +176,9 @@
   `parallel_3dof_controller` 已先在 producer 内部显式以
   `duration_ms` / `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜
   像字段。
+- `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
+  `MotionCommand` 风格字段：显式补 `value_encoding` / `duration_ms`，并把
+  bus 目标值在桥接前归一到 pulse us；`speed` 则只继续作为兼容镜像字段。
 - `websocket_bridge` 内部的 demo/BVH 回放链路也已开始默认改走
   `/execution/motion/command`，不再复用 teleop 命令入口，降低 demo 能力与
   teleop 控制权约束的耦合。

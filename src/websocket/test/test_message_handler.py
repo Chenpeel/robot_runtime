@@ -133,8 +133,9 @@ class TestMessageHandler:
         assert result is not None
         assert result["servo_type"] == "bus"
         assert result["servo_id"] == 1
-        # 1500us 应该对应约 90 度
-        assert 85 <= result["position"] <= 95
+        assert result["position"] == 1500
+        assert result["value_encoding"] == "bus_pulse_us"
+        assert result["duration_ms"] == 100
         assert result["speed"] == 100
 
     def test_parse_bcp_protocol_pca_servo(self):
@@ -146,6 +147,8 @@ class TestMessageHandler:
         assert result["servo_type"] == "pca"
         assert result["servo_id"] == 5
         assert result["position"] == 300
+        assert result["value_encoding"] == "pca_tick"
+        assert result["duration_ms"] == 100
         assert result["port"] == 0
 
     def test_parse_bcp_protocol_with_port(self):
@@ -165,7 +168,9 @@ class TestMessageHandler:
         assert result is not None
         assert result["servo_type"] == "bus"
         assert result["servo_id"] == 3
-        assert result["position"] == 120
+        assert result["position"] == self.handler._angle_to_us(120)
+        assert result["value_encoding"] == "bus_pulse_us"
+        assert result["duration_ms"] == 80
         assert result["speed"] == 80
 
     def test_parse_full_format_angle(self):
@@ -175,7 +180,8 @@ class TestMessageHandler:
 
         assert result is not None
         assert result["servo_id"] == 2
-        assert result["position"] == 45
+        assert result["position"] == self.handler._angle_to_us(45)
+        assert result["value_encoding"] == "bus_pulse_us"
 
     def test_parse_full_format_channel(self):
         """测试解析完整格式 - 使用 channel (PCA)"""
@@ -186,6 +192,7 @@ class TestMessageHandler:
         assert result["servo_type"] == "pca"
         assert result["servo_id"] == 7
         assert result["position"] == 200
+        assert result["value_encoding"] == "pca_tick"
 
     def test_parse_web_servo_payload_bus(self):
         """测试解析 web_servo 格式 - 总线舵机"""
@@ -203,7 +210,9 @@ class TestMessageHandler:
         assert result is not None
         assert result["servo_type"] == "bus"
         assert result["servo_id"] == 2
-        assert result["position"] == 45
+        assert result["position"] == self.handler._angle_to_us(45)
+        assert result["value_encoding"] == "bus_pulse_us"
+        assert result["duration_ms"] == 120
         assert result["speed"] == 120
 
     def test_parse_web_servo_payload_pca(self):
@@ -221,6 +230,46 @@ class TestMessageHandler:
         assert result["servo_type"] == "pca"
         assert result["servo_id"] == 5
         assert result["position"] == 300
+        assert result["value_encoding"] == "pca_tick"
+        assert result["duration_ms"] == 100
+
+    def test_parse_servo_control_prefers_duration_ms_over_speed(self):
+        """测试 parser 优先显式 duration_ms，并镜像写回 speed。"""
+        data = {
+            "servo_type": "bus",
+            "servo_id": 3,
+            "position": 90,
+            "speed": 120,
+            "duration_ms": 45,
+        }
+
+        result = self.handler.parse_servo_control(data)
+
+        assert result is not None
+        assert result["duration_ms"] == 45
+        assert result["speed"] == 45
+        assert result["position"] == self.handler._angle_to_us(90)
+        assert result["value_encoding"] == "bus_pulse_us"
+
+    def test_parse_web_servo_bus_pulse_position_with_explicit_encoding(self):
+        """测试显式 bus_pulse_us 编码时保留原始脉宽值。"""
+        data = {
+            "web_servo": {
+                "is_bus_servo": True,
+                "servo_id": 2,
+                "position": 1500,
+                "value_encoding": "bus_pulse_us",
+                "duration_ms": 60,
+            }
+        }
+
+        result = self.handler.parse_servo_control(data)
+
+        assert result is not None
+        assert result["position"] == 1500
+        assert result["value_encoding"] == "bus_pulse_us"
+        assert result["duration_ms"] == 60
+        assert result["speed"] == 60
 
     def test_parse_servo_control_invalid_data(self):
         """测试解析无效的舵机控制数据"""

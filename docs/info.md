@@ -57,6 +57,9 @@
 - teleop `MotionCommand` 已收紧为显式 requester / lease 约束。
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
   `value_encoding` 表达 `MotionCommand` 语义。
+- `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
+  `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
+  前归一到 pulse us，`speed` 仅保留为兼容镜像。
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
@@ -117,6 +120,10 @@
 - `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
+- `websocket_bridge/message_handler.py` 当前也已开始把 `servo_control`
+  解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
+  `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
+  也会优先采用这组显式语义继续下发。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接
