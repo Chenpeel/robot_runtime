@@ -177,7 +177,7 @@ class MessageHandler:
         """
         解析BVH动作请求
 
-        支持格式:
+        仅支持显式直接字段格式:
         {
           "type": "bvh_play",
           "action": "walk",
@@ -186,52 +186,27 @@ class MessageHandler:
           "playback_rate": 1.0,
           "frame_ms": 16.7
         }
-        或
-        {
-          "action": { "bvh": "walk", "loop": false, "playback_rate": 1.0 }
-        }
         """
         if not isinstance(data, dict):
             return None
 
-        action_name = None
-        loop_flag = False
-        speed_ms = None
-        playback_rate = None
-        frame_ms = None
+        msg_type = str(data.get("type") or "").strip().lower()
+        if msg_type != MessageType.BVH_PLAY.value:
+            return None
 
-        if isinstance(data.get("action"), dict):
-            action = data.get("action")
-            action_name = action.get("bvh") or action.get("name")
-            loop_flag = bool(action.get("loop", False))
-            speed_ms = action.get("speed_ms")
-            playback_rate = action.get("playback_rate")
-            frame_ms = action.get("frame_ms")
-        else:
-            action_name = data.get("bvh") or data.get("action")
-            loop_flag = bool(data.get("loop", False))
-            speed_ms = data.get("speed_ms")
-            playback_rate = data.get("playback_rate")
-            frame_ms = data.get("frame_ms")
+        if "action" not in data:
+            return None
 
-        if action_name is None:
-            # Allow explicit stop when action/bvh key is present
-            if "action" in data or "bvh" in data:
-                return {
-                    "action": None,
-                    "loop": loop_flag,
-                    "speed_ms": speed_ms,
-                    "playback_rate": playback_rate,
-                    "frame_ms": frame_ms
-                }
+        action_name = data.get("action")
+        if action_name is not None and not isinstance(action_name, str):
             return None
 
         return {
             "action": action_name,
-            "loop": loop_flag,
-            "speed_ms": speed_ms,
-            "playback_rate": playback_rate,
-            "frame_ms": frame_ms
+            "loop": bool(data.get("loop", False)),
+            "speed_ms": data.get("speed_ms"),
+            "playback_rate": data.get("playback_rate"),
+            "frame_ms": data.get("frame_ms"),
         }
 
     def _create_heartbeat_response(self) -> str:

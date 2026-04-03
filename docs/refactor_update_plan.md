@@ -194,6 +194,9 @@
 - BVH 触发入口当前也已收紧为显式 `bvh_play` 消息；旧的泛化 `action` 别
   名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉，继续
   减少 demo 能力混入通用消息面。
+- `bvh_play` payload 当前也已继续只保留显式直接字段；旧的 `action.bvh`
+  嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前 public
+  contract 保留。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
   继续减少 demo 路径对 teleop 主链路的运行时干扰。

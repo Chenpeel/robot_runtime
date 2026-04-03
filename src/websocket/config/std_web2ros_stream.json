@@ -1,6 +1,6 @@
 {
     "character_name": "robot",
-    "controller_type": "web_servo | xbox_controller | action",
+    "controller_type": "web_servo | xbox_controller | bvh_play",
 
     "web_servo": {
         "is_bus_servo": false,
@@ -8,15 +8,9 @@
         "position": 0,
         "speed": 100
     },
-    "action": {
-        "bvh": [
-            null,
-            "backwards_rifle_walk",
-            "hip_hop_dancing",
-            "hurricane_kick",
-            "strafing",
-            "walking"
-        ],
+    "bvh_play": {
+        "type": "bvh_play",
+        "action": "walking | backwards_rifle_walk | hip_hop_dancing | hurricane_kick | strafing | null",
         "loop": false,
         "speed_ms": 33,
         "playback_rate": 1.0,

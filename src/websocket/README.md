@@ -136,6 +136,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - 当前只保留显式 `type == "bvh_play"` 作为 BVH 触发入口；旧的泛化
   `action` 别名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都不
   再保留。
+- `bvh_play` payload 当前也只接受直接字段：
+  `action`、`loop`、`speed_ms`、`playback_rate`、`frame_ms`；
+  旧的 `action.bvh` 嵌套 payload 和顶层 `bvh` 别名都不再保留。
 
 状态查询与状态广播现在也会携带执行层反馈：
 
