@@ -104,7 +104,7 @@ class MessageHandler:
 
         if msg_type:
             # 映射到枚举
-            if msg_type in ("action", "bvh_play"):
+            if msg_type == "bvh_play":
                 return MessageType.BVH_PLAY
             try:
                 return MessageType(msg_type)
@@ -115,9 +115,6 @@ class MessageHandler:
         if self._is_servo_control(data):
             return MessageType.SERVO_CONTROL
 
-        # 基于内容推断BVH播放
-        if self._is_bvh_action(data):
-            return MessageType.BVH_PLAY
         if "timestamp" in data and "status" in data:
             return MessageType.HEARTBEAT
         return MessageType.UNKNOWN
@@ -138,27 +135,6 @@ class MessageHandler:
         servo_keys = {'b', 'c', 'p', 'id', 'servo_id', 'channel',
                       'angle', 'position', 'speed', 'is_bus_servo'}
         return bool(set(data.keys()) & servo_keys)
-
-    def _is_bvh_action(self, data: Dict[str, Any]) -> bool:
-        if not isinstance(data, dict):
-            return False
-        action_present = "action" in data
-        action = data.get("action")
-        if isinstance(action, dict):
-            if "bvh" in action or "name" in action:
-                return True
-            # allow empty dict as BVH intent when no servo control present
-            if action_present:
-                return True
-        if action is None and action_present:
-            return True
-        if isinstance(action, (str, int, float)) and str(action).strip():
-            return True
-        if "bvh" in data:
-            return True
-        if data.get("controller_type") == "action":
-            return True
-        return False
 
     async def process_message(self, data: Dict[str, Any]) -> Optional[str]:
         """

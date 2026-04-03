@@ -129,6 +129,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   - teleop 身份字段：`requester_id`、`lease_id`
 - `bvh_play` 触发的 demo/BVH 回放默认会走 `bvh_command_topic`，即
   `/execution/motion/command`，不再复用 teleop 的 `command_topic`。
+- 当前只保留显式 `type == "bvh_play"` 作为 BVH 触发入口；旧的泛化
+  `action` 别名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都不
+  再保留。
 
 状态查询与状态广播现在也会携带执行层反馈：
 

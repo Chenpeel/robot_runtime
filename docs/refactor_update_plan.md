@@ -188,6 +188,9 @@
 - `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
   `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
   回 `record_load_action`，继续减少 demo 配置入口留在 teleop 包边界。
+- BVH 触发入口当前也已收紧为显式 `bvh_play` 消息；旧的泛化 `action` 别
+  名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉，继续
+  减少 demo 能力混入通用消息面。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
   继续减少 demo 路径对 teleop 主链路的运行时干扰。

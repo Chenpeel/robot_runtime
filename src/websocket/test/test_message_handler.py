@@ -58,6 +58,13 @@ class TestMessageHandler:
 
         assert msg_type == MessageType.TELEOP_RELEASE
 
+    def test_get_message_type_bvh_play(self):
+        """测试显式 bvh_play 消息识别。"""
+        data = {"type": "bvh_play", "action": "walk"}
+        msg_type = self.handler.get_message_type(data)
+
+        assert msg_type == MessageType.BVH_PLAY
+
     def test_get_message_type_case_insensitive(self):
         """测试消息类型识别大小写不敏感"""
         data1 = {"type": "HEARTBEAT"}
@@ -105,6 +112,18 @@ class TestMessageHandler:
         msg_type = self.handler.get_message_type(data)
 
         assert msg_type == MessageType.UNKNOWN
+
+    def test_get_message_type_no_longer_inferrs_bvh_from_payload(self):
+        """测试不再按内容推断 BVH 播放。"""
+        data = {"action": "walk"}
+
+        assert self.handler.get_message_type(data) == MessageType.UNKNOWN
+
+    def test_get_message_type_action_alias_is_unknown(self):
+        """测试旧 action 别名不再作为 BVH 入口。"""
+        data = {"type": "action", "action": "walk"}
+
+        assert self.handler.get_message_type(data) == MessageType.UNKNOWN
 
     def test_parse_bcp_protocol_bus_servo(self):
         """测试解析 BCP 协议 - 总线舵机"""

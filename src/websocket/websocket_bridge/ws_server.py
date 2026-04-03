@@ -574,17 +574,13 @@ class WebSocketBridgeServer:
         """
         parsed_cmd = self.handler.message_handler.parse_servo_control(servo_cmd)
         if parsed_cmd is None:
-            # 尝试解析BVH动作
-            bvh_payload = self.handler.message_handler.parse_bvh_action(servo_cmd)
-            if bvh_payload and getattr(self.handler, 'on_bvh_play', None):
-                try:
-                    await self.handler.on_bvh_play(bvh_payload)
-                    self._debug("ws_bvh", f"BVH action forwarded: {bvh_payload}")
-                except Exception as e:
-                    print(f"[WebSocketServer] BVH action failed: {e}")
-            else:
-                self._debug("ws_servo", f"无法解析舵机命令: {servo_cmd}")
-            return
+            self._debug("ws_servo", f"无法解析舵机命令: {servo_cmd}")
+            return ErrorResponse.create(
+                error_code=ErrorCode.INVALID_SERVO_COMMAND,
+                message="舵机控制命令格式无效",
+                details={"received_data": servo_cmd},
+                device_id=self.device_id,
+            )
 
         # 使用 handler 的舵机命令回调
         if hasattr(self.handler, 'on_servo_command') and self.handler.on_servo_command:

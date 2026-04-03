@@ -251,6 +251,36 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
             "teleop_control_lease_required",
         )
 
+    async def test_direct_servo_command_no_longer_forwards_bvh_payload(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+        websocket = _FakeWebSocket()
+        server.client_info[websocket] = {
+            "id": "client-a",
+            "name": "a",
+            "teleop_lease_id": '',
+        }
+
+        bvh_called = False
+
+        async def bvh_callback(payload):
+            nonlocal bvh_called
+            del payload
+            bvh_called = True
+
+        server.handler.register_bvh_play_handler(bvh_callback)
+
+        error_response = await server._handle_servo_control_direct(
+            {
+                "action": "walk",
+            },
+            context=server._build_client_context(websocket),
+        )
+
+        response_data = json.loads(error_response)
+        self.assertFalse(bvh_called)
+        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["error_name"], "INVALID_SERVO_COMMAND")
+
 
 if __name__ == '__main__':
     unittest.main()

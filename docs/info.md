@@ -68,6 +68,8 @@
 - `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
   `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
   回 `record_load_action`。
+- BVH 触发入口当前也已收紧为显式 `bvh_play` 消息；旧的泛化 `action` 别
+  名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public
