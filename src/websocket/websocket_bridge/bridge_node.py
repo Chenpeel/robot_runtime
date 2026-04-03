@@ -74,7 +74,6 @@ class WebSocketROS2Bridge(Node):
         self.declare_parameter('debug_aggregate', True)
         self.declare_parameter('debug_aggregate_period', 1.0)
         self.declare_parameter('debug_aggregate_max_len', 120)
-        self.declare_parameter('bvh_action_file', '')
 
         # 从ROS参数读取配置
         self.ws_host = self.get_parameter('ws_host').value
@@ -91,7 +90,6 @@ class WebSocketROS2Bridge(Node):
         self.debug_aggregate = self.get_parameter('debug_aggregate').value
         self.debug_aggregate_period = float(self.get_parameter('debug_aggregate_period').value)
         self.debug_aggregate_max_len = int(self.get_parameter('debug_aggregate_max_len').value)
-        self.bvh_action_file = self.get_parameter('bvh_action_file').value
 
         if self.debug_aggregate_period <= 0:
             self.debug_aggregate_period = 1.0
@@ -153,7 +151,6 @@ class WebSocketROS2Bridge(Node):
         # BVH播放器
         self.bvh_player = BvhActionPlayer(
             publish_callback=self._publish_bvh_command,
-            config_path=self.bvh_action_file,
             logger=self.get_logger()
         )
 

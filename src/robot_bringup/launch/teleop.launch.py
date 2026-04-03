@@ -109,12 +109,6 @@ def generate_launch_description():
         default_value='120',
         description='调试日志聚合单条最大长度',
     )
-    bvh_action_file_arg = DeclareLaunchArgument(
-        'bvh_action_file',
-        default_value='',
-        description='BVH动作配置文件路径',
-    )
-
     execution_teleop_command_topic = LaunchConfiguration('execution_teleop_command_topic')
     execution_teleop_control_topic = LaunchConfiguration('execution_teleop_control_topic')
     execution_motion_command_topic = LaunchConfiguration('execution_motion_command_topic')
@@ -160,7 +154,6 @@ def generate_launch_description():
             {'debug_aggregate': LaunchConfiguration('debug_aggregate')},
             {'debug_aggregate_period': LaunchConfiguration('debug_aggregate_period')},
             {'debug_aggregate_max_len': LaunchConfiguration('debug_aggregate_max_len')},
-            {'bvh_action_file': LaunchConfiguration('bvh_action_file')},
         ],
     )
 
@@ -211,7 +204,6 @@ def generate_launch_description():
         debug_aggregate_arg,
         debug_aggregate_period_arg,
         debug_aggregate_max_len_arg,
-        bvh_action_file_arg,
         log_info,
         execution_manager_node,
         bridge_node,

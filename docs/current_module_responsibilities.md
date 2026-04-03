@@ -111,6 +111,8 @@
   - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前会被桥接层直
     接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停
     止。
+  - 当前也已不再继续把 `bvh_action_file` 作为 WebSocket/bringup 的 public
+    参数入口上抬；BVH 默认配置路径解析已完全收回 `record_load_action`。
   - 解析 WebSocket JSON 消息并下发舵机命令。
   - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与

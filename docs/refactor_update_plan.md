@@ -185,6 +185,9 @@
 - BVH 的运行说明当前也已继续收回 `record_load_action/README.md`；
   `websocket/config/README.md` 只保留指向说明，继续减少 demo 文档职责留在
   `websocket_bridge` 包内。
+- `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
+  `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
+  回 `record_load_action`，继续减少 demo 配置入口留在 teleop 包边界。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
   继续减少 demo 路径对 teleop 主链路的运行时干扰。

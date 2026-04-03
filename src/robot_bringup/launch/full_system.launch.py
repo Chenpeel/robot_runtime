@@ -164,11 +164,6 @@ def generate_launch_description():
         default_value='120',
         description='调试日志聚合单条最大长度',
     )
-    bvh_action_file_arg = DeclareLaunchArgument(
-        'bvh_action_file',
-        default_value='',
-        description='BVH动作配置文件路径',
-    )
     enable_simulation_arg = DeclareLaunchArgument(
         'enable_simulation',
         default_value='true',
@@ -259,7 +254,6 @@ def generate_launch_description():
             'debug_aggregate': LaunchConfiguration('debug_aggregate'),
             'debug_aggregate_period': LaunchConfiguration('debug_aggregate_period'),
             'debug_aggregate_max_len': LaunchConfiguration('debug_aggregate_max_len'),
-            'bvh_action_file': LaunchConfiguration('bvh_action_file'),
         }.items(),
     )
 
@@ -375,7 +369,6 @@ def generate_launch_description():
         debug_aggregate_arg,
         debug_aggregate_period_arg,
         debug_aggregate_max_len_arg,
-        bvh_action_file_arg,
         enable_simulation_arg,
         baudrate_arg,
         i2c_address_arg,

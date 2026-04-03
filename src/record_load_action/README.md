@@ -26,12 +26,9 @@ Directory default:
 config/bvh/
 ```
 
-Override the config path if needed:
-
-```
-ros2 launch robot_bringup full_system.launch.py \
-  bvh_action_file:=/path/to/{this_repo}/src/record_load_action/config/bvh_action_map.json
-```
+Runtime playback now resolves `config/bvh_action_map.json` from
+`record_load_action` by default. `robot_bringup` and `websocket_bridge`
+no longer expose `bvh_action_file` as a public launch/config parameter.
 
 Example:
 

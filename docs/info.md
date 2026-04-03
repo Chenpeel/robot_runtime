@@ -65,6 +65,9 @@
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
 - BVH 的运行说明当前也已继续收回 `record_load_action/README.md`；
   `websocket/config/README.md` 只保留指向说明。
+- `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
+  `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
+  回 `record_load_action`。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public

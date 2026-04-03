@@ -106,6 +106,19 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("self.bvh_command_pub = self.create_publisher(", source)
         self.assertIn("self.bvh_command_pub.publish(msg)", source)
 
+    def test_bridge_node_no_longer_exposes_bvh_config_parameter(self):
+        """BVH 配置路径不应继续作为 websocket bridge 的 public 参数暴露"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertNotIn("self.declare_parameter('bvh_action_file'", source)
+        self.assertNotIn("self.get_parameter('bvh_action_file')", source)
+        self.assertNotIn('config_path=self.bvh_action_file', source)
+
     def test_teleop_ack_payload_includes_execution_snapshot(self):
         """teleop ack 应携带当前 execution_state 快照语义"""
         source = Path(
