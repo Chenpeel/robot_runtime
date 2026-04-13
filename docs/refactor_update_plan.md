@@ -197,6 +197,9 @@
 - `bvh_play` payload 当前也已继续只保留显式直接字段；旧的 `action.bvh`
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前 public
   contract 保留。
+- `websocket_handler` / `ws_server` 当前也已不再继续为 BVH 保留单独
+  callback surface；`bridge_node` 现在通过通用消息注册面接入 `bvh_play`，
+  继续减少 demo 能力在通用 WebSocket 层占据 first-class 接口位。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
   继续减少 demo 路径对 teleop 主链路的运行时干扰。

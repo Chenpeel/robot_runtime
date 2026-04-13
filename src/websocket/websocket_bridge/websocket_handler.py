@@ -51,7 +51,7 @@ class WebSocketHandler:
         self.on_teleop_claim = None  # Callable[[dict], None]
         self.on_teleop_release = None  # Callable[[dict], None]
         self.on_status_query = None  # Callable[[dict], None]
-        self.on_bvh_play = None  # Callable[[dict], None]
+        self.message_callbacks = {}
         
         # 状态管理
         self.servo_state = {}
@@ -106,15 +106,6 @@ class WebSocketHandler:
         """注册 teleop 控制权释放回调。"""
         self.on_teleop_release = callback
 
-    def register_bvh_play_handler(self, callback: Callable):
-        """
-        注册BVH播放处理回调
-
-        Args:
-            callback: async def callback(payload: dict) -> None
-        """
-        self.on_bvh_play = callback
-    
     def register_message_handler(self, msg_type: str, callback: Callable):
         """
         为特定消息类型注册处理器
@@ -123,7 +114,9 @@ class WebSocketHandler:
             msg_type: 消息类型 (如 "servo_control", "heartbeat" 等)
             callback: async def callback(data: dict) -> Optional[str]
         """
-        self.message_handler.register_handler(msg_type, callback)
+        normalized_type = str(msg_type).strip().lower()
+        self.message_callbacks[normalized_type] = callback
+        self.message_handler.register_handler(normalized_type, callback)
     
     async def handle_message(
         self,
@@ -317,9 +310,10 @@ class WebSocketHandler:
                 device_id=self.device_id
             )
 
-        if self.on_bvh_play:
+        callback = self.message_callbacks.get(MessageType.BVH_PLAY.value)
+        if callback:
             try:
-                await self.on_bvh_play(payload)
+                await callback(payload)
             except WebSocketException as e:
                 return e.to_response(self.device_id)
             except Exception as e:

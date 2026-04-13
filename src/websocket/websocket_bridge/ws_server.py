@@ -95,9 +95,9 @@ class WebSocketBridgeServer:
         """设置状态查询回调"""
         self.handler.register_status_query_handler(callback)
 
-    def set_bvh_play_callback(self, callback):
-        """设置BVH播放回调"""
-        self.handler.register_bvh_play_handler(callback)
+    def set_message_callback(self, msg_type: str, callback):
+        """为特定消息类型设置通用回调。"""
+        self.handler.register_message_handler(msg_type, callback)
 
     async def start(self):
         """启动 WebSocket 服务器"""

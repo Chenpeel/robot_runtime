@@ -139,6 +139,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - `bvh_play` payload 当前也只接受直接字段：
   `action`、`loop`、`speed_ms`、`playback_rate`、`frame_ms`；
   旧的 `action.bvh` 嵌套 payload 和顶层 `bvh` 别名都不再保留。
+- 在通用 WebSocket 层内部，`bvh_play` 现在也通过通用消息注册面接入，
+  不再保留专用 BVH callback surface。
 
 状态查询与状态广播现在也会携带执行层反馈：
 
@@ -299,6 +301,7 @@ heartbeat:
 - `set_heartbeat_callback(callback)` - 注册心跳回调
 - `set_teleop_claim_callback(callback)` - 注册 teleop 控制权申请回调
 - `set_teleop_release_callback(callback)` - 注册 teleop 控制权释放回调
+- `set_message_callback(msg_type, callback)` - 为特定消息类型注册通用回调
 - `broadcast_status(status_dict)` - 广播状态到所有客户端
 - `start()` - 启动WebSocket服务器
 - `stop()` - 停止服务器

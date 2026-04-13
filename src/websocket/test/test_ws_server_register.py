@@ -267,7 +267,7 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
             del payload
             bvh_called = True
 
-        server.handler.register_bvh_play_handler(bvh_callback)
+        server.set_message_callback("bvh_play", bvh_callback)
 
         error_response = await server._handle_servo_control_direct(
             {
@@ -280,6 +280,19 @@ class TestWebSocketBridgeServerRegister(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(bvh_called)
         self.assertEqual(response_data["type"], "error")
         self.assertEqual(response_data["error_name"], "INVALID_SERVO_COMMAND")
+
+    def test_set_message_callback_registers_generic_bvh_handler(self):
+        server = WebSocketBridgeServer(device_id='test_device', debug=False)
+
+        async def bvh_callback(payload):
+            del payload
+
+        server.set_message_callback("bvh_play", bvh_callback)
+
+        self.assertIs(
+            server.handler.message_callbacks["bvh_play"],
+            bvh_callback,
+        )
 
 
 if __name__ == '__main__':

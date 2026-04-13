@@ -75,6 +75,8 @@
   名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉。
 - `bvh_play` payload 当前也已继续收紧为显式直接字段；旧的 `action.bvh`
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前事实保留。
+- `websocket_handler` / `ws_server` 当前也已不再继续为 BVH 保留单独 callback
+  surface；`bridge_node` 现在通过通用消息注册面接入 `bvh_play`。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public

@@ -192,7 +192,7 @@ class WebSocketROS2Bridge(Node):
             self.ws_server.set_teleop_release_callback(self.handle_teleop_release)
             self.ws_server.set_heartbeat_callback(self.handle_heartbeat)
             self.ws_server.set_status_query_callback(self.handle_status_query)
-            self.ws_server.set_bvh_play_callback(self.handle_bvh_play)
+            self.ws_server.set_message_callback("bvh_play", self.handle_bvh_play)
 
             # 运行服务器
             try:

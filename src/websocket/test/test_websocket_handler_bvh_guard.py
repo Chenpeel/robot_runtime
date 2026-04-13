@@ -26,7 +26,7 @@ class TestWebSocketHandlerBvhGuard(unittest.TestCase):
                 details={'reason': 'bvh_blocked_by_active_teleop'},
             )
 
-        self.handler.register_bvh_play_handler(bvh_callback)
+        self.handler.register_message_handler("bvh_play", bvh_callback)
 
         response = asyncio.run(
             self.handler.handle_message(
