@@ -115,8 +115,15 @@
     别名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已移除。
   - `bvh_play` payload 当前也只保留显式直接字段；旧的 `action.bvh` 嵌套
     payload 与顶层 `bvh` 历史别名都已移除。
-  - 通用 WebSocket 层当前也已不再为 BVH 保留单独 callback 注册口；
-    `bridge_node` 现在通过通用消息注册面接入 `bvh_play`。
+  - `record_load_action` 当前已提供传输层无关的
+    `normalize_bvh_play_request`，统一承接显式直接字段的规范化与基础结构校
+    验。
+  - 通用 `MessageHandler` 当前已移除 `BVH_PLAY` 枚举和
+    `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式
+    `type` 分发扩展，不再内建 BVH 协议知识。
+  - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
+    `bvh_play` 并调用上述 normalizer，同时保持 `bvh_play_ack` / 错误映射、
+    teleop guard 与 `/execution/motion/command` 输出不变。
   - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前会被桥接层直
     接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停
     止。
@@ -161,6 +168,8 @@
     口，但这仍属于包内局部约束，而不是能力边界本身已经彻底拆开。
   - 虽然隐式触发入口当前已被继续清掉，但 demo/BVH 能力本身仍挂在
     `websocket_bridge` 包内，还没有彻底迁出 teleop 主链路边界。
+  - demo/BVH 播放器的创建与运行生命周期当前仍由 `websocket_bridge` 管
+    理，尚未完成能力边界的最终拆出。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
     但当前还没有更正式的抢占策略和上层接口约束。
@@ -563,6 +572,8 @@
   - 承载 BVH 运行说明与使用约束说明。
   - 提供 BVH 动作播放与静态转换工具。
   - 作为 `bvh_action_map.json` 的唯一配置所有者与默认解析入口。
+  - 提供传输层无关的 `normalize_bvh_play_request`，负责显式 `bvh_play`
+    直接字段的规范化与基础结构校验。
 - 当前主要输入
   - BVH 动作文件
   - WebSocket 侧触发的播放请求

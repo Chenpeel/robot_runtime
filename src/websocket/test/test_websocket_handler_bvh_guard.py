@@ -45,24 +45,43 @@ class TestWebSocketHandlerBvhGuard(unittest.TestCase):
             "bvh_blocked_by_active_teleop",
         )
 
-    def test_bvh_play_rejects_legacy_nested_payload(self):
+    def test_registered_bvh_extension_precedes_servo_content_inference(self):
+        received_payloads = []
+
+        async def bvh_callback(payload):
+            received_payloads.append(payload)
+            return {
+                'status': 'accepted',
+                'action': payload.get('action'),
+                'loop': bool(payload.get('loop', False)),
+            }
+
+        self.handler.register_message_handler('bvh_play', bvh_callback)
+
         response = asyncio.run(
             self.handler.handle_message(
                 json.dumps({
                     "type": "bvh_play",
-                    "action": {
-                        "bvh": "wave",
-                        "loop": True,
-                    },
+                    "id": "request-1",
+                    "action": "wave",
+                    "loop": True,
                 }),
             )
         )
 
         response_data = json.loads(response)
-        self.assertEqual(response_data["type"], "error")
+        self.assertEqual(response_data["type"], "bvh_play_ack")
+        self.assertEqual(response_data["status"], "accepted")
+        self.assertEqual(response_data["action"], "wave")
+        self.assertTrue(response_data["loop"])
         self.assertEqual(
-            response_data["error_name"],
-            "INVALID_PARAMETER_VALUE",
+            received_payloads,
+            [{
+                "type": "bvh_play",
+                "id": "request-1",
+                "action": "wave",
+                "loop": True,
+            }],
         )
 
 

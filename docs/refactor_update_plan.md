@@ -197,12 +197,20 @@
 - `bvh_play` payload 当前也已继续只保留显式直接字段；旧的 `action.bvh`
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前 public
   contract 保留。
-- `websocket_handler` / `ws_server` 当前也已不再继续为 BVH 保留单独
-  callback surface；`bridge_node` 现在通过通用消息注册面接入 `bvh_play`，
-  继续减少 demo 能力在通用 WebSocket 层占据 first-class 接口位。
+- `record_load_action` 当前也已提供传输层无关的
+  `normalize_bvh_play_request`，统一承接显式直接字段的规范化与基础结构校验，
+  继续减少 BVH 请求 contract 对 WebSocket 实现的依赖。
+- 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
+  `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
+  分发扩展，不再内建 BVH 协议知识。
+- `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
+  `bvh_play` 并调用上述 normalizer，同时保持 `bvh_play_ack` / 错误映射、
+  teleop guard 与 `/execution/motion/command` 输出不变。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止，
   继续减少 demo 路径对 teleop 主链路的运行时干扰。
+- demo/BVH 播放器的创建与运行生命周期当前仍留在 `websocket_bridge`，尚未
+  完成能力边界的最终拆出。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 

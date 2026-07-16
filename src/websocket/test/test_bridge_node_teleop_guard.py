@@ -12,6 +12,28 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 def _install_bridge_node_test_stubs():
+    if 'websockets.server' not in sys.modules:
+        websockets_module = types.ModuleType('websockets')
+        server_module = types.ModuleType('websockets.server')
+        exceptions_module = types.ModuleType('websockets.exceptions')
+
+        async def _serve(*args, **kwargs):
+            del args, kwargs
+            return None
+
+        class _WebSocketServerProtocol:
+            pass
+
+        class _ConnectionClosed(Exception):
+            pass
+
+        server_module.serve = _serve
+        server_module.WebSocketServerProtocol = _WebSocketServerProtocol
+        exceptions_module.ConnectionClosed = _ConnectionClosed
+        sys.modules['websockets'] = websockets_module
+        sys.modules['websockets.server'] = server_module
+        sys.modules['websockets.exceptions'] = exceptions_module
+
     if 'motion_msgs.msg' not in sys.modules:
         motion_msgs_module = types.ModuleType('motion_msgs')
         motion_msgs_msg_module = types.ModuleType('motion_msgs.msg')
@@ -80,18 +102,30 @@ def _install_bridge_node_test_stubs():
             def stop(self):
                 return None
 
+        def _normalize_bvh_play_request(payload):
+            if not isinstance(payload, dict):
+                return None
+            if str(payload.get('type') or '').strip().lower() != 'bvh_play':
+                return None
+            if 'action' not in payload:
+                return None
+            action = payload.get('action')
+            if action is not None and not isinstance(action, str):
+                return None
+            return {
+                'action': action,
+                'loop': bool(payload.get('loop', False)),
+                'speed_ms': payload.get('speed_ms'),
+                'playback_rate': payload.get('playback_rate'),
+                'frame_ms': payload.get('frame_ms'),
+            }
+
         bvh_player_module.BvhActionPlayer = _BvhActionPlayer
+        bvh_player_module.normalize_bvh_play_request = (
+            _normalize_bvh_play_request
+        )
         sys.modules['record_load_action'] = record_load_action_module
         sys.modules['record_load_action.bvh_player'] = bvh_player_module
-
-    if 'websocket_bridge.ws_server' not in sys.modules:
-        ws_server_module = types.ModuleType('websocket_bridge.ws_server')
-
-        class _WebSocketBridgeServer:
-            pass
-
-        ws_server_module.WebSocketBridgeServer = _WebSocketBridgeServer
-        sys.modules['websocket_bridge.ws_server'] = ws_server_module
 
     if 'websocket_bridge.debug_aggregator' not in sys.modules:
         debug_aggregator_module = types.ModuleType(
@@ -114,7 +148,9 @@ def _install_bridge_node_test_stubs():
 _install_bridge_node_test_stubs()
 
 from websocket_bridge.bridge_node import WebSocketROS2Bridge
+from websocket_bridge.error_codes import ErrorCode
 from websocket_bridge.error_codes import TeleopControlRejectedException
+from websocket_bridge.error_codes import WebSocketException
 
 
 class TestBridgeNodeTeleopGuard(unittest.TestCase):
@@ -499,7 +535,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             asyncio.run(
                 WebSocketROS2Bridge.handle_bvh_play(
                     bridge,
-                    {'action': 'wave'},
+                    {'type': 'bvh_play', 'action': 'wave'},
                 )
             )
 
@@ -508,6 +544,146 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             'bvh_blocked_by_active_teleop',
         )
         self.assertEqual(bridge.bvh_player.play_calls, [])
+
+    def test_bvh_play_normalizes_request_and_returns_ack_data(self):
+        class _Player:
+            def __init__(self):
+                self.play_calls = []
+
+            def play(self, *args, **kwargs):
+                self.play_calls.append((args, kwargs))
+
+        bridge = self._bridge()
+        bridge.bvh_player = _Player()
+        bridge._ensure_bvh_play_allowed = lambda: None
+
+        result = asyncio.run(
+            WebSocketROS2Bridge.handle_bvh_play(
+                bridge,
+                {
+                    'type': 'bvh_play',
+                    'action': 'wave',
+                    'loop': True,
+                    'speed_ms': 40,
+                    'playback_rate': 1.25,
+                    'frame_ms': 16.7,
+                },
+            )
+        )
+
+        self.assertEqual(
+            result,
+            {
+                'status': 'accepted',
+                'action': 'wave',
+                'loop': True,
+            },
+        )
+        self.assertEqual(
+            bridge.bvh_player.play_calls,
+            [
+                (
+                    ('wave',),
+                    {
+                        'loop': True,
+                        'speed_ms': 40,
+                        'playback_rate': 1.25,
+                        'frame_ms': 16.7,
+                    },
+                )
+            ],
+        )
+
+    def test_bvh_play_rejects_invalid_request_before_player(self):
+        bridge = self._bridge()
+        bridge.bvh_player = types.SimpleNamespace()
+
+        with self.assertRaises(WebSocketException) as ctx:
+            asyncio.run(
+                WebSocketROS2Bridge.handle_bvh_play(
+                    bridge,
+                    {
+                        'type': 'bvh_play',
+                        'action': {'bvh': 'wave'},
+                    },
+                )
+            )
+
+        self.assertEqual(
+            ctx.exception.error_code,
+            ErrorCode.INVALID_PARAMETER_VALUE,
+        )
+
+    def test_bvh_player_failure_keeps_existing_error_contract(self):
+        class _Player:
+            def play(self, *args, **kwargs):
+                del args, kwargs
+                raise RuntimeError('player failed')
+
+        bridge = self._bridge()
+        bridge.bvh_player = _Player()
+        bridge._ensure_bvh_play_allowed = lambda: None
+
+        with self.assertRaises(WebSocketException) as ctx:
+            asyncio.run(
+                WebSocketROS2Bridge.handle_bvh_play(
+                    bridge,
+                    {'type': 'bvh_play', 'action': 'wave'},
+                )
+            )
+
+        self.assertEqual(
+            ctx.exception.error_code,
+            ErrorCode.ROS_CALLBACK_FAILED,
+        )
+        self.assertEqual(ctx.exception.message, 'BVH play failed: player failed')
+        self.assertEqual(
+            ctx.exception.details,
+            {
+                'payload': {
+                    'action': 'wave',
+                    'loop': False,
+                    'speed_ms': None,
+                    'playback_rate': None,
+                    'frame_ms': None,
+                },
+                'exception': 'player failed',
+            },
+        )
+
+    def test_bvh_stop_remains_allowed_while_teleop_is_active(self):
+        class _Player:
+            def __init__(self):
+                self.stop_calls = 0
+
+            def stop(self):
+                self.stop_calls += 1
+
+        bridge = self._bridge(
+            {
+                'teleop_holder_id': 'client-a',
+                'teleop_lease_id': 'lease-1',
+                'teleop_active': True,
+                'active_source': 'teleop',
+            }
+        )
+        bridge.bvh_player = _Player()
+        bridge._ensure_bvh_play_allowed = lambda: self.fail(
+            'stop request must not be blocked by active teleop'
+        )
+
+        result = asyncio.run(
+            WebSocketROS2Bridge.handle_bvh_play(
+                bridge,
+                {'type': 'bvh_play', 'action': None},
+            )
+        )
+
+        self.assertEqual(bridge.bvh_player.stop_calls, 1)
+        self.assertEqual(
+            result,
+            {'status': 'accepted', 'action': None, 'loop': False},
+        )
 
     def test_execution_state_callback_stops_bvh_when_teleop_becomes_active(self):
         class _Player:

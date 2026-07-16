@@ -28,8 +28,11 @@ except Exception:  # pragma: no cover - optional dependency
     HAS_IMU_DATA = False
 
 from .ws_server import WebSocketBridgeServer
+from .error_codes import ErrorCode
 from .error_codes import TeleopControlRejectedException
+from .error_codes import WebSocketException
 from record_load_action.bvh_player import BvhActionPlayer
+from record_load_action.bvh_player import normalize_bvh_play_request
 from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
@@ -331,24 +334,46 @@ class WebSocketROS2Bridge(Node):
 
     async def handle_bvh_play(self, payload: dict):
         """处理BVH动作播放请求"""
-        action = payload.get("action")
-        loop = bool(payload.get("loop", False))
-        speed_ms = payload.get("speed_ms")
-        playback_rate = payload.get("playback_rate")
-        frame_ms = payload.get("frame_ms")
+        request = normalize_bvh_play_request(payload)
+        if request is None:
+            raise WebSocketException(
+                error_code=ErrorCode.INVALID_PARAMETER_VALUE,
+                message="BVH action payload invalid",
+                details={"received_data": payload},
+            )
 
-        if action in (None, '', 'null'):
-            self.bvh_player.stop()
-            return
+        action = request.get("action")
+        loop = bool(request.get("loop", False))
+        speed_ms = request.get("speed_ms")
+        playback_rate = request.get("playback_rate")
+        frame_ms = request.get("frame_ms")
 
-        self._ensure_bvh_play_allowed()
-        self.bvh_player.play(
-            action,
-            loop=loop,
-            speed_ms=speed_ms,
-            playback_rate=playback_rate,
-            frame_ms=frame_ms
-        )
+        try:
+            if action in (None, '', 'null'):
+                self.bvh_player.stop()
+            else:
+                self._ensure_bvh_play_allowed()
+                self.bvh_player.play(
+                    action,
+                    loop=loop,
+                    speed_ms=speed_ms,
+                    playback_rate=playback_rate,
+                    frame_ms=frame_ms
+                )
+        except WebSocketException:
+            raise
+        except Exception as exc:
+            raise WebSocketException(
+                error_code=ErrorCode.ROS_CALLBACK_FAILED,
+                message=f"BVH play failed: {str(exc)}",
+                details={"payload": request, "exception": str(exc)},
+            )
+
+        return {
+            "status": "accepted",
+            "action": action,
+            "loop": loop,
+        }
 
     async def handle_heartbeat(self, context: dict | None = None):
         """处理心跳消息"""

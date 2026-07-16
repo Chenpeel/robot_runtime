@@ -136,7 +136,15 @@ class WebSocketHandler:
         data = self.message_handler.parse_message(raw_message)
         if data is None:
             return None
-        
+
+        explicit_message_type = self._get_explicit_message_type(data)
+        if (
+            explicit_message_type
+            and explicit_message_type in self.message_callbacks
+            and not self._is_builtin_message_type(explicit_message_type)
+        ):
+            return await self._handle_registered_message(data, context)
+
         # 获取消息类型
         msg_type = self.message_handler.get_message_type(data)
         
@@ -151,8 +159,6 @@ class WebSocketHandler:
             return await self._handle_teleop_claim(data, context)
         elif msg_type == MessageType.TELEOP_RELEASE:
             return await self._handle_teleop_release(data, context)
-        elif msg_type == MessageType.BVH_PLAY:
-            return await self._handle_bvh_play(data)
         elif msg_type == MessageType.STATUS_QUERY:
             return await self._handle_status_query(data, context)
         elif msg_type == MessageType.REGISTER:
@@ -162,7 +168,7 @@ class WebSocketHandler:
         elif msg_type == MessageType.PRIVATE:
             return await self._handle_private(data, context)
         else:
-            return None
+            return await self._handle_registered_message(data, context)
     
     async def _handle_heartbeat(
         self,
@@ -299,39 +305,44 @@ class WebSocketHandler:
             device_id=self.device_id
         )
 
-    async def _handle_bvh_play(self, data: Dict[str, Any]) -> Optional[str]:
-        """处理BVH动作播放请求"""
-        payload = self.message_handler.parse_bvh_action(data)
-        if payload is None:
+    async def _handle_registered_message(
+        self,
+        data: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """按显式消息类型调用可选扩展处理器。"""
+        message_type = self._get_explicit_message_type(data)
+        callback = self.message_callbacks.get(message_type)
+        if callback is None:
+            return None
+
+        try:
+            callback_result = await self._invoke_callback_with_context(
+                callback,
+                data,
+                context,
+            )
+        except WebSocketException as e:
+            return e.to_response(self.device_id)
+        except Exception as e:
             return ErrorResponse.create(
-                error_code=ErrorCode.INVALID_PARAMETER_VALUE,
-                message="BVH action payload invalid",
-                details={"received_data": data},
-                device_id=self.device_id
+                error_code=ErrorCode.ROS_CALLBACK_FAILED,
+                message=f"{message_type} handler failed: {str(e)}",
+                details={"received_data": data, "exception": str(e)},
+                device_id=self.device_id,
             )
 
-        callback = self.message_callbacks.get(MessageType.BVH_PLAY.value)
-        if callback:
-            try:
-                await callback(payload)
-            except WebSocketException as e:
-                return e.to_response(self.device_id)
-            except Exception as e:
-                return ErrorResponse.create(
-                    error_code=ErrorCode.ROS_CALLBACK_FAILED,
-                    message=f"BVH play failed: {str(e)}",
-                    details={"payload": payload, "exception": str(e)},
-                    device_id=self.device_id
-                )
+        if isinstance(callback_result, str):
+            return callback_result
+
+        response_data = {"status": "accepted"}
+        if isinstance(callback_result, dict):
+            response_data.update(callback_result)
 
         return SuccessResponse.create(
-            response_type="bvh_play_ack",
-            data={
-                "status": "accepted",
-                "action": payload.get("action"),
-                "loop": bool(payload.get("loop", False))
-            },
-            device_id=self.device_id
+            response_type=f"{message_type}_ack",
+            data=response_data,
+            device_id=self.device_id,
         )
     
     async def _handle_status_query(
@@ -519,6 +530,25 @@ class WebSocketHandler:
             "control_confirmed": control_confirmed,
             "confirmation_source": "execution_state",
         }
+
+    @staticmethod
+    def _get_explicit_message_type(data: Dict[str, Any]) -> str:
+        """提取用于扩展回调分发的显式消息类型。"""
+        if not isinstance(data, dict):
+            return ""
+        for key in ("type", "Type", "TYPE"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip().lower()
+        return ""
+
+    @staticmethod
+    def _is_builtin_message_type(message_type: str) -> bool:
+        """判断显式类型是否属于不可被扩展回调覆盖的内建消息。"""
+        try:
+            return MessageType(message_type) is not MessageType.UNKNOWN
+        except ValueError:
+            return False
 
     async def _invoke_callback(
         self,

@@ -17,7 +17,6 @@ class MessageType(Enum):
     SERVO_CONTROL = "servo_control"
     TELEOP_CLAIM = "teleop_claim"
     TELEOP_RELEASE = "teleop_release"
-    BVH_PLAY = "bvh_play"
     BROADCAST = "broadcast"
     PRIVATE = "private"
     REGISTER = "register"
@@ -104,8 +103,6 @@ class MessageHandler:
 
         if msg_type:
             # 映射到枚举
-            if msg_type == "bvh_play":
-                return MessageType.BVH_PLAY
             try:
                 return MessageType(msg_type)
             except ValueError:
@@ -172,42 +169,6 @@ class MessageHandler:
             if self.debug:
                 logger.debug(f"未知消息类型: {msg_type.value}")
             return None
-
-    def parse_bvh_action(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        解析BVH动作请求
-
-        仅支持显式直接字段格式:
-        {
-          "type": "bvh_play",
-          "action": "walk",
-          "loop": false,
-          "speed_ms": 33,
-          "playback_rate": 1.0,
-          "frame_ms": 16.7
-        }
-        """
-        if not isinstance(data, dict):
-            return None
-
-        msg_type = str(data.get("type") or "").strip().lower()
-        if msg_type != MessageType.BVH_PLAY.value:
-            return None
-
-        if "action" not in data:
-            return None
-
-        action_name = data.get("action")
-        if action_name is not None and not isinstance(action_name, str):
-            return None
-
-        return {
-            "action": action_name,
-            "loop": bool(data.get("loop", False)),
-            "speed_ms": data.get("speed_ms"),
-            "playback_rate": data.get("playback_rate"),
-            "frame_ms": data.get("frame_ms"),
-        }
 
     def _create_heartbeat_response(self) -> str:
         """创建心跳响应"""

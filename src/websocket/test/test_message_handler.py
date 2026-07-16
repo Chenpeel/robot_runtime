@@ -58,12 +58,12 @@ class TestMessageHandler:
 
         assert msg_type == MessageType.TELEOP_RELEASE
 
-    def test_get_message_type_bvh_play(self):
-        """测试显式 bvh_play 消息识别。"""
+    def test_get_message_type_bvh_play_is_unknown(self):
+        """测试通用处理器不识别显式 bvh_play 消息。"""
         data = {"type": "bvh_play", "action": "walk"}
         msg_type = self.handler.get_message_type(data)
 
-        assert msg_type == MessageType.BVH_PLAY
+        assert msg_type == MessageType.UNKNOWN
 
     def test_get_message_type_case_insensitive(self):
         """测试消息类型识别大小写不敏感"""
@@ -124,62 +124,6 @@ class TestMessageHandler:
         data = {"type": "action", "action": "walk"}
 
         assert self.handler.get_message_type(data) == MessageType.UNKNOWN
-
-    def test_parse_bvh_action_accepts_explicit_direct_fields(self):
-        """测试 BVH payload 只接受显式直接字段。"""
-        data = {
-            "type": "bvh_play",
-            "action": "walk",
-            "loop": True,
-            "speed_ms": 33,
-            "playback_rate": 1.1,
-            "frame_ms": 16.7,
-        }
-
-        result = self.handler.parse_bvh_action(data)
-
-        assert result == {
-            "action": "walk",
-            "loop": True,
-            "speed_ms": 33,
-            "playback_rate": 1.1,
-            "frame_ms": 16.7,
-        }
-
-    def test_parse_bvh_action_allows_explicit_stop(self):
-        """测试显式 bvh_play 仍允许 action 为空表示停止。"""
-        data = {
-            "type": "bvh_play",
-            "action": None,
-        }
-
-        result = self.handler.parse_bvh_action(data)
-
-        assert result == {
-            "action": None,
-            "loop": False,
-            "speed_ms": None,
-            "playback_rate": None,
-            "frame_ms": None,
-        }
-
-    def test_parse_bvh_action_rejects_nested_action_payload(self):
-        """测试不再接受旧的 action.bvh 嵌套 payload。"""
-        data = {
-            "type": "bvh_play",
-            "action": {"bvh": "walk"},
-        }
-
-        assert self.handler.parse_bvh_action(data) is None
-
-    def test_parse_bvh_action_rejects_top_level_bvh_alias(self):
-        """测试不再接受顶层 bvh 历史别名。"""
-        data = {
-            "type": "bvh_play",
-            "bvh": "walk",
-        }
-
-        assert self.handler.parse_bvh_action(data) is None
 
     def test_parse_bcp_protocol_bus_servo(self):
         """测试解析 BCP 协议 - 总线舵机"""

@@ -138,9 +138,12 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   再保留。
 - `bvh_play` payload 当前也只接受直接字段：
   `action`、`loop`、`speed_ms`、`playback_rate`、`frame_ms`；
-  旧的 `action.bvh` 嵌套 payload 和顶层 `bvh` 别名都不再保留。
-- 在通用 WebSocket 层内部，`bvh_play` 现在也通过通用消息注册面接入，
-  不再保留专用 BVH callback surface。
+  旧的 `action.bvh` 嵌套 payload 和顶层 `bvh` 别名都不再保留；这组字段
+  的规范化与基础结构校验当前由 `record_load_action` 持有。
+- 在通用 WebSocket 层内部，`bvh_play` 现在通过显式类型的通用消息注册面
+  接入；`MessageHandler` 不再保留 BVH 枚举、专用 payload parser 或专用
+  callback surface。`bridge_node` 当前仍保留 WebSocket 适配、播放器编排、
+  teleop 联锁和 ACK/错误响应映射。
 
 状态查询与状态广播现在也会携带执行层反馈：
 

@@ -75,10 +75,18 @@
   名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉。
 - `bvh_play` payload 当前也已继续收紧为显式直接字段；旧的 `action.bvh`
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前事实保留。
-- `websocket_handler` / `ws_server` 当前也已不再继续为 BVH 保留单独 callback
-  surface；`bridge_node` 现在通过通用消息注册面接入 `bvh_play`。
+- `record_load_action` 当前也已提供传输层无关的
+  `normalize_bvh_play_request`，统一承接显式直接字段的规范化与基础结构校验。
+- 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
+  `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
+  分发扩展，不再内建 BVH 协议知识。
+- `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
+  `bvh_play` 并调用上述 normalizer，同时保持 `bvh_play_ack` / 错误映射、
+  teleop guard 与 `/execution/motion/command` 输出不变。
 - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
   接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
+- demo/BVH 播放器的创建与运行生命周期当前仍留在 `websocket_bridge`，能力
+  边界尚未完成最终拆出。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public
   surface 在本轮也已基本收口完成；当前剩余更多是最终包边界合并与必要维
   护，而不再是主推进阻塞项。
@@ -128,6 +136,9 @@
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会优先采用这组显式语义继续下发。
+- `bvh_play` 请求的显式直接字段规范化与基础结构校验当前也已从通用
+  `MessageHandler` 收回 `record_load_action`；WebSocket 通用层会优先按已注
+  册的显式扩展分发，`bridge_node` 保留当前传输适配、播放器编排与执行联锁。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接

@@ -64,6 +64,22 @@ Action file (`config/bvh/walking.json`) example:
 - If teleop is currently active, a new BVH playback request is rejected.
 - If teleop becomes active during playback, the current BVH playback is stopped.
 
+## Play Request Contract
+
+`record_load_action.bvh_player.normalize_bvh_play_request` owns the
+transport-independent normalization of explicit `bvh_play` requests. The
+accepted direct fields are:
+
+- `action`: action name, or `null` to stop playback
+- `loop`
+- `speed_ms`
+- `playback_rate`
+- `frame_ms`
+
+Legacy nested `action.bvh` payloads and the top-level `bvh` alias are not
+accepted. Transport adapters such as `websocket_bridge` remain responsible
+for their own acknowledgement and error response formats.
+
 ## Static Conversion (optional)
 
 Runtime playback parses BVH directly in `record_load_action/bvh_player.py`.
