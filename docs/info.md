@@ -58,14 +58,16 @@
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
   `value_encoding` 表达 `MotionCommand` 语义；求解器输出当前只保留
   `duration_ms` 时长字段，控制器只读取该显式时长并发布，不再回退或镜像旧
-  `speed` 字段；该包内旧词表仅保留在 `speed` / `default_speed` 参数名中。
+  `speed` 字段；公共字段已进入弃用迁移窗口，该包内旧词表仅保留在
+  `speed` / `default_speed` 参数名中。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
   前归一到 pulse us。WebSocket payload 与规范化 ack 仍保留兼容 `speed`，但
-  默认 teleop producer 发布 `MotionCommand` 时已不再写入该镜像。
+  默认 teleop producer 发布 `MotionCommand` 时已不再写入该镜像；这组外部
+  协议字段与已弃用的 ROS 公共消息字段是两个独立合同。
 - `execution_manager` 当前也已继续收紧 `MotionCommand` consumer 侧时长解
   析：内部 setpoint 时长只来自显式正值 `duration_ms`，不再从旧
-  `speed` 回退推导。
+  `speed` 回退推导；adapter 测试也不再伪造该旧字段输入。
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
@@ -101,6 +103,12 @@
 - `BvhWebSocketExtension` 当前也已只把回调提供的执行时长写入显式
   `duration_ms`，不再镜像旧 `MotionCommand.speed`；请求级 `speed_ms` 合同与
   播放器内部 timing 行为保持不变。
+- `MotionCommand.speed` 当前已明确标记为弃用，仅在公共消息迁移窗口内保
+  留；仓库级源码门禁会同时禁止内置 producer / consumer 重新读写该字段，并
+  保护 WebSocket、BVH 和驱动层的不同 `speed` 合同。
+- `docs/motion_command_speed_migration.md` 已记录删除字段前的仓外依赖、旧
+  rosbag、目标 schema、版本策略、clean rebuild 与同步重启门禁。当前未取得
+  这些外部事实，因此本轮不修改 ROS 公共消息布局。
 - `record_load_action/bvh_websocket_demo.launch.py` 是当前显式 opt-in 入口；
   默认 `robot_bringup` teleop/full-system 与默认 WebSocket schema 均不再装
   配或广告 BVH。
@@ -134,7 +142,7 @@
 
 下一优先级定义为：
 
-**Phase C-Next：继续收紧 `MotionCommand` 的中性执行语义**
+**Phase C-Next：冻结 `MotionCommand` 下一版 schema 与 breaking 切换门禁**
 
 原因：
 
@@ -142,20 +150,29 @@
   口，这两块不再是当前主推进阻塞项。
 - `MotionCommand.duration_ms` / `value_encoding` 已成为 producer 与 consumer
   的主语义；execution consumer 侧旧 `speed` 回退与仓库内置 producer 镜像均
-  已移除，但公共接口仍保留 servo 风格过渡字段。
-- 当前更适合沿既有中性 setpoint 适配层做小步收紧，而不是立即改包名、移动
-  目录或继续深挖 demo 内部实现。
+  已移除，公共 `speed` 字段也已进入带自动化 no-read / no-write 门禁的弃用
+  迁移窗口。
+- 删除 ROS `.msg` 字段会改变类型描述、生成代码与序列化布局。当前仓库无法
+  自动证明不存在仓外 consumer、旧 rosbag 或旧部署镜像，因此不能把逻辑脱
+  钩直接等同于可安全删除公共字段。
+- `servo_type`、`servo_id`、`position` 等其他 servo 风格字段仍未冻结最终
+  方向；应先决定是否统一安排一次 breaking 变更，避免连续修改公共 ABI。
 
 
 ## 5. 下一阶段建议范围
 
 下一阶段建议范围控制在：
 
-- 审计 `MotionCommand` 的所有 producer / consumer，只选择一个可独立验证
-  的旧字段依赖继续收紧；不在同一阶段同时改消息定义和所有调用方。
-- 继续稳定 `duration_ms`、`value_encoding` 的主语义优先级；consumer 侧旧
-  `speed` 时长回退和仓库内置 producer 镜像均已移除，后续再评估公共字段与
-  其他 servo 风格过渡字段的收紧方式。
+- 按 `docs/motion_command_speed_migration.md` 盘点仓库外 publisher /
+  subscriber、topic override、旧 rosbag、外部工作空间、生成绑定和部署镜
+  像，并为每项保留可追溯结论。
+- 审计 `servo_type`、`servo_id`、`position` 等剩余过渡字段的 producer /
+  consumer，冻结下一版目标 schema；本阶段只形成接口决策，不顺带修改公共
+  消息布局。
+- 明确采用“原消息名停机原子切换”还是“版本化新消息 / topic 并行迁移”，
+  以及 `motion_msgs` 的 breaking-change 版本策略。
+- 只有迁移门禁全部通过且具备 ROS 2 / colcon 验证环境时，才单独提交字段删
+  除、依赖包 clean rebuild 与新 schema pub/sub 冒烟验证。
 - `websocket_bridge` 后续只继续处理 teleop / debug / status 的剩余混杂，
   不重新把 BVH capability、配置或样例放回默认核心。
 - 仿真域后续只保留必要维护，不再把内部实现细节重新上抬到
@@ -171,7 +188,11 @@
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会只采用这组显式时长语义继续下发，不再镜像旧 `MotionCommand.speed`。
 - `execution_manager/command_adapter.py` 当前也已移除 consumer 侧旧
-  `speed` 时长回退，只把正值 `duration_ms` 提升为内部执行时长。
+  `speed` 时长回退，只把正值 `duration_ms` 提升为内部执行时长；测试 fixture
+  也已清除旧公共字段，改为覆盖缺失、非法和非正 `duration_ms`。
+- `motion_msgs` 当前已把公共 `MotionCommand.speed` 标记为弃用，并注册标准
+  库源码合同测试，禁止三个内置 producer 写入或 execution adapter 读取该字
+  段；根 README 的失效 CLI 示例也已改走显式 `duration_ms` motion 入口。
 - `bvh_play` 请求规范化、ack、错误映射、motion publisher、执行联锁与播放
   生命周期当前均已收回 `record_load_action` 的可选 capability；
   `bridge_node` 只保留通用扩展工厂、状态通知与关闭钩子。
@@ -252,10 +273,11 @@
 下一阶段建议优先审计的文件：
 
 - `src/motion_msgs/msg/MotionCommand.msg`
-- `src/execution_manager/test/test_command_adapter.py`
-- `src/parallel_3dof_controller/test/test_motion_command_fields_source.py`
-- `src/websocket/test/test_bridge_node_topics.py`
-- `src/record_load_action/test/test_bvh_websocket_extension.py`
+- `docs/motion_command_speed_migration.md`
+- `src/execution_manager/execution_manager/command_adapter.py`
+- `src/websocket/websocket_bridge/bridge_node.py`
+- `src/parallel_3dof_controller/parallel_3dof_controller/controller_node.py`
+- `src/record_load_action/record_load_action/bvh_websocket_extension.py`
 
 实施后必须同步更新：
 

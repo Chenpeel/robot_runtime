@@ -88,9 +88,10 @@ it beside `full_system.launch.py` on the same WebSocket port.
 
 - BVH/demo playback publishes `MotionCommand` to `/execution/motion/command`.
 - `BvhWebSocketExtension` writes callback-provided execution timing to explicit
-  `duration_ms` and no longer mirrors it into the legacy `MotionCommand.speed`
-  field. The `speed_ms` request contract and playback resource timing fields
-  remain unchanged.
+  `duration_ms`. The deprecated `MotionCommand.speed` field remains only for
+  the public-message migration window and the extension must not write it. The
+  `speed_ms` request contract and playback resource timing fields remain
+  unchanged.
 - It does not reuse the teleop command entry.
 - If teleop is currently active, a new BVH playback request is rejected.
 - If teleop becomes active during playback, the current BVH playback is stopped.

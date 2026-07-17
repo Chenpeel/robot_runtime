@@ -88,7 +88,7 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
   - position: 兼容目标值字段，当前写入 bus pulse us
   - value_encoding: 目标值编码，当前写入 `bus_pulse_us`
   - duration_ms: 显式运动时长（毫秒）
-  - speed: 公共消息保留的旧兼容字段；当前控制器不再写入该镜像
+  - speed: 已弃用，仅在公共消息迁移窗口内保留；当前控制器禁止写入
   - 默认值为 `/execution/motion/command`
   - 当前仍保留 `servo_type`、`servo_id` 等过渡字段
 

@@ -268,13 +268,16 @@ ros2 topic echo /execution/state
 # 查看舵机状态
 ros2 topic echo /servo/state
 
+# 发送测试命令（推荐走 motion 执行边界）
+# 需确保 teleop 未持有控制权
+ros2 topic pub /execution/motion/command motion_msgs/msg/MotionCommand \
+  "{servo_type: 'bus', servo_id: 1, position: 1500, \
+  value_encoding: 'bus_pulse_us', duration_ms: 100}" --once
+
 # 发送 teleop 控制权申请
+# 与上面的 motion 测试命令独立使用
 ros2 topic pub /execution/teleop/control motion_msgs/msg/TeleopControl \
   "{action: 'claim'}" --once
-
-# 发送测试命令（推荐走执行边界）
-ros2 topic pub /execution/teleop/command motion_msgs/msg/MotionCommand \
-  "{servo_type: 'bus', servo_id: 1, position: 1500, speed: 100}"
 
 # 发送测试命令（驱动直连，仅调试用）
 ros2 topic pub /servo/command servo_msgs/msg/ServoCommand \

@@ -100,7 +100,8 @@
     显式补 `value_encoding` / `duration_ms`，并在 bus 输入为角度时先归一到
     pulse us 后再下发。
   - WebSocket payload 与规范化 ack 仍保留兼容 `speed`；默认 teleop
-    `MotionCommand` producer 只写入 `duration_ms`，不再镜像旧 `speed` 字段。
+    `MotionCommand` producer 只写入 `duration_ms`，不再镜像已弃用的公共
+    `speed` 字段；两者属于不同协议层合同。
   - 在将 teleop 命令下发到执行层前，先基于最新 `execution_state` 做一层
     holder / lease 预校验；若当前连接缺少 requester / lease 或尚未确认控制
     权，会直接返回错误回包。
@@ -161,8 +162,9 @@
     `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，且默认 teleop
     producer 已只写入 `duration_ms` / `value_encoding` 这组显式语义；但
-    WebSocket payload 仍保留兼容 `speed`，公共消息层也仍保留
-    `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。
+    WebSocket payload 仍保留兼容 `speed`；公共消息层仍保留
+    `servo_type`、`servo_id`、`position` 等过渡定义，另有已弃用、仅在迁移
+    窗口内保留且仓库内禁止读写的 `speed` 字段。
 - 与长期规划的关系
   - 长期上更接近 `teleoperation_bridge` 的前身。
   - 整机主 launch 已迁到 `robot_bringup`。
@@ -237,7 +239,7 @@
   - 进行 3-DOF 并联机构运动学求解。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
-    `value_encoding` 作为主语义，不再镜像写入旧 `speed` 字段。
+    `value_encoding` 作为主语义，不再镜像写入已弃用的 `speed` 字段。
   - 求解器输出当前只保留 `duration_ms` 时长字段，控制器也只消费该字段；旧
     词表仅保留在 `rpy_to_servo_commands(..., speed=...)` 与
     `default_speed` 参数名中，不再进入内部命令 dict 或 `MotionCommand`。
@@ -288,8 +290,8 @@
   - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间与 teleop
     身份做仲裁，不再要求一层伪 `CommandFrame` 中间快照。
   - 优先读取 `MotionCommand.value_encoding`，缺失时按 actuator type 补过渡
-    默认编码；内部 setpoint 时长只读取显式正值 `duration_ms`，不再回退读取
-    旧 `MotionCommand.speed`。
+    默认编码；`duration_ms` 是 `MotionCommand` 唯一执行时长输入，公共
+    `speed` 字段已弃用且执行层禁止读取。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
@@ -317,8 +319,10 @@
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
-    仓库内置 `MotionCommand` producer 也已停止写入该镜像，但公共命令字段仍
-    带有明显的 servo 风格命名。
+    仓库内置 `MotionCommand` producer 也已停止写入该镜像，公共字段已标记弃
+    用并建立源码门禁；但删除它属于 breaking ROS interface change，仍需先
+    确认仓外 consumer、旧 rosbag、目标 schema 与全量同步切换条件。其余公共
+    命令字段也仍带有明显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
@@ -558,9 +562,9 @@
   - 该扩展独立持有指向 `/execution/motion/command` 的 `MotionCommand`
     publisher，并承担 `bvh_play` 注册、accepted ack、BVH 错误映射、
     execution state 驱动的 teleop 播放联锁以及 adapter/runtime 关闭生命周期。
-  - 该扩展只把回调提供的执行时长写入显式 `duration_ms`，不再镜像旧
-    `MotionCommand.speed`；请求级 `speed_ms` 合同与播放器内部 timing 行为
-    保持不变。
+  - 该扩展只把回调提供的执行时长写入显式 `duration_ms`，禁止写入迁移窗口
+    内保留的已弃用 `MotionCommand.speed`；请求级 `speed_ms` 合同与播放器内
+    部 timing 行为保持不变。
   - 提供 `bvh_websocket_demo.launch.py` 作为显式演示入口；它 include
     `robot_bringup/teleop.launch.py`，显式传入
     `record_load_action.bvh_websocket_extension:create_extension`，并将
@@ -709,5 +713,6 @@
 `websocket_bridge` 核心抽离为 `record_load_action` 所有的显式可选扩展。
 但整体上仍需继续面对这些现实问题：`websocket_bridge` 仍混合
 teleop/debug/status/IMU 上行职责，`parallel_3dof_controller` 虽已输出
-`MotionCommand`，但接口仍保留 servo 风格过渡字段，C++ 仿真桥仍待最终包
-边界合并。长期规划应继续保留，当前事实则由本文负责单独记录。
+`MotionCommand`，但接口仍保留 servo 风格过渡字段；其中 `speed` 已进入弃
+用迁移窗口，尚待外部依赖和 breaking 切换门禁确认。C++ 仿真桥仍待最终包边
+界合并。长期规划应继续保留，当前事实则由本文负责单独记录。

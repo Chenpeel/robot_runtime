@@ -17,7 +17,6 @@ def test_motion_command_to_setpoint_requires_explicit_duration_ms():
         servo_type='bus',
         servo_id=7,
         position=1500,
-        speed=120,
         value_encoding='',
         duration_ms=0,
     )
@@ -52,12 +51,11 @@ def test_setpoint_to_servo_fields_preserves_driver_values():
     }
 
 
-def test_motion_command_to_setpoint_prefers_explicit_duration_and_encoding():
+def test_motion_command_to_setpoint_uses_explicit_duration_and_encoding():
     msg = SimpleNamespace(
         servo_type='bus',
         servo_id=2,
         position=1800,
-        speed=90,
         value_encoding='bus_pulse_us',
         duration_ms=45,
     )
@@ -73,33 +71,11 @@ def test_motion_command_to_setpoint_prefers_explicit_duration_and_encoding():
     )
 
 
-def test_motion_command_to_setpoint_ignores_speed_when_duration_missing():
+def test_motion_command_to_setpoint_defaults_missing_duration_to_zero():
     msg = SimpleNamespace(
         servo_type='bus',
         servo_id=4,
         position=1600,
-        speed=120,
-        value_encoding='bus_pulse_us',
-        duration_ms=0,
-    )
-
-    setpoint = motion_command_to_setpoint(msg)
-
-    assert setpoint == ActuatorSetpoint(
-        actuator_type='bus',
-        actuator_id=4,
-        target_raw=1600,
-        value_encoding='bus_pulse_us',
-        duration_ms=0,
-    )
-
-
-def test_motion_command_to_setpoint_ignores_missing_duration_attribute_speed():
-    msg = SimpleNamespace(
-        servo_type='bus',
-        servo_id=4,
-        position=1600,
-        speed=120,
         value_encoding='bus_pulse_us',
     )
 
@@ -114,14 +90,13 @@ def test_motion_command_to_setpoint_ignores_missing_duration_attribute_speed():
     )
 
 
-def test_motion_command_to_setpoint_keeps_explicit_duration_when_speed_invalid():
+def test_motion_command_to_setpoint_normalizes_invalid_duration_to_zero():
     msg = SimpleNamespace(
         servo_type='pca',
         servo_id=5,
         position=300,
-        speed='invalid',
         value_encoding='pca_tick',
-        duration_ms=35,
+        duration_ms='invalid',
     )
 
     setpoint = motion_command_to_setpoint(msg)
@@ -131,5 +106,25 @@ def test_motion_command_to_setpoint_keeps_explicit_duration_when_speed_invalid()
         actuator_id=5,
         target_raw=300,
         value_encoding='pca_tick',
-        duration_ms=35,
+        duration_ms=0,
+    )
+
+
+def test_motion_command_to_setpoint_normalizes_non_positive_duration_to_zero():
+    msg = SimpleNamespace(
+        servo_type='pca',
+        servo_id=5,
+        position=300,
+        value_encoding='pca_tick',
+        duration_ms=-1,
+    )
+
+    setpoint = motion_command_to_setpoint(msg)
+
+    assert setpoint == ActuatorSetpoint(
+        actuator_type='pca',
+        actuator_id=5,
+        target_raw=300,
+        value_encoding='pca_tick',
+        duration_ms=0,
     )

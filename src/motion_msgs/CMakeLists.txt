@@ -16,6 +16,19 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES builtin_interfaces
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_test REQUIRED)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+  ament_add_test(test_motion_command_speed_migration
+    COMMAND
+      "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/test/test_motion_command_speed_migration.py"
+    ENV "PYTHONDONTWRITEBYTECODE=1"
+    TIMEOUT 60
+  )
+endif()
+
 ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

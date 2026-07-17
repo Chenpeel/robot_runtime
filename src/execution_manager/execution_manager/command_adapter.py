@@ -20,8 +20,8 @@ def motion_command_to_setpoint(msg) -> ActuatorSetpoint:
 
     这里显式收敛当前过渡语义：
     - ``position`` 在执行层内部视为原始目标值 ``target_raw``
-    - ``duration_ms`` 是执行时长主字段
-    - ``speed`` 只作为旧 producer 的兼容镜像字段，不再参与内部时长解析
+    - ``duration_ms`` 是 MotionCommand 唯一的执行时长输入
+    - 公共 ``speed`` 字段已弃用，执行层不读取该字段
     """
     return ActuatorSetpoint(
         actuator_type=str(msg.servo_type),

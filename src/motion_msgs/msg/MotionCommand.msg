@@ -10,7 +10,9 @@ uint16 servo_id
 # 目标位置
 uint16 position
 
-# 兼容镜像字段：旧 producer/driver 语义中的执行时长（毫秒）
+# DEPRECATED：仅在公共消息迁移窗口内保留，仓库内置 producer/consumer
+# 已禁止读写该字段。新调用方必须使用 duration_ms。
+# 后续删除属于破坏性 ROS 接口变更，必须统一重建并同步重启全部依赖节点。
 uint16 speed
 
 # 目标值编码

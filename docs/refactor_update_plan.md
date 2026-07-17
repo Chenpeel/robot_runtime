@@ -188,6 +188,12 @@
 - `execution_manager` 当前也已移除 consumer 侧旧 `speed` 时长回退：内部
   setpoint 时长只来自显式正值 `duration_ms`，旧 `MotionCommand.speed` 不
   再被提升为内部执行时长。
+- 公共 `MotionCommand.speed` 当前已标记为弃用，仅在接口迁移窗口内保留；
+  `motion_msgs` 已增加 no-read / no-write 源码合同并注册为 60 秒测试，同时
+  保护 WebSocket、BVH 与 `ServoCommand.speed` 这三类独立合同。
+- 字段删除会改变 ROS 类型描述、生成代码与序列化布局。当前已新增专项迁移说
+  明，记录仓外 consumer、旧 rosbag、目标 schema、版本策略、clean rebuild
+  和同步重启门禁；这些外部条件确认前不直接修改 `.msg` 布局。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `MotionCommand` 风格字段：显式补 `value_encoding` / `duration_ms`，并把
   bus 目标值在桥接前归一到 pulse us；WebSocket payload 与规范化 ack 仍保留
@@ -239,7 +245,9 @@
 2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留；
    当前已先在 `execution_manager` 内部补上中性适配层，并已为消息增量补充更
    明确的时长和编码语义；consumer 侧旧 `speed` 时长回退与仓库内置 producer
-   镜像均已移除。下一步重点转为公共消息里的 servo 风格过渡字段。
+   镜像均已移除，公共字段也已进入带源码门禁的弃用迁移窗口。下一步先冻结
+   `servo_type`、`servo_id`、`position` 等剩余字段的目标 schema，并完成仓外
+   依赖与 breaking 切换确认，再决定一次性公共接口变更范围。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
@@ -456,7 +464,8 @@
 
 1. `motion_msgs` 语义收紧
    - consumer 侧已不再依赖旧 `speed` 时长回退，仓库内置 producer 也已停止
-     写入该镜像；后续继续收紧公共消息里的 servo 风格过渡字段。
+     写入该镜像；公共字段已进入弃用迁移窗口并有自动化门禁。后续先冻结完整
+     目标 schema、确认仓外依赖与切换策略，不在证据不足时直接破坏 ROS 接口。
 2. 继续稳定执行边界
    - 后续再按独立阶段收紧 teleop lease、抢占、超时与跨入口统一准入语义。
 3. `websocket_bridge` 剩余职责收紧
