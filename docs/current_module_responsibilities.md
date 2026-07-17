@@ -317,9 +317,8 @@
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
-    `parallel_3dof_controller` 与默认 WebSocket teleop producer 也已清除各自
-    的 `speed` 镜像，但可选 BVH 等其他 producer 仍保留兼容镜像，且外部命令
-    字段仍带有明显的 servo 风格命名。
+    仓库内置 `MotionCommand` producer 也已停止写入该镜像，但公共命令字段仍
+    带有明显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
@@ -559,6 +558,9 @@
   - 该扩展独立持有指向 `/execution/motion/command` 的 `MotionCommand`
     publisher，并承担 `bvh_play` 注册、accepted ack、BVH 错误映射、
     execution state 驱动的 teleop 播放联锁以及 adapter/runtime 关闭生命周期。
+  - 该扩展只把回调提供的执行时长写入显式 `duration_ms`，不再镜像旧
+    `MotionCommand.speed`；请求级 `speed_ms` 合同与播放器内部 timing 行为
+    保持不变。
   - 提供 `bvh_websocket_demo.launch.py` 作为显式演示入口；它 include
     `robot_bringup/teleop.launch.py`，显式传入
     `record_load_action.bvh_websocket_extension:create_extension`，并将

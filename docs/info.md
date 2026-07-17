@@ -98,6 +98,9 @@
 - `record_load_action` 当前已提供 `BvhWebSocketExtension`，由它持有
   `/execution/motion/command` publisher、注册显式 `bvh_play`、映射既有 ack
   与错误类别，并将 execution state 原子提交到播放门禁。
+- `BvhWebSocketExtension` 当前也已只把回调提供的执行时长写入显式
+  `duration_ms`，不再镜像旧 `MotionCommand.speed`；请求级 `speed_ms` 合同与
+  播放器内部 timing 行为保持不变。
 - `record_load_action/bvh_websocket_demo.launch.py` 是当前显式 opt-in 入口；
   默认 `robot_bringup` teleop/full-system 与默认 WebSocket schema 均不再装
   配或广告 BVH。
@@ -138,8 +141,8 @@
 - BVH/demo 已完成 opt-in 断依赖，sim 域 package-level surface 也已基本收
   口，这两块不再是当前主推进阻塞项。
 - `MotionCommand.duration_ms` / `value_encoding` 已成为 producer 与 consumer
-  的主语义；execution consumer 侧旧 `speed` 回退已移除，但 servo 风格字段
-  仍存在于公共接口及多个 producer 中。
+  的主语义；execution consumer 侧旧 `speed` 回退与仓库内置 producer 镜像均
+  已移除，但公共接口仍保留 servo 风格过渡字段。
 - 当前更适合沿既有中性 setpoint 适配层做小步收紧，而不是立即改包名、移动
   目录或继续深挖 demo 内部实现。
 
@@ -151,7 +154,8 @@
 - 审计 `MotionCommand` 的所有 producer / consumer，只选择一个可独立验证
   的旧字段依赖继续收紧；不在同一阶段同时改消息定义和所有调用方。
 - 继续稳定 `duration_ms`、`value_encoding` 的主语义优先级；consumer 侧旧
-  `speed` 时长回退已移除，后续再评估 producer 镜像与公共字段删除。
+  `speed` 时长回退和仓库内置 producer 镜像均已移除，后续再评估公共字段与
+  其他 servo 风格过渡字段的收紧方式。
 - `websocket_bridge` 后续只继续处理 teleop / debug / status 的剩余混杂，
   不重新把 BVH capability、配置或样例放回默认核心。
 - 仿真域后续只保留必要维护，不再把内部实现细节重新上抬到
@@ -245,13 +249,13 @@
 - 后续仍应继续统一仿真域 message contract 与包边界，但这部分当前已不再
   是主推进面，而是后续阶段的维护与最终合并事项。
 
-建议优先修改的文件：
+下一阶段建议优先审计的文件：
 
-- `src/execution_manager/execution_manager/command_adapter.py`
+- `src/motion_msgs/msg/MotionCommand.msg`
 - `src/execution_manager/test/test_command_adapter.py`
-- `src/parallel_3dof_controller/parallel_3dof_controller/controller_node.py`
-- `src/websocket/websocket_bridge/bridge_node.py`
-- `src/record_load_action/record_load_action/bvh_websocket_extension.py`
+- `src/parallel_3dof_controller/test/test_motion_command_fields_source.py`
+- `src/websocket/test/test_bridge_node_topics.py`
+- `src/record_load_action/test/test_bvh_websocket_extension.py`
 
 实施后必须同步更新：
 

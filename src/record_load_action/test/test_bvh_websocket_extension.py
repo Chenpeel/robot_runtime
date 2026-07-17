@@ -228,7 +228,7 @@ class BvhWebSocketExtensionTest(unittest.TestCase):
                 self.assertEqual(msg.position, 1500)
                 self.assertEqual(msg.value_encoding, expected_encoding)
                 self.assertEqual(msg.duration_ms, 42)
-                self.assertEqual(msg.speed, 42)
+                self.assertFalse(hasattr(msg, 'speed'))
                 self.assertEqual(msg.requester_id, '')
                 self.assertEqual(msg.lease_id, '')
                 self.assertEqual(msg.stamp, 'fake-stamp')

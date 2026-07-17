@@ -178,8 +178,9 @@
   一层伪 `CommandFrame` 中间快照，而是由节点在 setpoint 适配后直接送入仲
   裁，再把被接受的请求转回驱动层命令。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
-  `execution_manager` 已优先读取新字段，默认 WebSocket teleop producer 与
-  `parallel_3dof_controller` 也已停止写入旧 `speed` 镜像；其中后者已先在
+  `execution_manager` 已优先读取新字段；默认 WebSocket teleop producer、
+  `parallel_3dof_controller` 与可选 BVH producer 也已停止写入旧 `speed`
+  镜像。其中 `parallel_3dof_controller` 已先在
   producer 内部显式以 `duration_ms` / `value_encoding` 作为主语义；求解器
   输出当前只保留 `duration_ms` 时长字段，控制器只接受该显式时长，并在发布
   `MotionCommand` 时只写入这组显式字段，不再回退或镜像旧 `speed`。该包内
@@ -204,6 +205,9 @@
   `create_extension`；该扩展独立持有 `/execution/motion/command` publisher，
   并承担 `bvh_play` 注册、accepted ack、错误映射、execution state 联锁以及
   `BvhWebSocketPlaybackAdapter` / `BvhPlaybackRuntime` 关闭生命周期。
+- `BvhWebSocketExtension` 当前也已只把回调提供的执行时长写入显式
+  `duration_ms`，不再镜像旧 `MotionCommand.speed`；请求级 `speed_ms` 合同与
+  播放器内部 timing 行为保持不变。
 - `record_load_action/launch/bvh_websocket_demo.launch.py` 作为显式 opt-in 入口
   include `robot_bringup/teleop.launch.py`，传入
   `record_load_action.bvh_websocket_extension:create_extension`，并将 motion 入口
@@ -234,8 +238,8 @@
    义。
 2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留；
    当前已先在 `execution_manager` 内部补上中性适配层，并已为消息增量补充更
-   明确的时长和编码语义；consumer 侧旧 `speed` 时长回退已移除。下一步重点
-   转为继续弱化 producer 镜像字段和公共消息里的 servo 风格过渡字段。
+   明确的时长和编码语义；consumer 侧旧 `speed` 时长回退与仓库内置 producer
+   镜像均已移除。下一步重点转为公共消息里的 servo 风格过渡字段。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
@@ -451,8 +455,8 @@
 如果只按投入产出比排序，建议顺序如下：
 
 1. `motion_msgs` 语义收紧
-   - consumer 侧已不再依赖旧 `speed` 时长回退；后续继续弱化 producer 镜像
-     字段与公共消息里的 servo 风格过渡字段。
+   - consumer 侧已不再依赖旧 `speed` 时长回退，仓库内置 producer 也已停止
+     写入该镜像；后续继续收紧公共消息里的 servo 风格过渡字段。
 2. 继续稳定执行边界
    - 后续再按独立阶段收紧 teleop lease、抢占、超时与跨入口统一准入语义。
 3. `websocket_bridge` 剩余职责收紧

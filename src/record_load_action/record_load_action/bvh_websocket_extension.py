@@ -129,8 +129,6 @@ class BvhWebSocketExtension:
         msg.position = int(position)
         msg.value_encoding = self._value_encoding_for_servo_type(servo_type)
         msg.duration_ms = int(speed)
-        # 过渡期保留旧字段镜像，consumer 应优先读取 duration_ms。
-        msg.speed = int(speed)
         msg.requester_id = ''
         msg.lease_id = ''
         msg.stamp = self._bridge.get_clock().now().to_msg()
