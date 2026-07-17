@@ -66,6 +66,9 @@ Action file (`config/bvh/walking.json`) example:
 - `BvhPlaybackRuntime` creates and owns `BvhActionPlayer`, and serializes play,
   blocked-state changes, and close operations. Transport adapters hold the
   runtime, not the player itself.
+- `BvhWebSocketPlaybackAdapter` owns the WebSocket-facing runtime assembly for
+  `bvh_play`, including request normalization and accepted ack payload data.
+  The bridge maps adapter/runtime exceptions to its WebSocket error categories.
 - Entering blocked state closes admission before stopping current playback.
   If that stop is incomplete, a repeated `set_blocked(True)` retries it even
   though the blocked state itself did not change. Once stopping completes,
@@ -88,7 +91,7 @@ Action file (`config/bvh/walking.json`) example:
 
 ## Play Request Contract
 
-`record_load_action.bvh_player.normalize_bvh_play_request` owns the
+`record_load_action.bvh_request.normalize_bvh_play_request` owns the
 transport-independent normalization of explicit `bvh_play` requests. The
 accepted direct fields are:
 
@@ -99,8 +102,10 @@ accepted direct fields are:
 - `frame_ms`
 
 Legacy nested `action.bvh` payloads and the top-level `bvh` alias are not
-accepted. Transport adapters such as `websocket_bridge` remain responsible
-for their own acknowledgement and error response formats.
+accepted. `record_load_action.bvh_player` re-exports this normalizer for
+existing local imports. WebSocket acknowledgement payload data is now built by
+the package adapter; the transport bridge still owns device-level response
+wrapping and error-code categories.
 
 ## Static Conversion (optional)
 

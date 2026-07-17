@@ -6,34 +6,14 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 try:
+    from .bvh_request import normalize_bvh_play_request
+except ImportError:  # pragma: no cover - direct test-module import fallback
+    from bvh_request import normalize_bvh_play_request
+
+try:
     from ament_index_python.packages import get_package_share_directory
 except ImportError:  # pragma: no cover - fallback for non-ROS envs
     get_package_share_directory = None
-
-
-def normalize_bvh_play_request(payload) -> Optional[Dict]:
-    """规范化显式 ``bvh_play`` 请求，非法请求返回 ``None``。"""
-    if not isinstance(payload, dict):
-        return None
-
-    request_type = str(payload.get('type') or '').strip().lower()
-    if request_type != 'bvh_play':
-        return None
-
-    if 'action' not in payload:
-        return None
-
-    action = payload.get('action')
-    if action is not None and not isinstance(action, str):
-        return None
-
-    return {
-        'action': action,
-        'loop': bool(payload.get('loop', False)),
-        'speed_ms': payload.get('speed_ms'),
-        'playback_rate': payload.get('playback_rate'),
-        'frame_ms': payload.get('frame_ms'),
-    }
 
 
 class BvhActionPlayer:

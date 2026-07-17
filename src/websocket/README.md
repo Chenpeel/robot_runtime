@@ -143,11 +143,12 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 - 在通用 WebSocket 层内部，`bvh_play` 现在通过显式类型的通用消息注册面
   接入；`MessageHandler` 不再保留 BVH 枚举、专用 payload parser 或专用
   callback surface。`bridge_node` 当前只保留 WebSocket/ROS 适配并持有
-  `BvhPlaybackRuntime`，不再直接创建或持有 `BvhActionPlayer`；播放器和生命
-  周期所有权已迁入 `record_load_action`。
-- `bridge_node` 会根据执行状态切换 runtime 的 blocked 状态，并在节点关闭时
-  调用 `close()`；blocked 会先阻断新播放再停止当前播放，若停止未完成，同
-  状态的后续同步会继续重试。closed 后仍允许显式停止请求收敛状态。
+  `BvhWebSocketPlaybackAdapter`，不再直接创建或持有 `BvhActionPlayer` 或
+  `BvhPlaybackRuntime`；播放器、runtime 装配和生命周期所有权已迁入
+  `record_load_action`。
+- `bridge_node` 会根据执行状态切换 adapter/runtime 的 blocked 状态，并在节
+  点关闭时调用 `close()`；blocked 会先阻断新播放再停止当前播放，若停止未
+  完成，同状态的后续同步会继续重试。closed 后仍允许显式停止请求收敛状态。
 - 播放请求、最新 execution state 与 runtime blocked 状态由同一原子门禁保
   护，避免播放准入与 teleop 状态切换之间出现竞态。shutdown 首次 close 未
   完成时只额外重试一次，随后继续 WebSocket 与线程清理。

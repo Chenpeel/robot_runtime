@@ -31,9 +31,9 @@ from .ws_server import WebSocketBridgeServer
 from .error_codes import ErrorCode
 from .error_codes import TeleopControlRejectedException
 from .error_codes import WebSocketException
-from record_load_action.bvh_player import normalize_bvh_play_request
 from record_load_action.bvh_runtime import BvhPlaybackBlockedError
-from record_load_action.bvh_runtime import BvhPlaybackRuntime
+from record_load_action.bvh_websocket_adapter import BvhPlaybackInvalidRequestError
+from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackAdapter
 from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
@@ -157,8 +157,8 @@ class WebSocketROS2Bridge(Node):
         else:
             self.get_logger().warn('ImuData消息不可用，已跳过IMU订阅')
 
-        # BVH 播放 runtime 由 record_load_action 持有播放器与生命周期状态。
-        self.bvh_runtime = BvhPlaybackRuntime(
+        # BVH WebSocket 适配由 record_load_action 持有 runtime 装配与生命周期。
+        self.bvh_playback = BvhWebSocketPlaybackAdapter(
             publish_callback=self._publish_bvh_command,
             logger=self.get_logger()
         )
@@ -338,33 +338,32 @@ class WebSocketROS2Bridge(Node):
 
     async def handle_bvh_play(self, payload: dict):
         """处理BVH动作播放请求"""
-        request = normalize_bvh_play_request(payload)
-        if request is None:
-            raise WebSocketException(
-                error_code=ErrorCode.INVALID_PARAMETER_VALUE,
-                message="BVH action payload invalid",
-                details={"received_data": payload},
-            )
-
         with self._bvh_gate_lock:
             try:
-                result = self.bvh_runtime.apply_request(request)
+                return self.bvh_playback.handle_play_payload(payload)
+            except BvhPlaybackInvalidRequestError as exc:
+                raise WebSocketException(
+                    error_code=ErrorCode.INVALID_PARAMETER_VALUE,
+                    message="BVH action payload invalid",
+                    details={"received_data": exc.payload},
+                )
             except BvhPlaybackBlockedError:
                 # 拒绝详情必须与触发 runtime 阻塞的 execution state 一致。
                 self._raise_bvh_play_blocked()
             except Exception as exc:
                 cause = getattr(exc, 'cause', None) or exc
+                request = getattr(exc, 'request', payload)
                 raise WebSocketException(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
                     message=f"BVH play failed: {str(cause)}",
                     details={"payload": request, "exception": str(cause)},
                 )
 
-        return {
-            "status": "accepted",
-            "action": result.get("action"),
-            "loop": bool(result.get("loop", False)),
-        }
+        raise WebSocketException(
+            error_code=ErrorCode.ROS_CALLBACK_FAILED,
+            message="BVH play failed: unknown adapter result",
+            details={"payload": payload, "exception": "unknown adapter result"},
+        )
 
     async def handle_heartbeat(self, context: dict | None = None):
         """处理心跳消息"""
@@ -443,7 +442,7 @@ class WebSocketROS2Bridge(Node):
                 bvh_blocked = self._teleop_control_is_active()
                 bvh_blocked_changed = False
                 try:
-                    bvh_blocked_changed = self.bvh_runtime.set_blocked(
+                    bvh_blocked_changed = self.bvh_playback.set_blocked(
                         bvh_blocked
                     )
                 except Exception as exc:
@@ -889,7 +888,7 @@ class WebSocketROS2Bridge(Node):
         bvh_runtime_closed = False
         for _attempt in range(2):
             try:
-                self.bvh_runtime.close()
+                self.bvh_playback.close()
                 bvh_runtime_closed = True
                 break
             except Exception as exc:

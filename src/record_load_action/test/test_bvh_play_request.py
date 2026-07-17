@@ -5,9 +5,9 @@ import sys
 import unittest
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../record_load_action'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from bvh_player import normalize_bvh_play_request
+from record_load_action.bvh_request import normalize_bvh_play_request
 
 
 class NormalizeBvhPlayRequestTest(unittest.TestCase):

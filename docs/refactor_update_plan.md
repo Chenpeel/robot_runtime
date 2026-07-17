@@ -198,24 +198,28 @@
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前 public
   contract 保留。
 - `record_load_action` 当前也已提供传输层无关的
-  `normalize_bvh_play_request`，统一承接显式直接字段的规范化与基础结构校验，
-  继续减少 BVH 请求 contract 对 WebSocket 实现的依赖。
+  `bvh_request.normalize_bvh_play_request`，统一承接显式直接字段的规范化与基
+  础结构校验；`bvh_player` 只保留兼容导入出口，继续减少 BVH 请求 contract
+  对 WebSocket 实现的依赖。
+- `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
+  接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
+  runtime 装配。
 - 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
 - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-  `bvh_play` 并调用上述 normalizer；既有 accepted `bvh_play_ack` 形状、
-  teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
-  `ROS_CALLBACK_FAILED` 类别继续保留。
+  `bvh_play` 并调用上述 adapter；既有 accepted `bvh_play_ack` 形状、teleop
+  拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
+  `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
 - `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
-  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有 runtime
-  适配引用，不再直接持有播放器。
+  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
+  `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
 - 当执行层进入 teleop 活跃态时，桥接层会把 runtime 置为 blocked；runtime
   会先阻断新播放再停止当前播放。节点关闭时则进入 closed/blocked 终态并停
   止播放器，停止失败的关闭仍可重试，显式停止请求在 blocked/closed 状态下
   仍被允许。
 - blocked 状态下若停止尚未完成，后续同状态 `set_blocked(True)` 会继续重
-  试；`bridge_node` 也会通过同一原子门禁同步 execution state、runtime
+  试；`bridge_node` 也会通过同一原子门禁同步 execution state、adapter
   blocked 状态与播放准入，shutdown 对未完成 close 只额外重试一次。
 - `BvhActionPlayer` 当前为每代 worker 使用独立 `Event`，并以 bool
   `play()` / `stop()` 报告操作结果；只有确认上一代退出后才会启动下一代，

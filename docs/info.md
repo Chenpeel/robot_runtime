@@ -76,23 +76,27 @@
 - `bvh_play` payload 当前也已继续收紧为显式直接字段；旧的 `action.bvh`
   嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前事实保留。
 - `record_load_action` 当前也已提供传输层无关的
-  `normalize_bvh_play_request`，统一承接显式直接字段的规范化与基础结构校验。
+  `bvh_request.normalize_bvh_play_request`，统一承接显式直接字段的规范化与
+  基础结构校验；`bvh_player` 只保留兼容导入出口。
+- `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
+  接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
+  runtime 装配。
 - 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
 - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-  `bvh_play` 并调用上述 normalizer；既有 accepted `bvh_play_ack` 形状、
-  teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
-  `ROS_CALLBACK_FAILED` 类别继续保留。
+  `bvh_play` 并调用上述 adapter；既有 accepted `bvh_play_ack` 形状、teleop
+  拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
+  `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
 - `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
-  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有 runtime
-  适配引用，不再直接持有播放器。
+  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
+  `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
 - 当执行层进入 teleop 活跃态时，桥接层会把 runtime 置为 blocked；runtime
   会先阻断新播放再停止当前播放。节点关闭时则进入 closed/blocked 终态并停
   止播放器，停止失败的关闭仍可重试，显式停止请求在 blocked/closed 状态下
   仍被允许。
 - blocked 状态下若停止尚未完成，后续同状态 `set_blocked(True)` 会继续重
-  试；`bridge_node` 也会通过同一原子门禁同步 execution state、runtime
+  试；`bridge_node` 也会通过同一原子门禁同步 execution state、adapter
   blocked 状态与播放准入，shutdown 对未完成 close 只额外重试一次。
 - `BvhActionPlayer` 当前为每代 worker 使用独立 `Event`，并以 bool
   `play()` / `stop()` 报告操作结果；只有确认上一代退出后才会启动下一代，
@@ -150,9 +154,10 @@
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会优先采用这组显式语义继续下发。
-- `bvh_play` 请求的显式直接字段规范化与基础结构校验当前也已从通用
-  `MessageHandler` 收回 `record_load_action`；WebSocket 通用层会优先按已注
-  册的显式扩展分发，`bridge_node` 保留当前传输适配、播放器编排与执行联锁。
+- `bvh_play` 请求的显式直接字段规范化、ack payload 生成与 WebSocket-facing
+  runtime 装配当前也已从 `bridge_node` 继续收回 `record_load_action`；
+  WebSocket 通用层会优先按已注册的显式扩展分发，`bridge_node` 保留当前传
+  输适配、错误类别映射与执行联锁。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接

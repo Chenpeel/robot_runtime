@@ -106,8 +106,8 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("self.bvh_command_pub = self.create_publisher(", source)
         self.assertIn("self.bvh_command_pub.publish(msg)", source)
 
-    def test_bvh_player_lifecycle_is_owned_by_record_runtime(self):
-        """bridge_node 不应继续直接创建或管理 BvhActionPlayer。"""
+    def test_bvh_playback_lifecycle_is_owned_by_record_adapter(self):
+        """bridge_node 不应继续直接创建播放器或 runtime。"""
         source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -115,10 +115,11 @@ class TestBridgeNodeTopics(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn('BvhPlaybackRuntime', source)
-        self.assertIn('self.bvh_runtime = BvhPlaybackRuntime(', source)
-        self.assertIn('self.bvh_runtime.set_blocked(', source)
-        self.assertIn('self.bvh_runtime.close()', source)
+        self.assertIn('BvhWebSocketPlaybackAdapter', source)
+        self.assertIn('self.bvh_playback = BvhWebSocketPlaybackAdapter(', source)
+        self.assertIn('self.bvh_playback.set_blocked(', source)
+        self.assertIn('self.bvh_playback.close()', source)
+        self.assertNotIn('BvhPlaybackRuntime', source)
         self.assertNotIn('BvhActionPlayer', source)
 
     def test_bridge_node_no_longer_exposes_bvh_config_parameter(self):

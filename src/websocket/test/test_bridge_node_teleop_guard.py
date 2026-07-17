@@ -119,6 +119,10 @@ _install_bridge_node_test_stubs()
 
 from record_load_action.bvh_runtime import BvhPlaybackBlockedError
 from record_load_action.bvh_runtime import BvhPlaybackRuntime
+from record_load_action.bvh_websocket_adapter import (
+    BvhPlaybackInvalidRequestError,
+)
+from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackAdapter
 from websocket_bridge.bridge_node import WebSocketROS2Bridge
 from websocket_bridge.error_codes import ErrorCode
 from websocket_bridge.error_codes import TeleopControlRejectedException
@@ -484,12 +488,12 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(msg.lease_id, 'lease-1')
 
     def test_bvh_play_is_rejected_when_teleop_is_active(self):
-        class _Runtime:
+        class _Playback:
             def __init__(self):
                 self.requests = []
 
-            def apply_request(self, request):
-                self.requests.append(request)
+            def handle_play_payload(self, payload):
+                self.requests.append(payload)
                 raise BvhPlaybackBlockedError('blocked')
 
         bridge = self._bridge(
@@ -500,7 +504,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 'active_source': 'teleop',
             }
         )
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
         bridge._raise_bvh_play_blocked = (
             lambda: WebSocketROS2Bridge._raise_bvh_play_blocked(bridge)
         )
@@ -518,30 +522,25 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             'bvh_blocked_by_active_teleop',
         )
         self.assertEqual(
-            bridge.bvh_runtime.requests,
-            [{
-                'action': 'wave',
-                'loop': False,
-                'speed_ms': None,
-                'playback_rate': None,
-                'frame_ms': None,
-            }],
+            bridge.bvh_playback.requests,
+            [{'type': 'bvh_play', 'action': 'wave'}],
         )
 
     def test_bvh_play_normalizes_request_and_returns_ack_data(self):
-        class _Runtime:
+        class _Playback:
             def __init__(self):
-                self.requests = []
+                self.payloads = []
 
-            def apply_request(self, request):
-                self.requests.append(request)
+            def handle_play_payload(self, payload):
+                self.payloads.append(payload)
                 return {
-                    'action': request.get('action'),
-                    'loop': bool(request.get('loop', False)),
+                    'status': 'accepted',
+                    'action': payload.get('action'),
+                    'loop': bool(payload.get('loop', False)),
                 }
 
         bridge = self._bridge()
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
 
         result = asyncio.run(
             WebSocketROS2Bridge.handle_bvh_play(
@@ -566,8 +565,9 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             },
         )
         self.assertEqual(
-            bridge.bvh_runtime.requests,
+            bridge.bvh_playback.payloads,
             [{
+                'type': 'bvh_play',
                 'action': 'wave',
                 'loop': True,
                 'speed_ms': 40,
@@ -577,13 +577,12 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
     def test_bvh_play_rejects_invalid_request_before_runtime(self):
-        class _Runtime:
-            def apply_request(self, request):
-                del request
-                raise AssertionError('invalid request reached runtime')
+        class _Playback:
+            def handle_play_payload(self, payload):
+                raise BvhPlaybackInvalidRequestError(payload)
 
         bridge = self._bridge()
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
 
         with self.assertRaises(WebSocketException) as ctx:
             asyncio.run(
@@ -602,13 +601,13 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
     def test_bvh_runtime_failure_keeps_existing_error_contract(self):
-        class _Runtime:
-            def apply_request(self, request):
-                del request
+        class _Playback:
+            def handle_play_payload(self, payload):
+                del payload
                 raise RuntimeError('player failed')
 
         bridge = self._bridge()
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
 
         with self.assertRaises(WebSocketException) as ctx:
             asyncio.run(
@@ -626,13 +625,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(
             ctx.exception.details,
             {
-                'payload': {
-                    'action': 'wave',
-                    'loop': False,
-                    'speed_ms': None,
-                    'playback_rate': None,
-                    'frame_ms': None,
-                },
+                'payload': {'type': 'bvh_play', 'action': 'wave'},
                 'exception': 'player failed',
             },
         )
@@ -656,9 +649,14 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         for action, expected_message in cases:
             with self.subTest(action=action):
                 bridge = self._bridge()
-                bridge.bvh_runtime = BvhPlaybackRuntime(
+                bridge.bvh_playback = BvhWebSocketPlaybackAdapter(
                     publish_callback=lambda *args: None,
-                    player_factory=_FalsePlayer,
+                    runtime_factory=(
+                        lambda **kwargs: BvhPlaybackRuntime(
+                            player_factory=_FalsePlayer,
+                            **kwargs,
+                        )
+                    ),
                 )
 
                 with self.assertRaises(WebSocketException) as ctx:
@@ -679,13 +677,17 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 )
 
     def test_bvh_stop_remains_allowed_while_teleop_is_active(self):
-        class _Runtime:
+        class _Playback:
             def __init__(self):
-                self.requests = []
+                self.payloads = []
 
-            def apply_request(self, request):
-                self.requests.append(request)
-                return {'action': request.get('action'), 'loop': False}
+            def handle_play_payload(self, payload):
+                self.payloads.append(payload)
+                return {
+                    'status': 'accepted',
+                    'action': payload.get('action'),
+                    'loop': False,
+                }
 
         bridge = self._bridge(
             {
@@ -695,7 +697,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 'active_source': 'teleop',
             }
         )
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
 
         result = asyncio.run(
             WebSocketROS2Bridge.handle_bvh_play(
@@ -705,22 +707,16 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
         self.assertEqual(
-            bridge.bvh_runtime.requests,
-            [{
-                'action': None,
-                'loop': False,
-                'speed_ms': None,
-                'playback_rate': None,
-                'frame_ms': None,
-            }],
+            bridge.bvh_playback.payloads,
+            [{'type': 'bvh_play', 'action': None}],
         )
         self.assertEqual(
             result,
             {'status': 'accepted', 'action': None, 'loop': False},
         )
 
-    def test_execution_state_callback_blocks_bvh_runtime_when_teleop_is_active(self):
-        class _Runtime:
+    def test_execution_state_callback_blocks_bvh_playback_when_teleop_is_active(self):
+        class _Playback:
             def __init__(self):
                 self.blocked_calls = []
 
@@ -733,7 +729,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 del args, kwargs
 
         bridge = self._bridge()
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
         bridge.ws_server = None
         bridge.ws_loop = None
         bridge.debug = False
@@ -772,7 +768,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
         WebSocketROS2Bridge.execution_state_callback(bridge, msg)
 
-        self.assertEqual(bridge.bvh_runtime.blocked_calls, [True])
+        self.assertEqual(bridge.bvh_playback.blocked_calls, [True])
         self.assertTrue(bridge.latest_execution_state['teleop_active'])
 
     def test_bvh_request_waits_for_atomic_runtime_block_transition(self):
@@ -791,12 +787,12 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 del exc_type, exc_value, traceback
                 self._lock.release()
 
-        class _Runtime:
+        class _Playback:
             def __init__(self):
                 self.blocked = False
                 self.set_blocked_entered = threading.Event()
                 self.finish_set_blocked = threading.Event()
-                self.apply_called = threading.Event()
+                self.handle_called = threading.Event()
 
             def set_blocked(self, blocked):
                 self.set_blocked_entered.set()
@@ -805,13 +801,15 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 self.blocked = bool(blocked)
                 return True
 
-            def apply_request(self, request):
-                self.apply_called.set()
+            def handle_play_payload(self, payload):
+                del payload
+                self.handle_called.set()
                 if self.blocked:
                     raise BvhPlaybackBlockedError('blocked')
                 return {
-                    'action': request.get('action'),
-                    'loop': bool(request.get('loop', False)),
+                    'status': 'accepted',
+                    'action': 'wave',
+                    'loop': False,
                 }
 
         class _Logger:
@@ -819,10 +817,10 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 del args, kwargs
 
         gate = _ObservedRLock()
-        runtime = _Runtime()
+        playback = _Playback()
         bridge = self._bridge()
         bridge._bvh_gate_lock = gate
-        bridge.bvh_runtime = runtime
+        bridge.bvh_playback = playback
         bridge.ws_server = None
         bridge.ws_loop = None
         bridge.debug = False
@@ -888,19 +886,19 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
         callback_thread.start()
-        self.assertTrue(runtime.set_blocked_entered.wait(timeout=1.0))
+        self.assertTrue(playback.set_blocked_entered.wait(timeout=1.0))
         request_thread.start()
         try:
             self.assertTrue(gate.request_waiting.wait(timeout=1.0))
-            self.assertFalse(runtime.apply_called.is_set())
+            self.assertFalse(playback.handle_called.is_set())
         finally:
-            runtime.finish_set_blocked.set()
+            playback.finish_set_blocked.set()
 
         callback_thread.join(timeout=1.0)
         request_thread.join(timeout=1.0)
         self.assertFalse(callback_thread.is_alive())
         self.assertFalse(request_thread.is_alive())
-        self.assertTrue(runtime.apply_called.is_set())
+        self.assertTrue(playback.handle_called.is_set())
         self.assertEqual(len(outcomes), 1)
         self.assertIsInstance(outcomes[0], TeleopControlRejectedException)
         self.assertEqual(
@@ -915,7 +913,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
 
     def test_runtime_block_failure_does_not_skip_execution_state_update(self):
-        class _Runtime:
+        class _Playback:
             def set_blocked(self, blocked):
                 del blocked
                 raise RuntimeError('stop failed')
@@ -937,7 +935,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         logger = _Logger()
         server = _Server()
         bridge = self._bridge()
-        bridge.bvh_runtime = _Runtime()
+        bridge.bvh_playback = _Playback()
         bridge.ws_server = server
         bridge.ws_loop = None
         bridge.debug = False
@@ -1026,7 +1024,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
         logger = _Logger()
         bridge = types.SimpleNamespace(
-            bvh_runtime=_Runtime(),
+            bvh_playback=_Runtime(),
             ws_server=_Server(),
             ws_loop=_Loop(),
             ws_thread=None,
@@ -1070,7 +1068,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         logger = _Logger()
         runtime = _Runtime()
         bridge = types.SimpleNamespace(
-            bvh_runtime=runtime,
+            bvh_playback=runtime,
             ws_server=None,
             ws_loop=None,
             ws_thread=None,
