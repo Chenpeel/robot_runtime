@@ -9,7 +9,6 @@
 
   <depend>rclpy</depend>
   <depend>motion_msgs</depend>
-  <depend>servo_msgs</depend>
   <depend>sensor_msgs</depend>
   <exec_depend>ament_index_python</exec_depend>
 

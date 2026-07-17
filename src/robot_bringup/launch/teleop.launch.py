@@ -54,6 +54,11 @@ def generate_launch_description():
         default_value='/execution/state',
         description='执行层状态话题',
     )
+    execution_actuator_state_topic_arg = DeclareLaunchArgument(
+        'execution_actuator_state_topic',
+        default_value='/execution/actuator_state',
+        description='执行层适配后的执行器状态话题',
+    )
     execution_estop_topic_arg = DeclareLaunchArgument(
         'execution_estop_topic',
         default_value='/execution/estop',
@@ -118,6 +123,9 @@ def generate_launch_description():
     execution_teleop_control_topic = LaunchConfiguration('execution_teleop_control_topic')
     execution_motion_command_topic = LaunchConfiguration('execution_motion_command_topic')
     execution_state_topic = LaunchConfiguration('execution_state_topic')
+    execution_actuator_state_topic = LaunchConfiguration(
+        'execution_actuator_state_topic'
+    )
     execution_estop_topic = LaunchConfiguration('execution_estop_topic')
 
     execution_manager_node = Node(
@@ -131,6 +139,8 @@ def generate_launch_description():
             {'teleop_control_topic': execution_teleop_control_topic},
             {'motion_command_topic': execution_motion_command_topic},
             {'output_command_topic': '/servo/command'},
+            {'driver_state_topic': '/servo/state'},
+            {'actuator_state_topic': execution_actuator_state_topic},
             {'state_topic': execution_state_topic},
             {'estop_topic': execution_estop_topic},
             {'teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec')},
@@ -151,6 +161,7 @@ def generate_launch_description():
             {'debug': LaunchConfiguration('bridge_debug')},
             {'command_topic': execution_teleop_command_topic},
             {'teleop_control_topic': execution_teleop_control_topic},
+            {'actuator_state_topic': execution_actuator_state_topic},
             {'execution_state_topic': execution_state_topic},
             {
                 'extension_factories': LaunchConfiguration(
@@ -186,6 +197,9 @@ def generate_launch_description():
             '  执行状态: ',
             execution_state_topic,
             '\n',
+            '  执行器反馈: ',
+            execution_actuator_state_topic,
+            '\n',
         ],
     )
 
@@ -199,6 +213,7 @@ def generate_launch_description():
         execution_teleop_control_topic_arg,
         execution_motion_command_topic_arg,
         execution_state_topic_arg,
+        execution_actuator_state_topic_arg,
         execution_estop_topic_arg,
         execution_teleop_timeout_sec_arg,
         execution_motion_timeout_sec_arg,

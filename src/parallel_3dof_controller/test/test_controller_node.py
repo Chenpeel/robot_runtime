@@ -254,7 +254,7 @@ import pytest
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Vector3
-from servo_msgs.msg import ServoCommand
+from motion_msgs.msg import MotionCommand
 from std_msgs.msg import Float32MultiArray
 
 
@@ -267,8 +267,8 @@ def node():
     rclpy.shutdown()
 
 
-def test_node_publishes_servo_commands(node):
-    '''测试节点发布舵机命令'''
+def test_node_publishes_motion_commands(node):
+    '''测试节点向 execution_manager 发布运动命令'''
 
     # 创建订阅器
     received_messages = []
@@ -277,8 +277,8 @@ def test_node_publishes_servo_commands(node):
         received_messages.append(msg)
 
     subscription = node.create_subscription(
-        ServoCommand,
-        '/parallel_3dof_controller/servo/command',
+        MotionCommand,
+        '/execution/motion/command',
         callback,
         10
     )
@@ -305,7 +305,7 @@ def test_node_publishes_servo_commands(node):
     assert len(received_messages) == 3  # 应该收到3个舵机命令
     for msg in received_messages:
         assert 500 <= msg.position <= 2500
-        assert msg.speed > 0
+        assert msg.duration_ms > 0
 
 
 def test_node_publishes_theta_feedback(node):
@@ -377,8 +377,8 @@ class IntegrationTestInstructions(unittest.TestCase):
            # 发送测试命令
            ros2 topic pub /parallel_3dof_controller/ankle_rpy geometry_msgs/Vector3 "{x: 10.0, y: 10.0, z: 5.0}" --once
 
-           # 查看舵机命令输出
-           ros2 topic echo /parallel_3dof_controller/servo/command
+           # 查看进入 execution_manager 的运动命令
+           ros2 topic echo /execution/motion/command
 
            # 查看theta角反馈
            ros2 topic echo /parallel_3dof_controller/ankle_theta

@@ -65,6 +65,10 @@
   - 当前持有 `docs/plan.md` Phase 2 仓库级完成合同，以结构化源码检查统一验
     收 WebSocket/simulation 包级分离、sensor 独立所有权、BVH 默认 opt-in
     和 full-system 三分域组合，防止已拆出的职责重新混回默认主链。
+  - `teleop.launch.py` 与 `full_system.launch.py` 已公开统一的
+    `execution_actuator_state_topic`，将执行层反馈同时接到
+    `execution_manager` 与 `websocket_bridge`，不再让上层桥接直接订阅驱动
+    状态话题。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
@@ -116,7 +120,9 @@
     holder / lease 状态对齐。
   - 解析 WebSocket JSON 消息，将 teleop 输入转换为
     `motion_msgs/TeleopControl` 和 `motion_msgs/MotionCommand` 后发往执行层。
-  - 订阅 `/servo/state` 并向 WebSocket 客户端广播状态。
+  - 订阅 `motion_msgs/ActuatorState` 的 `/execution/actuator_state`，将执行
+    层适配后的执行器状态转换为兼容的 WebSocket 状态字段；核心包已移除
+    `servo_msgs` manifest 依赖和运行时导入。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
     teleop 控制权反馈。
   - 订阅 `/sensor/imu` 并向 WebSocket 客户端广播传感器数据。
@@ -132,7 +138,7 @@
     均不启用或广告 BVH 能力。
 - 当前主要输入
   - WebSocket 客户端消息
-  - `/servo/state`
+  - `/execution/actuator_state`
   - `/execution/state`
   - `/sensor/imu`
 - 当前主要输出
@@ -298,6 +304,10 @@
     `speed` 字段已弃用且执行层禁止读取。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
+  - 订阅驱动级 `servo_msgs/ServoState` 的 `/servo/state`，先转换为内部
+    `ActuatorFeedback`，再通过 `motion_msgs/ActuatorState` 发布到
+    `/execution/actuator_state`；该消息使用 actuator 命名、显式
+    `value_encoding` 和 `status` / `reason` / `recoverable` 错误语义。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
     teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果、控制动作计
     数、当前 holder 标识与当前 lease 标识。
@@ -306,9 +316,11 @@
   - `/execution/teleop/command`
   - `/execution/motion/command`
   - `/execution/estop`
+  - `/servo/state`
 - 当前主要输出
   - `/servo/command`
   - `/execution/state`
+  - `/execution/actuator_state`
 - 当前非职责
   - 不做任务语义理解。
   - 不做轨迹生成。
@@ -328,9 +340,10 @@
     确认仓外 consumer、旧 rosbag、目标 schema 与全量同步切换条件。其余公共
     命令字段也仍带有明显的 servo 风格命名。
 - 与长期规划的关系
-  - 已补出控制层与驱动层之间的最小正式边界。
-  - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
-    到更稳定的内部消息接口和更完整的仲裁规则。
+  - 已补出控制层与驱动层之间的双向最小正式边界：下行命令和上行执行器反
+    馈均由 `execution_manager` 负责 motion/driver 接口适配。
+  - 当前执行层状态与执行器反馈均已由 `websocket_bridge` 通过
+    `motion_msgs` 消费；后续仍需继续演进完整仲裁规则和最终中性命令 schema。
 
 ### 3.7 `simulation_bridge`
 
@@ -543,12 +556,40 @@
   - 不表达运动学层命令。
   - 不表达外部任务服务接口。
 - 当前问题
-  - 上层控制和桥接模块当前对它的直接依赖范围过大。
+  - 当前运行依赖已收紧到 `execution_manager`、`servo_hardware` 与两类
+    simulation 驱动兼容包；仍需持续防止新的上层包重新依赖该驱动接口。
 - 与长期规划的关系
   - 长期应继续保留为驱动级边界。
   - 上层模块应逐步减少对它的长期直接依赖。
 
-### 3.10 `record_load_action`
+### 3.10 `motion_msgs`
+
+- 状态
+  - 已实现最小控制与执行接口集合，处于正式语义继续收口阶段。
+- 当前承接位置
+  - 目录：`src/motion_msgs`
+  - ROS 包名：`motion_msgs`
+- 当前主要职责
+  - 以 `MotionCommand` 承接上层控制和 teleop 执行请求。
+  - 以 `TeleopControl` 承接 teleop claim / keepalive / release。
+  - 以 `ExecutionState` 承接仲裁状态、holder、lease、急停与计数反馈。
+  - 以 `ActuatorState` 承接执行层向上发布的执行器状态，使用
+    `actuator_type` / `actuator_id` / `position_raw` / `value_encoding`，并
+    提供 `status` / `reason` / `recoverable` 结构化错误语义。
+- 当前非职责
+  - 不定义串口、总线协议或驱动服务。
+  - 不表达外部任务服务协议。
+  - 不负责执行仲裁实现。
+- 当前问题
+  - `MotionCommand` 仍保留 `servo_type`、`servo_id`、`position` 以及已弃用
+    `speed` 等过渡字段；breaking 切换门禁未通过前不会直接删除公共字段。
+  - `task_api_msgs`、`speech_msgs`、`perception_msgs` 仍需随真实模块按后续阶
+    段落地，不以空接口包冒充完成度。
+- 与长期规划的关系
+  - 已成为当前上层模块与 `execution_manager` 之间的双向接口边界。
+  - 最终仍需冻结驱动无关的正式运动请求 schema。
+
+### 3.11 `record_load_action`
 
 - 状态
   - 已实现，当前作为显式 opt-in 的工具/演示包。
@@ -620,7 +661,7 @@
 - 与长期规划的关系
   - 长期应保留为可选工具/演示资源，而不是正式主链路核心。
 
-### 3.11 `robot_description`
+### 3.12 `robot_description`
 
 - 状态
   - 已实现，职责边界相对清晰。
@@ -640,7 +681,7 @@
 - 与长期规划的关系
   - 长期继续作为描述资源域存在即可。
 
-### 3.12 `mjc_viewer`
+### 3.13 `mjc_viewer`
 
 - 状态
   - 已实现，属于展示与仿真辅助模块。

@@ -38,6 +38,9 @@ def _install_bridge_node_test_stubs():
         motion_msgs_module = types.ModuleType('motion_msgs')
         motion_msgs_msg_module = types.ModuleType('motion_msgs.msg')
 
+        class _ActuatorState:
+            pass
+
         class _ExecutionState:
             pass
 
@@ -47,6 +50,7 @@ def _install_bridge_node_test_stubs():
         class _TeleopControl:
             pass
 
+        motion_msgs_msg_module.ActuatorState = _ActuatorState
         motion_msgs_msg_module.ExecutionState = _ExecutionState
         motion_msgs_msg_module.MotionCommand = _MotionCommand
         motion_msgs_msg_module.TeleopControl = _TeleopControl
@@ -78,17 +82,6 @@ def _install_bridge_node_test_stubs():
         sys.modules['rclpy'] = rclpy_module
         sys.modules['rclpy.node'] = rclpy_node_module
         sys.modules['rclpy.executors'] = rclpy_executors_module
-
-    if 'servo_msgs.msg' not in sys.modules:
-        servo_msgs_module = types.ModuleType('servo_msgs')
-        servo_msgs_msg_module = types.ModuleType('servo_msgs.msg')
-
-        class _ServoState:
-            pass
-
-        servo_msgs_msg_module.ServoState = _ServoState
-        sys.modules['servo_msgs'] = servo_msgs_module
-        sys.modules['servo_msgs.msg'] = servo_msgs_msg_module
 
     if 'websocket_bridge.debug_aggregator' not in sys.modules:
         debug_aggregator_module = types.ModuleType(
@@ -382,6 +375,52 @@ class TestBridgeNodeExtensions(unittest.TestCase):
         self.assertNotIn('mutated_by_extension', server.states[0])
         self.assertEqual(len(logger.errors), 1)
         self.assertIn('state failed', logger.errors[0])
+
+    def test_actuator_state_keeps_websocket_status_payload_compatible(self):
+        msg = types.SimpleNamespace(
+            actuator_type='bus',
+            actuator_id=7,
+            position_raw=1500,
+            value_encoding='bus_pulse_us',
+            load=12,
+            temperature=38,
+            status='ok',
+            reason='',
+            recoverable=False,
+            driver_error_code=0,
+            stamp=types.SimpleNamespace(sec=12, nanosec=500_000_000),
+        )
+
+        payload = WebSocketROS2Bridge._actuator_state_msg_to_payload(msg)
+
+        self.assertEqual('bus', payload['servo_type'])
+        self.assertEqual(7, payload['servo_id'])
+        self.assertEqual(0.0, payload['position'])
+        self.assertEqual(0.0, payload['angle'])
+        self.assertEqual(1500, payload['pulse'])
+        self.assertEqual(12, payload['load'])
+        self.assertEqual(38, payload['temperature'])
+        self.assertEqual(0, payload['error_code'])
+        self.assertEqual(12.5, payload['timestamp'])
+
+        pca_payload = WebSocketROS2Bridge._actuator_state_msg_to_payload(
+            types.SimpleNamespace(
+                actuator_type='pca',
+                actuator_id=3,
+                position_raw=320,
+                value_encoding='pca_tick',
+                load=-1,
+                temperature=-1,
+                status='ok',
+                reason='',
+                recoverable=False,
+                driver_error_code=0,
+                stamp=types.SimpleNamespace(sec=13, nanosec=0),
+            )
+        )
+        self.assertEqual(320, pca_payload['position'])
+        self.assertIsNone(pca_payload['angle'])
+        self.assertIsNone(pca_payload['pulse'])
 
     def test_shutdown_retries_extensions_before_websocket_cleanup(self):
         events = []

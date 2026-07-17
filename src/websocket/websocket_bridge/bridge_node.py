@@ -1,10 +1,11 @@
 """
-WebSocket桥接节点 - 连接WebSocket服务器和ROS 2舵机驱动
+WebSocket桥接节点 - 连接 WebSocket 服务器和 ROS 2 执行边界
 
 数据流:
 1. WebSocket客户端 -> WebSocket服务器 -> bridge_node
    -> /execution/teleop/control + /execution/teleop/command -> execution_manager
-2. 舵机驱动节点 -> /servo/state话题 -> bridge_node -> WebSocket服务器 -> WebSocket客户端
+2. execution_manager -> /execution/actuator_state -> bridge_node
+   -> WebSocket服务器 -> WebSocket客户端
 """
 
 import asyncio
@@ -12,13 +13,13 @@ from importlib import import_module
 import threading
 from typing import Optional
 
+from motion_msgs.msg import ActuatorState
 from motion_msgs.msg import ExecutionState
 from motion_msgs.msg import MotionCommand
 from motion_msgs.msg import TeleopControl
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from servo_msgs.msg import ServoState
 
 try:
     from sensor_msgs.msg import ImuData
@@ -33,6 +34,7 @@ from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
 DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
+DEFAULT_ACTUATOR_STATE_TOPIC = '/execution/actuator_state'
 BUS_MIN_US = 500
 BUS_MAX_US = 2500
 
@@ -66,6 +68,10 @@ class WebSocketROS2Bridge(Node):
         self.declare_parameter('debug', debug)
         self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
         self.declare_parameter('teleop_control_topic', DEFAULT_TELEOP_CONTROL_TOPIC)
+        self.declare_parameter(
+            'actuator_state_topic',
+            DEFAULT_ACTUATOR_STATE_TOPIC,
+        )
         self.declare_parameter('execution_state_topic', '/execution/state')
         self.declare_parameter('extension_factories', '')
         self.declare_parameter('imu_debug', debug)
@@ -82,6 +88,9 @@ class WebSocketROS2Bridge(Node):
         self.debug = self.get_parameter('debug').value
         self.command_topic = self.get_parameter('command_topic').value
         self.teleop_control_topic = self.get_parameter('teleop_control_topic').value
+        self.actuator_state_topic = self.get_parameter(
+            'actuator_state_topic'
+        ).value
         self.execution_state_topic = self.get_parameter('execution_state_topic').value
         self.extension_factories = str(
             self.get_parameter('extension_factories').value or ''
@@ -119,11 +128,11 @@ class WebSocketROS2Bridge(Node):
 
         self.latest_execution_state = {}
 
-        # 订阅舵机状态反馈
-        self.servo_state_sub = self.create_subscription(
-            ServoState,
-            '/servo/state',
-            self.servo_state_callback,
+        # 只消费 execution_manager 适配后的执行器反馈。
+        self.actuator_state_sub = self.create_subscription(
+            ActuatorState,
+            self.actuator_state_topic,
+            self.actuator_state_callback,
             10
         )
         self.execution_state_sub = self.create_subscription(
@@ -156,6 +165,7 @@ class WebSocketROS2Bridge(Node):
             f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}, '
             f'command_topic={self.command_topic}, '
             f'teleop_control_topic={self.teleop_control_topic}, '
+            f'actuator_state_topic={self.actuator_state_topic}, '
             f'execution_state_topic={self.execution_state_topic}, '
             f'extensions={len(self.extensions)}'
         )
@@ -490,38 +500,21 @@ class WebSocketROS2Bridge(Node):
         except Exception as e:
             self.get_logger().error(f'处理 execution state 回调异常: {e}')
 
-    def servo_state_callback(self, msg: ServoState):
+    def actuator_state_callback(self, msg: ActuatorState):
         """
-        处理舵机状态反馈（来自驱动节点）
+        处理 execution_manager 适配后的执行器反馈。
 
         Args:
-            msg: ServoState消息
+            msg: ActuatorState 消息
         """
         try:
-            angle = None
-            position = msg.position
-            if msg.servo_type == "bus":
-                angle = self._map_pulse_to_centered_angle(position)
-                position = angle
-
-            # 转换为JSON字典
-            state = {
-                "servo_type": msg.servo_type,
-                "servo_id": msg.servo_id,
-                "position": position,
-                "angle": angle,
-                "pulse": msg.position if msg.servo_type == "bus" else None,
-                "load": msg.load,
-                "temperature": msg.temperature,
-                "error_code": msg.error_code,
-                "timestamp": msg.stamp.sec + msg.stamp.nanosec / 1e9
-            }
+            state = self._actuator_state_msg_to_payload(msg)
 
             self._debug_log(
-                "servo_state",
+                "actuator_state",
                 (
-                    f"{msg.servo_type} ID={msg.servo_id} "
-                    f"POS={msg.position} ERR={msg.error_code}"
+                    f"{msg.actuator_type} ID={msg.actuator_id} "
+                    f"POS={msg.position_raw} ERR={msg.driver_error_code}"
                 ),
                 self.debug
             )
@@ -529,9 +522,9 @@ class WebSocketROS2Bridge(Node):
             # 更新WebSocket服务器的状态
             if self.ws_server:
                 self.ws_server.update_servo_state(
-                    msg.servo_id,
-                    msg.servo_type,
-                    position
+                    msg.actuator_id,
+                    msg.actuator_type,
+                    state['position']
                 )
 
                 # 广播状态到所有WebSocket客户端
@@ -548,7 +541,32 @@ class WebSocketROS2Bridge(Node):
                     self._debug_log("ws_broadcast_skip", "event loop not running", self.debug)
 
         except Exception as e:
-            self.get_logger().error(f'处理舵机状态回调异常: {e}')
+            self.get_logger().error(f'处理执行器状态回调异常: {e}')
+
+    @classmethod
+    def _actuator_state_msg_to_payload(cls, msg: ActuatorState) -> dict:
+        """保持既有 WebSocket 状态字段，同时隐藏 ROS 驱动消息。"""
+        angle = None
+        position = msg.position_raw
+        if msg.value_encoding == 'bus_pulse_us':
+            angle = cls._map_pulse_to_centered_angle(position)
+            position = angle
+
+        return {
+            'servo_type': msg.actuator_type,
+            'servo_id': msg.actuator_id,
+            'position': position,
+            'angle': angle,
+            'pulse': (
+                msg.position_raw
+                if msg.value_encoding == 'bus_pulse_us'
+                else None
+            ),
+            'load': msg.load,
+            'temperature': msg.temperature,
+            'error_code': msg.driver_error_code,
+            'timestamp': msg.stamp.sec + msg.stamp.nanosec / 1e9,
+        }
 
     def imu_data_callback(self, msg: ImuData):
         """

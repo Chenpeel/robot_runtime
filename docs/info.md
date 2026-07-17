@@ -84,12 +84,12 @@
   `40%` 提升到 `45%`，实际推进约 `3.6` 个百分点。该完成状态只覆盖 Phase 2
   拆包目标，不代表 Phase 1 的 colcon/launch 验收、WebSocket 剩余职责拆分或
   `sim_joint_bridge_cpp` 最终合并已经完成。
-- 本轮 source-level 定向回归按 `robot_bringup` 15 项、
+- Phase 2 调分当轮的 source-level 定向回归按 `robot_bringup` 15 项、
   `record_load_action` 58 项、simulation/WebSocket 定向合同 15 项分组，共
   88 项通过。前述 38 项是独立归档的 Phase 2 直接证据集，与 88 项定向回归
-  中的 32 项重叠；两组分别用于调分审计与较宽回归，不能相加。当前环境未提
-  供 `colcon`、`ros2` 与 Docker Compose，因此没有把 ROS 构建、安装后 entry
-  point、launch 启动或容器联测计入本轮完成证据。
+  中的 32 项重叠；两组分别用于调分审计与较宽回归，不能相加。当轮宿主环境
+  未提供 `colcon`、`ros2` 与 Docker Compose，因此没有把 ROS 构建、安装后
+  entry point、launch 启动或容器联测计入 Phase 2 完成证据。
 - `execution_manager` 已建立最小执行边界，teleop 与 motion 已不再都直接碰驱动层。
 - `sensor_hardware` 已独立成 ROS 包。
 - teleop 控制权链已落地显式 claim / keepalive / release。
@@ -110,6 +110,33 @@
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
+- `motion_msgs` 当前已新增中性执行器反馈 `ActuatorState`，使用
+  `actuator_type` / `actuator_id` / `position_raw` / `value_encoding`，并提
+  供 `status` / `reason` / `recoverable` 和原始 `driver_error_code`。执行层
+  会订阅驱动级 `/servo/state`，经独立 `feedback_adapter` 转换后向上发布
+  `/execution/actuator_state`。
+- `websocket_bridge` 已改为只消费 `motion_msgs/ActuatorState`，不再导入
+  `ServoState`、不再直订阅 `/servo/state`，`package.xml` 也已移除
+  `servo_msgs`；既有 WebSocket `servo_type` / `servo_id` / `position` /
+  `angle` / `pulse` 状态字段保持兼容。至此现有上层 producer/bridge 的运行
+  依赖均收口到 `motion_msgs`，`servo_msgs` 只留在执行、驱动和 simulation
+  兼容边界。
+- Phase 3 新增 6 项仓库级双向边界合同、6 项反馈适配测试和 1 项 WebSocket
+  payload 兼容测试，均已通过。本次 Phase 3 验收在一次性 ROS 2 Humble
+  容器完成核心 5 包（`motion_msgs`、`servo_msgs`、`execution_manager`、
+  `parallel_3dof_controller`、`websocket_bridge`）与 `robot_bringup` 完整依
+  赖闭包 10 包隔离构建；`colcon test-result` 汇总 36 项零失败，其中包括
+  34 个 Python 用例和 2 个 `ament_cmake_pytest` / CTest 注册项。此外，
+  `ros2 interface show`、launch 参数解析、
+  teleop/full-system `--show-args`、8 秒 teleop 启动冒烟和真实
+  `ServoState → ActuatorState`、`MotionCommand → ServoCommand` pub/sub
+  验收。该证据证明当前接口在 Humble 可生成和运行；仓库目标 Jazzy 的发布前
+  回归仍需在对应镜像或目标环境补充，不能由本次跨发行版结构验收替代。
+- 基于上述双向执行边界与 ROS 验收，`docs/plan.md` Phase 3 已从 `50%` 提升
+  到 `75%`：全局原始进度由 `42.9%` 提升到 `46.4%`，实际推进约 `3.6` 个百
+  分点。按最近 `5%` 展示仍为 `45%`，因此顶部进度条保持 9/20 格，不能误写
+  为 `50%`。Phase 3 尚未达到 `100%`，因为 `MotionCommand` 最终中性 schema
+  与 breaking 切换门禁仍未完成，其他未来接口包也尚未随真实模块落地。
 - BVH/demo capability 的动作输出已改走 `/execution/motion/command`，不再复
   用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
@@ -196,6 +223,9 @@
   钩直接等同于可安全删除公共字段。
 - `servo_type`、`servo_id`、`position` 等其他 servo 风格字段仍未冻结最终
   方向；应先决定是否统一安排一次 breaking 变更，避免连续修改公共 ABI。
+- 命令与反馈双向 execution 边界已经通过 ROS 构建、pub/sub 和 teleop 启动
+  验收，WebSocket 也已退出驱动状态依赖；下一步可以集中处理
+  `MotionCommand` 最终 schema，不重复扩张反馈兼容层。
 
 
 ## 5. 下一阶段建议范围

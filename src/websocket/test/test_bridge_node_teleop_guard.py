@@ -38,6 +38,9 @@ def _install_bridge_node_test_stubs():
         motion_msgs_module = types.ModuleType('motion_msgs')
         motion_msgs_msg_module = types.ModuleType('motion_msgs.msg')
 
+        class _ActuatorState:
+            pass
+
         class _ExecutionState:
             pass
 
@@ -47,6 +50,7 @@ def _install_bridge_node_test_stubs():
         class _TeleopControl:
             pass
 
+        motion_msgs_msg_module.ActuatorState = _ActuatorState
         motion_msgs_msg_module.ExecutionState = _ExecutionState
         motion_msgs_msg_module.MotionCommand = _MotionCommand
         motion_msgs_msg_module.TeleopControl = _TeleopControl
@@ -79,17 +83,6 @@ def _install_bridge_node_test_stubs():
         sys.modules['rclpy'] = rclpy_module
         sys.modules['rclpy.node'] = rclpy_node_module
         sys.modules['rclpy.executors'] = rclpy_executors_module
-
-    if 'servo_msgs.msg' not in sys.modules:
-        servo_msgs_module = types.ModuleType('servo_msgs')
-        servo_msgs_msg_module = types.ModuleType('servo_msgs.msg')
-
-        class _ServoState:
-            pass
-
-        servo_msgs_msg_module.ServoState = _ServoState
-        sys.modules['servo_msgs'] = servo_msgs_module
-        sys.modules['servo_msgs.msg'] = servo_msgs_msg_module
 
     if 'websocket_bridge.debug_aggregator' not in sys.modules:
         debug_aggregator_module = types.ModuleType(

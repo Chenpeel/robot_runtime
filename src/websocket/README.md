@@ -81,7 +81,15 @@ python -m websocket_bridge.ws_server --host 0.0.0.0 --port 9105 --debug
 WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
           -> bridge_node -> MotionCommand (teleop) -> /execution/teleop/command
           -> execution_manager -> ServoCommand -> /servo/command
+
+servo_hardware -> ServoState -> /servo/state -> execution_manager
+               -> ActuatorState -> /execution/actuator_state -> bridge_node
 ```
+
+`bridge_node` 不再导入 `servo_msgs` 或直接订阅 `/servo/state`。它只消费
+`motion_msgs/ActuatorState`，同时继续把 `actuator_type`、`actuator_id` 和
+`position_raw` 映射为既有 WebSocket `servo_type`、`servo_id`、`position`、
+`angle`、`pulse` 等兼容字段，因此 ROS 内部依赖收紧不会改变客户端状态格式。
 
 默认核心节点不装配 demo/BVH。可选能力通过通用参数
 `extension_factories` 显式加载，未配置时不导入任何扩展包。
@@ -149,6 +157,9 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
 ```text
 /execution/state (ExecutionState)
   -> bridge_node -> WebSocket status_query/status_update
+
+/execution/actuator_state (ActuatorState)
+  -> bridge_node -> WebSocket servo status_update
 ```
 
 当前 `execution_state` 中除了 `mode` / `active_source` 之外，还会携带

@@ -1,16 +1,19 @@
 """execution_manager ROS 2 节点。"""
 
+from motion_msgs.msg import ActuatorState
 from motion_msgs.msg import ExecutionState
 from motion_msgs.msg import MotionCommand
 from motion_msgs.msg import TeleopControl
 import rclpy
 from rclpy.node import Node
-from servo_msgs.msg import ServoCommand
+from servo_msgs.msg import ServoCommand, ServoState
 from std_msgs.msg import Bool
 
 from .arbitrator import CommandArbitrator
 from .command_adapter import motion_command_to_setpoint
 from .command_adapter import setpoint_to_servo_fields
+from .feedback_adapter import feedback_to_actuator_state_fields
+from .feedback_adapter import servo_state_to_feedback
 
 
 class ExecutionManagerNode(Node):
@@ -23,6 +26,11 @@ class ExecutionManagerNode(Node):
         self.declare_parameter('teleop_control_topic', '/execution/teleop/control')
         self.declare_parameter('motion_command_topic', '/execution/motion/command')
         self.declare_parameter('output_command_topic', '/servo/command')
+        self.declare_parameter('driver_state_topic', '/servo/state')
+        self.declare_parameter(
+            'actuator_state_topic',
+            '/execution/actuator_state',
+        )
         self.declare_parameter('state_topic', '/execution/state')
         self.declare_parameter('estop_topic', '/execution/estop')
         self.declare_parameter('teleop_timeout_sec', 0.8)
@@ -34,6 +42,8 @@ class ExecutionManagerNode(Node):
         teleop_control_topic = self.get_parameter('teleop_control_topic').value
         motion_command_topic = self.get_parameter('motion_command_topic').value
         output_command_topic = self.get_parameter('output_command_topic').value
+        driver_state_topic = self.get_parameter('driver_state_topic').value
+        actuator_state_topic = self.get_parameter('actuator_state_topic').value
         self.state_topic = self.get_parameter('state_topic').value
         estop_topic = self.get_parameter('estop_topic').value
         teleop_timeout_sec = float(self.get_parameter('teleop_timeout_sec').value)
@@ -57,6 +67,11 @@ class ExecutionManagerNode(Node):
             ExecutionState,
             self.state_topic,
             10,
+        )
+        self.actuator_state_pub = self.create_publisher(
+            ActuatorState,
+            actuator_state_topic,
+            50,
         )
 
         self.teleop_sub = self.create_subscription(
@@ -83,6 +98,12 @@ class ExecutionManagerNode(Node):
             self._handle_estop,
             10,
         )
+        self.driver_state_sub = self.create_subscription(
+            ServoState,
+            driver_state_topic,
+            self._handle_driver_state,
+            50,
+        )
 
         period = publish_state_period_sec if publish_state_period_sec > 0 else 0.2
         self.state_timer = self.create_timer(period, self._publish_state)
@@ -93,6 +114,8 @@ class ExecutionManagerNode(Node):
             f'teleop_control={teleop_control_topic}, '
             f'motion={motion_command_topic}, '
             f'output={output_command_topic}, '
+            f'driver_state={driver_state_topic}, '
+            f'actuator_state={actuator_state_topic}, '
             f'estop={estop_topic}'
         )
 
@@ -158,6 +181,23 @@ class ExecutionManagerNode(Node):
             f'执行层急停状态已切换: estop_active={state["estop_active"]}'
         )
         self._publish_state()
+
+    def _handle_driver_state(self, msg: ServoState) -> None:
+        feedback = servo_state_to_feedback(msg)
+        fields = feedback_to_actuator_state_fields(feedback)
+        state_msg = ActuatorState()
+        state_msg.actuator_type = fields['actuator_type']
+        state_msg.actuator_id = fields['actuator_id']
+        state_msg.position_raw = fields['position_raw']
+        state_msg.value_encoding = fields['value_encoding']
+        state_msg.load = fields['load']
+        state_msg.temperature = fields['temperature']
+        state_msg.status = fields['status']
+        state_msg.reason = fields['reason']
+        state_msg.recoverable = fields['recoverable']
+        state_msg.driver_error_code = fields['driver_error_code']
+        state_msg.stamp = msg.stamp
+        self.actuator_state_pub.publish(state_msg)
 
     def _publish_state(self, now_sec: float | None = None) -> None:
         if now_sec is None:

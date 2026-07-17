@@ -10,6 +10,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/ActuatorState.msg"
   "msg/MotionCommand.msg"
   "msg/ExecutionState.msg"
   "msg/TeleopControl.msg"
@@ -17,14 +18,17 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
-  find_package(ament_cmake_test REQUIRED)
-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_package(ament_cmake_pytest REQUIRED)
 
-  ament_add_test(test_motion_command_speed_migration
-    COMMAND
-      "${Python3_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/test/test_motion_command_speed_migration.py"
-    ENV "PYTHONDONTWRITEBYTECODE=1"
+  ament_add_pytest_test(test_motion_command_speed_migration
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/test_motion_command_speed_migration.py"
+    APPEND_ENV "PYTHONDONTWRITEBYTECODE=1"
+    TIMEOUT 60
+  )
+
+  ament_add_pytest_test(test_phase3_execution_boundary
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/test_phase3_execution_boundary.py"
+    APPEND_ENV "PYTHONDONTWRITEBYTECODE=1"
     TIMEOUT 60
   )
 endif()

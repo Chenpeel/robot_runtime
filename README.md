@@ -243,6 +243,7 @@ ros2 run simulation_bridge sim_servo_bridge_node
 | `/execution/teleop/command` | `MotionCommand` | teleop 执行请求 |
 | `/execution/motion/command` | `MotionCommand` | motion 执行请求 |
 | `/execution/state` | `ExecutionState` | 执行层状态反馈 |
+| `/execution/actuator_state` | `ActuatorState` | 执行层适配后的执行器反馈 |
 | `/servo/command` | `ServoCommand` | 舵机控制命令 |
 | `/sim/servo_state` | `ServoState` | 仿真侧状态反馈 |
 
@@ -264,6 +265,9 @@ ros2 topic echo /servo/command
 
 # 查看执行层状态
 ros2 topic echo /execution/state
+
+# 查看执行层适配后的执行器反馈（上层推荐入口）
+ros2 topic echo /execution/actuator_state
 
 # 查看舵机状态
 ros2 topic echo /servo/state

@@ -59,6 +59,11 @@ def generate_launch_description():
         default_value='/execution/state',
         description='执行层状态话题',
     )
+    execution_actuator_state_topic_arg = DeclareLaunchArgument(
+        'execution_actuator_state_topic',
+        default_value='/execution/actuator_state',
+        description='执行层适配后的执行器状态话题',
+    )
     execution_estop_topic_arg = DeclareLaunchArgument(
         'execution_estop_topic',
         default_value='/execution/estop',
@@ -243,6 +248,9 @@ def generate_launch_description():
             'execution_teleop_control_topic': LaunchConfiguration('execution_teleop_control_topic'),
             'execution_motion_command_topic': LaunchConfiguration('execution_motion_command_topic'),
             'execution_state_topic': LaunchConfiguration('execution_state_topic'),
+            'execution_actuator_state_topic': LaunchConfiguration(
+                'execution_actuator_state_topic'
+            ),
             'execution_estop_topic': LaunchConfiguration('execution_estop_topic'),
             'execution_teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec'),
             'execution_motion_timeout_sec': LaunchConfiguration('execution_motion_timeout_sec'),
@@ -331,6 +339,9 @@ def generate_launch_description():
             '  执行状态: ',
             LaunchConfiguration('execution_state_topic'),
             '\n',
+            '  执行器反馈: ',
+            LaunchConfiguration('execution_actuator_state_topic'),
+            '\n',
             '  仿真域启用: ',
             LaunchConfiguration('enable_simulation'),
             '\n',
@@ -348,6 +359,7 @@ def generate_launch_description():
         execution_teleop_control_topic_arg,
         execution_motion_command_topic_arg,
         execution_state_topic_arg,
+        execution_actuator_state_topic_arg,
         execution_estop_topic_arg,
         execution_teleop_timeout_sec_arg,
         execution_motion_timeout_sec_arg,

@@ -2,14 +2,17 @@
 舵机命令路由节点
 
 功能:
-- 订阅全局话题 /servo/command（来自WebSocket桥接）
+- 订阅全局话题 /servo/command（来自 execution_manager）
 - 根据配置将命令路由到不同驱动节点的私有话题
 - 聚合各驱动节点的状态反馈并发布到全局话题 /servo/state
 
 使用场景:
-- WebSocket -> /servo/command -> 路由节点 -> /bus_servo_driver/command -> 总线舵机驱动
-- WebSocket -> /servo/command -> 路由节点 -> /pca_servo_driver/command -> PCA舵机驱动
-- 驱动节点 -> /xxx_driver/state -> 路由节点 -> /servo/state -> WebSocket
+- 上层 -> MotionCommand -> execution_manager -> /servo/command
+  -> 路由节点 -> /bus_servo_driver/command -> 总线舵机驱动
+- 上层 -> MotionCommand -> execution_manager -> /servo/command
+  -> 路由节点 -> /pca_servo_driver/command -> PCA舵机驱动
+- 驱动节点 -> /xxx_driver/state -> 路由节点 -> /servo/state
+  -> execution_manager -> ActuatorState -> 上层
 """
 
 import rclpy
