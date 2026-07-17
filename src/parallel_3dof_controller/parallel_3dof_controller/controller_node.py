@@ -220,8 +220,6 @@ class Parallel3DOFControllerNode(Node):
         motion_msg.position = target_pulse_us
         motion_msg.value_encoding = 'bus_pulse_us'
         motion_msg.duration_ms = duration_ms
-        # 过渡期继续镜像到旧字段，便于旧 consumer 保持兼容。
-        motion_msg.speed = duration_ms
         motion_msg.requester_id = ''
         motion_msg.lease_id = ''
         motion_msg.stamp = self.get_clock().now().to_msg()

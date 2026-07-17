@@ -235,9 +235,10 @@
   - 进行 3-DOF 并联机构运动学求解。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
-    `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜像字段。
+    `value_encoding` 作为主语义，不再镜像写入旧 `speed` 字段。
   - 求解器输出当前也已补充 `duration_ms`，控制器优先消费该字段；旧
-    `speed` 字段只继续作为同值兼容镜像。
+    `speed` 字段只保留在求解器内部的同值兼容镜像中，不再传入
+    `MotionCommand`。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
@@ -314,8 +315,8 @@
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
-    且 producer 也开始双写更明确的时长与编码字段，但外部命令字段仍带有明
-    显的 servo 风格命名。
+    `parallel_3dof_controller` 也已停止镜像写入该字段，但仍有其他 producer
+    保留兼容镜像，且外部命令字段仍带有明显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进

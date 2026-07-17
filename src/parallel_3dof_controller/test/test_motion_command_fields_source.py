@@ -1,4 +1,4 @@
-"""parallel_3dof_controller MotionCommand 字段双写测试。"""
+"""parallel_3dof_controller MotionCommand 显式语义字段测试。"""
 
 import os
 import unittest
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 class TestMotionCommandFieldsSource(unittest.TestCase):
-    """验证 controller_node 已开始双写新语义字段。"""
+    """验证 controller_node 只发布显式 motion 语义字段。"""
 
     def test_controller_node_sets_value_encoding_and_duration_ms(self):
         source = Path(
@@ -22,6 +22,7 @@ class TestMotionCommandFieldsSource(unittest.TestCase):
             "duration_ms = int(cmd.get('duration_ms', cmd['speed']))",
             source,
         )
+        self.assertNotIn("motion_msg.speed = duration_ms", source)
 
 
 if __name__ == '__main__':

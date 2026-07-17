@@ -40,8 +40,8 @@ ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py ankle_si
 # 启用调试模式
 ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py debug:=true
 
-# 覆盖默认输出话题
-ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py command_topic:=/servo/command
+# 覆盖为其他 MotionCommand consumer 的话题
+ros2 launch parallel_3dof_controller parallel_3dof_controller.launch.py command_topic:=/custom/motion/command
 ```
 
 ### 2. 发送RPY命令
@@ -88,7 +88,7 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
   - position: 兼容目标值字段，当前写入 bus pulse us
   - value_encoding: 目标值编码，当前写入 `bus_pulse_us`
   - duration_ms: 显式运动时长（毫秒）
-  - speed: 兼容镜像字段，当前等于 `duration_ms`
+  - speed: 公共消息保留的旧兼容字段；当前控制器不再写入该镜像
   - 默认值为 `/execution/motion/command`
   - 当前仍保留 `servo_type`、`servo_id` 等过渡字段
 

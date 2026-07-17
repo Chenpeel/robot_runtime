@@ -57,7 +57,7 @@
 - teleop `MotionCommand` 已收紧为显式 requester / lease 约束。
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
   `value_encoding` 表达 `MotionCommand` 语义；求解器输出当前也已补充
-  `duration_ms`，控制器优先消费该字段，`speed` 仅保留为兼容镜像。
+  `duration_ms`，控制器发布时只写入显式时长，不再镜像旧 `speed` 字段。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
   前归一到 pulse us，`speed` 仅保留为兼容镜像。
