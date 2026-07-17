@@ -5,10 +5,16 @@ bridge_node teleop 命令预校验单元测试
 import asyncio
 import os
 import sys
+import threading
 import types
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(
+    0,
+    os.path.join(os.path.dirname(__file__), '../../record_load_action'),
+)
 
 
 def _install_bridge_node_test_stubs():
@@ -91,42 +97,6 @@ def _install_bridge_node_test_stubs():
         sys.modules['servo_msgs'] = servo_msgs_module
         sys.modules['servo_msgs.msg'] = servo_msgs_msg_module
 
-    if 'record_load_action.bvh_player' not in sys.modules:
-        record_load_action_module = types.ModuleType('record_load_action')
-        bvh_player_module = types.ModuleType('record_load_action.bvh_player')
-
-        class _BvhActionPlayer:
-            def __init__(self, *args, **kwargs):
-                del args, kwargs
-
-            def stop(self):
-                return None
-
-        def _normalize_bvh_play_request(payload):
-            if not isinstance(payload, dict):
-                return None
-            if str(payload.get('type') or '').strip().lower() != 'bvh_play':
-                return None
-            if 'action' not in payload:
-                return None
-            action = payload.get('action')
-            if action is not None and not isinstance(action, str):
-                return None
-            return {
-                'action': action,
-                'loop': bool(payload.get('loop', False)),
-                'speed_ms': payload.get('speed_ms'),
-                'playback_rate': payload.get('playback_rate'),
-                'frame_ms': payload.get('frame_ms'),
-            }
-
-        bvh_player_module.BvhActionPlayer = _BvhActionPlayer
-        bvh_player_module.normalize_bvh_play_request = (
-            _normalize_bvh_play_request
-        )
-        sys.modules['record_load_action'] = record_load_action_module
-        sys.modules['record_load_action.bvh_player'] = bvh_player_module
-
     if 'websocket_bridge.debug_aggregator' not in sys.modules:
         debug_aggregator_module = types.ModuleType(
             'websocket_bridge.debug_aggregator'
@@ -147,6 +117,8 @@ def _install_bridge_node_test_stubs():
 
 _install_bridge_node_test_stubs()
 
+from record_load_action.bvh_runtime import BvhPlaybackBlockedError
+from record_load_action.bvh_runtime import BvhPlaybackRuntime
 from websocket_bridge.bridge_node import WebSocketROS2Bridge
 from websocket_bridge.error_codes import ErrorCode
 from websocket_bridge.error_codes import TeleopControlRejectedException
@@ -156,6 +128,7 @@ from websocket_bridge.error_codes import WebSocketException
 class TestBridgeNodeTeleopGuard(unittest.TestCase):
     def _bridge(self, execution_state=None):
         return types.SimpleNamespace(
+            _bvh_gate_lock=threading.RLock(),
             latest_execution_state=execution_state or {},
         )
 
@@ -511,12 +484,13 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(msg.lease_id, 'lease-1')
 
     def test_bvh_play_is_rejected_when_teleop_is_active(self):
-        class _Player:
+        class _Runtime:
             def __init__(self):
-                self.play_calls = []
+                self.requests = []
 
-            def play(self, *args, **kwargs):
-                self.play_calls.append((args, kwargs))
+            def apply_request(self, request):
+                self.requests.append(request)
+                raise BvhPlaybackBlockedError('blocked')
 
         bridge = self._bridge(
             {
@@ -526,9 +500,9 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 'active_source': 'teleop',
             }
         )
-        bridge.bvh_player = _Player()
-        bridge._ensure_bvh_play_allowed = (
-            lambda: WebSocketROS2Bridge._ensure_bvh_play_allowed(bridge)
+        bridge.bvh_runtime = _Runtime()
+        bridge._raise_bvh_play_blocked = (
+            lambda: WebSocketROS2Bridge._raise_bvh_play_blocked(bridge)
         )
 
         with self.assertRaises(TeleopControlRejectedException) as ctx:
@@ -543,19 +517,31 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             ctx.exception.details['reason'],
             'bvh_blocked_by_active_teleop',
         )
-        self.assertEqual(bridge.bvh_player.play_calls, [])
+        self.assertEqual(
+            bridge.bvh_runtime.requests,
+            [{
+                'action': 'wave',
+                'loop': False,
+                'speed_ms': None,
+                'playback_rate': None,
+                'frame_ms': None,
+            }],
+        )
 
     def test_bvh_play_normalizes_request_and_returns_ack_data(self):
-        class _Player:
+        class _Runtime:
             def __init__(self):
-                self.play_calls = []
+                self.requests = []
 
-            def play(self, *args, **kwargs):
-                self.play_calls.append((args, kwargs))
+            def apply_request(self, request):
+                self.requests.append(request)
+                return {
+                    'action': request.get('action'),
+                    'loop': bool(request.get('loop', False)),
+                }
 
         bridge = self._bridge()
-        bridge.bvh_player = _Player()
-        bridge._ensure_bvh_play_allowed = lambda: None
+        bridge.bvh_runtime = _Runtime()
 
         result = asyncio.run(
             WebSocketROS2Bridge.handle_bvh_play(
@@ -580,23 +566,24 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             },
         )
         self.assertEqual(
-            bridge.bvh_player.play_calls,
-            [
-                (
-                    ('wave',),
-                    {
-                        'loop': True,
-                        'speed_ms': 40,
-                        'playback_rate': 1.25,
-                        'frame_ms': 16.7,
-                    },
-                )
-            ],
+            bridge.bvh_runtime.requests,
+            [{
+                'action': 'wave',
+                'loop': True,
+                'speed_ms': 40,
+                'playback_rate': 1.25,
+                'frame_ms': 16.7,
+            }],
         )
 
-    def test_bvh_play_rejects_invalid_request_before_player(self):
+    def test_bvh_play_rejects_invalid_request_before_runtime(self):
+        class _Runtime:
+            def apply_request(self, request):
+                del request
+                raise AssertionError('invalid request reached runtime')
+
         bridge = self._bridge()
-        bridge.bvh_player = types.SimpleNamespace()
+        bridge.bvh_runtime = _Runtime()
 
         with self.assertRaises(WebSocketException) as ctx:
             asyncio.run(
@@ -614,15 +601,14 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             ErrorCode.INVALID_PARAMETER_VALUE,
         )
 
-    def test_bvh_player_failure_keeps_existing_error_contract(self):
-        class _Player:
-            def play(self, *args, **kwargs):
-                del args, kwargs
+    def test_bvh_runtime_failure_keeps_existing_error_contract(self):
+        class _Runtime:
+            def apply_request(self, request):
+                del request
                 raise RuntimeError('player failed')
 
         bridge = self._bridge()
-        bridge.bvh_player = _Player()
-        bridge._ensure_bvh_play_allowed = lambda: None
+        bridge.bvh_runtime = _Runtime()
 
         with self.assertRaises(WebSocketException) as ctx:
             asyncio.run(
@@ -651,13 +637,55 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             },
         )
 
-    def test_bvh_stop_remains_allowed_while_teleop_is_active(self):
-        class _Player:
-            def __init__(self):
-                self.stop_calls = 0
+    def test_bvh_runtime_false_lifecycle_result_maps_to_callback_failure(self):
+        class _FalsePlayer:
+            def __init__(self, *args, **kwargs):
+                del args, kwargs
+
+            def play(self, *args, **kwargs):
+                del args, kwargs
+                return False
 
             def stop(self):
-                self.stop_calls += 1
+                return False
+
+        cases = (
+            ('wave', 'Failed to start BVH playback'),
+            (None, 'Failed to stop BVH playback'),
+        )
+        for action, expected_message in cases:
+            with self.subTest(action=action):
+                bridge = self._bridge()
+                bridge.bvh_runtime = BvhPlaybackRuntime(
+                    publish_callback=lambda *args: None,
+                    player_factory=_FalsePlayer,
+                )
+
+                with self.assertRaises(WebSocketException) as ctx:
+                    asyncio.run(
+                        WebSocketROS2Bridge.handle_bvh_play(
+                            bridge,
+                            {'type': 'bvh_play', 'action': action},
+                        )
+                    )
+
+                self.assertEqual(
+                    ctx.exception.error_code,
+                    ErrorCode.ROS_CALLBACK_FAILED,
+                )
+                self.assertEqual(
+                    ctx.exception.message,
+                    f'BVH play failed: {expected_message}',
+                )
+
+    def test_bvh_stop_remains_allowed_while_teleop_is_active(self):
+        class _Runtime:
+            def __init__(self):
+                self.requests = []
+
+            def apply_request(self, request):
+                self.requests.append(request)
+                return {'action': request.get('action'), 'loop': False}
 
         bridge = self._bridge(
             {
@@ -667,10 +695,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 'active_source': 'teleop',
             }
         )
-        bridge.bvh_player = _Player()
-        bridge._ensure_bvh_play_allowed = lambda: self.fail(
-            'stop request must not be blocked by active teleop'
-        )
+        bridge.bvh_runtime = _Runtime()
 
         result = asyncio.run(
             WebSocketROS2Bridge.handle_bvh_play(
@@ -679,26 +704,36 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
             )
         )
 
-        self.assertEqual(bridge.bvh_player.stop_calls, 1)
+        self.assertEqual(
+            bridge.bvh_runtime.requests,
+            [{
+                'action': None,
+                'loop': False,
+                'speed_ms': None,
+                'playback_rate': None,
+                'frame_ms': None,
+            }],
+        )
         self.assertEqual(
             result,
             {'status': 'accepted', 'action': None, 'loop': False},
         )
 
-    def test_execution_state_callback_stops_bvh_when_teleop_becomes_active(self):
-        class _Player:
+    def test_execution_state_callback_blocks_bvh_runtime_when_teleop_is_active(self):
+        class _Runtime:
             def __init__(self):
-                self.stop_calls = 0
+                self.blocked_calls = []
 
-            def stop(self):
-                self.stop_calls += 1
+            def set_blocked(self, blocked):
+                self.blocked_calls.append(blocked)
+                return len(self.blocked_calls) == 1
 
         class _Logger:
             def error(self, *args, **kwargs):
                 del args, kwargs
 
         bridge = self._bridge()
-        bridge.bvh_player = _Player()
+        bridge.bvh_runtime = _Runtime()
         bridge.ws_server = None
         bridge.ws_loop = None
         bridge.debug = False
@@ -737,8 +772,316 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
         WebSocketROS2Bridge.execution_state_callback(bridge, msg)
 
-        self.assertEqual(bridge.bvh_player.stop_calls, 1)
+        self.assertEqual(bridge.bvh_runtime.blocked_calls, [True])
         self.assertTrue(bridge.latest_execution_state['teleop_active'])
+
+    def test_bvh_request_waits_for_atomic_runtime_block_transition(self):
+        class _ObservedRLock:
+            def __init__(self):
+                self._lock = threading.RLock()
+                self.request_waiting = threading.Event()
+
+            def __enter__(self):
+                if threading.current_thread().name == 'bvh-request':
+                    self.request_waiting.set()
+                self._lock.acquire()
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                del exc_type, exc_value, traceback
+                self._lock.release()
+
+        class _Runtime:
+            def __init__(self):
+                self.blocked = False
+                self.set_blocked_entered = threading.Event()
+                self.finish_set_blocked = threading.Event()
+                self.apply_called = threading.Event()
+
+            def set_blocked(self, blocked):
+                self.set_blocked_entered.set()
+                if not self.finish_set_blocked.wait(timeout=2.0):
+                    raise RuntimeError('set_blocked coordination timed out')
+                self.blocked = bool(blocked)
+                return True
+
+            def apply_request(self, request):
+                self.apply_called.set()
+                if self.blocked:
+                    raise BvhPlaybackBlockedError('blocked')
+                return {
+                    'action': request.get('action'),
+                    'loop': bool(request.get('loop', False)),
+                }
+
+        class _Logger:
+            def error(self, *args, **kwargs):
+                del args, kwargs
+
+        gate = _ObservedRLock()
+        runtime = _Runtime()
+        bridge = self._bridge()
+        bridge._bvh_gate_lock = gate
+        bridge.bvh_runtime = runtime
+        bridge.ws_server = None
+        bridge.ws_loop = None
+        bridge.debug = False
+        bridge._debug_log = lambda *args, **kwargs: None
+        bridge._teleop_control_is_active = (
+            lambda: WebSocketROS2Bridge._teleop_control_is_active(bridge)
+        )
+        bridge._execution_state_msg_to_dict = (
+            lambda msg: WebSocketROS2Bridge._execution_state_msg_to_dict(msg)
+        )
+        bridge._raise_bvh_play_blocked = (
+            lambda: WebSocketROS2Bridge._raise_bvh_play_blocked(bridge)
+        )
+        bridge.get_logger = lambda: _Logger()
+
+        msg = types.SimpleNamespace(
+            mode='teleop_active',
+            active_source='teleop',
+            teleop_holder_id='client-race',
+            teleop_lease_id='lease-race',
+            estop_active=False,
+            teleop_active=True,
+            motion_active=False,
+            teleop_timeout_sec=0.8,
+            motion_timeout_sec=0.5,
+            teleop_control_remaining_sec=0.4,
+            last_teleop_control_action='claim',
+            last_teleop_control_accepted=True,
+            last_teleop_control_reason='accepted',
+            teleop_control_accepted_count=1,
+            teleop_control_rejected_count=0,
+            teleop_accepted_count=1,
+            motion_accepted_count=0,
+            teleop_rejected_count=0,
+            motion_rejected_count=0,
+            last_rejection_reason='',
+            stamp=types.SimpleNamespace(sec=1, nanosec=0),
+        )
+        outcomes = []
+
+        callback_thread = threading.Thread(
+            target=WebSocketROS2Bridge.execution_state_callback,
+            args=(bridge, msg),
+            name='execution-state',
+        )
+
+        def _request_bvh():
+            try:
+                outcomes.append(
+                    asyncio.run(
+                        WebSocketROS2Bridge.handle_bvh_play(
+                            bridge,
+                            {'type': 'bvh_play', 'action': 'wave'},
+                        )
+                    )
+                )
+            except Exception as exc:  # 由主线程断言具体拒绝类型和快照。
+                outcomes.append(exc)
+
+        request_thread = threading.Thread(
+            target=_request_bvh,
+            name='bvh-request',
+        )
+
+        callback_thread.start()
+        self.assertTrue(runtime.set_blocked_entered.wait(timeout=1.0))
+        request_thread.start()
+        try:
+            self.assertTrue(gate.request_waiting.wait(timeout=1.0))
+            self.assertFalse(runtime.apply_called.is_set())
+        finally:
+            runtime.finish_set_blocked.set()
+
+        callback_thread.join(timeout=1.0)
+        request_thread.join(timeout=1.0)
+        self.assertFalse(callback_thread.is_alive())
+        self.assertFalse(request_thread.is_alive())
+        self.assertTrue(runtime.apply_called.is_set())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], TeleopControlRejectedException)
+        self.assertEqual(
+            outcomes[0].details,
+            {
+                'reason': 'bvh_blocked_by_active_teleop',
+                'teleop_holder_id': 'client-race',
+                'teleop_lease_id': 'lease-race',
+                'teleop_active': True,
+                'active_source': 'teleop',
+            },
+        )
+
+    def test_runtime_block_failure_does_not_skip_execution_state_update(self):
+        class _Runtime:
+            def set_blocked(self, blocked):
+                del blocked
+                raise RuntimeError('stop failed')
+
+        class _Server:
+            def __init__(self):
+                self.states = []
+
+            def update_execution_state(self, state):
+                self.states.append(state)
+
+        class _Logger:
+            def __init__(self):
+                self.errors = []
+
+            def error(self, message):
+                self.errors.append(message)
+
+        logger = _Logger()
+        server = _Server()
+        bridge = self._bridge()
+        bridge.bvh_runtime = _Runtime()
+        bridge.ws_server = server
+        bridge.ws_loop = None
+        bridge.debug = False
+        bridge._debug_log = lambda *args, **kwargs: None
+        bridge._teleop_control_is_active = (
+            lambda: WebSocketROS2Bridge._teleop_control_is_active(bridge)
+        )
+        bridge._execution_state_msg_to_dict = (
+            lambda msg: WebSocketROS2Bridge._execution_state_msg_to_dict(msg)
+        )
+        bridge.get_logger = lambda: logger
+
+        msg = types.SimpleNamespace(
+            mode='teleop_active',
+            active_source='teleop',
+            teleop_holder_id='client-a',
+            teleop_lease_id='lease-1',
+            estop_active=False,
+            teleop_active=True,
+            motion_active=False,
+            teleop_timeout_sec=0.8,
+            motion_timeout_sec=0.5,
+            teleop_control_remaining_sec=0.4,
+            last_teleop_control_action='claim',
+            last_teleop_control_accepted=True,
+            last_teleop_control_reason='accepted',
+            teleop_control_accepted_count=1,
+            teleop_control_rejected_count=0,
+            teleop_accepted_count=1,
+            motion_accepted_count=0,
+            teleop_rejected_count=0,
+            motion_rejected_count=0,
+            last_rejection_reason='',
+            stamp=types.SimpleNamespace(sec=1, nanosec=0),
+        )
+
+        WebSocketROS2Bridge.execution_state_callback(bridge, msg)
+
+        self.assertTrue(bridge.latest_execution_state['teleop_active'])
+        self.assertEqual(len(server.states), 1)
+        self.assertIn('stop failed', logger.errors[0])
+
+    def test_shutdown_retries_runtime_close_before_websocket_cleanup(self):
+        calls = []
+
+        class _Runtime:
+            def __init__(self):
+                self.attempts = 0
+
+            def close(self):
+                self.attempts += 1
+                calls.append(f'runtime-{self.attempts}')
+                if self.attempts == 1:
+                    raise RuntimeError('first close failed')
+
+        class _Server:
+            async def stop(self):
+                calls.append('websocket')
+
+        class _Loop:
+            def stop(self):
+                return None
+
+            def call_soon_threadsafe(self, callback):
+                del callback
+                calls.append('loop-stop')
+
+        class _Future:
+            def result(self, timeout):
+                del timeout
+
+        class _Logger:
+            def __init__(self):
+                self.errors = []
+
+            def info(self, *args, **kwargs):
+                del args, kwargs
+
+            def error(self, message):
+                self.errors.append(message)
+
+        def _run_coroutine_threadsafe(coroutine, loop):
+            del loop
+            asyncio.run(coroutine)
+            return _Future()
+
+        logger = _Logger()
+        bridge = types.SimpleNamespace(
+            bvh_runtime=_Runtime(),
+            ws_server=_Server(),
+            ws_loop=_Loop(),
+            ws_thread=None,
+            get_logger=lambda: logger,
+        )
+
+        with mock.patch.object(
+            asyncio,
+            'run_coroutine_threadsafe',
+            _run_coroutine_threadsafe,
+        ):
+            WebSocketROS2Bridge.shutdown(bridge)
+
+        self.assertEqual(
+            calls,
+            ['runtime-1', 'runtime-2', 'websocket', 'loop-stop'],
+        )
+        self.assertEqual(len(logger.errors), 1)
+        self.assertIn('first close failed', logger.errors[0])
+
+    def test_shutdown_reports_incomplete_runtime_close(self):
+        class _Runtime:
+            def __init__(self):
+                self.attempts = 0
+
+            def close(self):
+                self.attempts += 1
+                raise RuntimeError('close still failing')
+
+        class _Logger:
+            def __init__(self):
+                self.infos = []
+                self.errors = []
+
+            def info(self, message):
+                self.infos.append(message)
+
+            def error(self, message):
+                self.errors.append(message)
+
+        logger = _Logger()
+        runtime = _Runtime()
+        bridge = types.SimpleNamespace(
+            bvh_runtime=runtime,
+            ws_server=None,
+            ws_loop=None,
+            ws_thread=None,
+            get_logger=lambda: logger,
+        )
+
+        WebSocketROS2Bridge.shutdown(bridge)
+
+        self.assertEqual(runtime.attempts, 2)
+        self.assertFalse(any('节点已关闭' in item for item in logger.infos))
+        self.assertIn('未确认关闭', logger.errors[-1])
 
 
 if __name__ == '__main__':

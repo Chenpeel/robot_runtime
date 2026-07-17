@@ -63,6 +63,28 @@ Action file (`config/bvh/walking.json`) example:
 - It does not reuse the teleop command entry.
 - If teleop is currently active, a new BVH playback request is rejected.
 - If teleop becomes active during playback, the current BVH playback is stopped.
+- `BvhPlaybackRuntime` creates and owns `BvhActionPlayer`, and serializes play,
+  blocked-state changes, and close operations. Transport adapters hold the
+  runtime, not the player itself.
+- Entering blocked state closes admission before stopping current playback.
+  If that stop is incomplete, a repeated `set_blocked(True)` retries it even
+  though the blocked state itself did not change. Once stopping completes,
+  repeated blocked calls do not stop again. The bool result still reports only
+  whether the blocked state changed. Explicit stop requests remain valid while
+  blocked or closed.
+- `close()` enters the closed/blocked terminal state and stops the player. If
+  stopping fails, close remains incomplete so a later `close()` can retry.
+- Each player worker generation has its own `threading.Event`. `play()` and
+  `stop()` return bool results, and a replacement worker is started only after
+  the previous worker is confirmed stopped. A timed-out live worker remains
+  tracked and causes replacement playback to be rejected.
+- The accepted `bvh_play_ack` shape, `TELEOP_CONTROL_REJECTED` category for
+  teleop blocking, and `ROS_CALLBACK_FAILED` category for player operation
+  failures remain transport-owned and stable. The motion output topic, timing
+  field forwarding, and teleop interlock also remain stable.
+- A player result of explicit `False` is now surfaced through the existing
+  `ROS_CALLBACK_FAILED` category. The old player API did not expose that bool
+  failure, so this is an intentional, observable safety tightening.
 
 ## Play Request Contract
 

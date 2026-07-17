@@ -106,6 +106,21 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("self.bvh_command_pub = self.create_publisher(", source)
         self.assertIn("self.bvh_command_pub.publish(msg)", source)
 
+    def test_bvh_player_lifecycle_is_owned_by_record_runtime(self):
+        """bridge_node 不应继续直接创建或管理 BvhActionPlayer。"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('BvhPlaybackRuntime', source)
+        self.assertIn('self.bvh_runtime = BvhPlaybackRuntime(', source)
+        self.assertIn('self.bvh_runtime.set_blocked(', source)
+        self.assertIn('self.bvh_runtime.close()', source)
+        self.assertNotIn('BvhActionPlayer', source)
+
     def test_bridge_node_no_longer_exposes_bvh_config_parameter(self):
         """BVH 配置路径不应继续作为 websocket bridge 的 public 参数暴露"""
         source = Path(

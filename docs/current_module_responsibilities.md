@@ -122,11 +122,20 @@
     `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式
     `type` 分发扩展，不再内建 BVH 协议知识。
   - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-    `bvh_play` 并调用上述 normalizer，同时保持 `bvh_play_ack` / 错误映射、
-    teleop guard 与 `/execution/motion/command` 输出不变。
-  - 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前会被桥接层直
-    接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停
-    止。
+    `bvh_play`、调用上述 normalizer 和 `BvhPlaybackRuntime`；既有 accepted
+    `bvh_play_ack` 形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别与播
+    放器操作失败使用的 `ROS_CALLBACK_FAILED` 类别继续保留。
+  - `bridge_node` 当前只持有 runtime 适配引用，不再直接创建或持有
+    `BvhActionPlayer`；播放器实例与生命周期由 `record_load_action` 内的
+    runtime 管理。
+  - `bridge_node` 使用同一原子门禁同步最新 execution state、runtime
+    blocked 状态与 `apply_request()` 播放准入；进入 teleop 活跃态时由
+    runtime 先阻断新播放再停止当前播放。
+  - 节点关闭时会调用 runtime 的 `close()` 进入 closed/blocked 终态；若首
+    次关闭未完成，shutdown 只额外重试一次，随后继续其余清理。
+  - `/execution/motion/command` 输出、BVH 播放 timing 字段透传和既有 teleop
+    联锁语义保持不变；player 明确返回 `False` 时则会通过既有
+    `ROS_CALLBACK_FAILED` 类别显式失败，这是安全性收紧。
   - 当前也已不再继续把 `bvh_action_file` 作为 WebSocket/bringup 的 public
     参数入口上抬；BVH 默认配置路径解析已完全收回 `record_load_action`。
   - 解析 WebSocket JSON 消息并下发舵机命令。
@@ -168,8 +177,9 @@
     口，但这仍属于包内局部约束，而不是能力边界本身已经彻底拆开。
   - 虽然隐式触发入口当前已被继续清掉，但 demo/BVH 能力本身仍挂在
     `websocket_bridge` 包内，还没有彻底迁出 teleop 主链路边界。
-  - demo/BVH 播放器的创建与运行生命周期当前仍由 `websocket_bridge` 管
-    理，尚未完成能力边界的最终拆出。
+  - demo/BVH 播放器和生命周期所有权虽已迁入 `record_load_action`，但
+    `websocket_bridge` 仍直接装配 runtime 并承担 WebSocket/ROS 适配，能力
+    依赖尚未从 teleop 主链路边界完全移除。
   - 显式 `teleop_claim` / `teleop_release` 链路虽然已经落地，并且执行状态里
     已补上最小控制权反馈、连接级 holder 语义和第一版 `teleop_lease_id`，
     但当前还没有更正式的抢占策略和上层接口约束。
@@ -574,6 +584,16 @@
   - 作为 `bvh_action_map.json` 的唯一配置所有者与默认解析入口。
   - 提供传输层无关的 `normalize_bvh_play_request`，负责显式 `bvh_play`
     直接字段的规范化与基础结构校验。
+  - 提供 `BvhPlaybackRuntime`，由它创建并持有 `BvhActionPlayer`，串行化播
+    放、blocked 状态切换与 close 生命周期。
+  - runtime 在进入 blocked 时先关闭新播放入口再停止当前播放；close 会进入
+    closed/blocked 终态，停止失败时保留未完成状态供后续重试，显式停止请求
+    在 blocked/closed 状态下仍可执行。
+  - blocked 状态下若停止尚未完成，同状态 `set_blocked(True)` 会继续尝试停
+    止；成功后再收到同状态调用不会重复停止，返回值仍只表示 blocked 状态本
+    身是否发生变化。
+  - `BvhActionPlayer` 为每代 worker 使用独立 `Event`，`play()` / `stop()`
+    以 bool 报告结果；上一代未确认退出时不会创建替代线程。
 - 当前主要输入
   - BVH 动作文件
   - WebSocket 侧触发的播放请求

@@ -142,8 +142,21 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   的规范化与基础结构校验当前由 `record_load_action` 持有。
 - 在通用 WebSocket 层内部，`bvh_play` 现在通过显式类型的通用消息注册面
   接入；`MessageHandler` 不再保留 BVH 枚举、专用 payload parser 或专用
-  callback surface。`bridge_node` 当前仍保留 WebSocket 适配、播放器编排、
-  teleop 联锁和 ACK/错误响应映射。
+  callback surface。`bridge_node` 当前只保留 WebSocket/ROS 适配并持有
+  `BvhPlaybackRuntime`，不再直接创建或持有 `BvhActionPlayer`；播放器和生命
+  周期所有权已迁入 `record_load_action`。
+- `bridge_node` 会根据执行状态切换 runtime 的 blocked 状态，并在节点关闭时
+  调用 `close()`；blocked 会先阻断新播放再停止当前播放，若停止未完成，同
+  状态的后续同步会继续重试。closed 后仍允许显式停止请求收敛状态。
+- 播放请求、最新 execution state 与 runtime blocked 状态由同一原子门禁保
+  护，避免播放准入与 teleop 状态切换之间出现竞态。shutdown 首次 close 未
+  完成时只额外重试一次，随后继续 WebSocket 与线程清理。
+- 既有 accepted `bvh_play_ack` 仍返回 `status` / `action` / `loop`，teleop
+  阻断仍使用 `TELEOP_CONTROL_REJECTED`，播放器操作失败仍归入
+  `ROS_CALLBACK_FAILED`。当 player 明确返回 `False` 时，现在会通过后一类
+  错误显式失败；旧 player 未暴露该 bool 结果，因此这是安全性收紧。
+- `/execution/motion/command` 输出、`speed_ms` / `playback_rate` / `frame_ms`
+  透传及既有 teleop 联锁语义保持不变。
 
 状态查询与状态广播现在也会携带执行层反馈：
 

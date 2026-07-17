@@ -31,8 +31,9 @@ from .ws_server import WebSocketBridgeServer
 from .error_codes import ErrorCode
 from .error_codes import TeleopControlRejectedException
 from .error_codes import WebSocketException
-from record_load_action.bvh_player import BvhActionPlayer
 from record_load_action.bvh_player import normalize_bvh_play_request
+from record_load_action.bvh_runtime import BvhPlaybackBlockedError
+from record_load_action.bvh_runtime import BvhPlaybackRuntime
 from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
@@ -126,6 +127,10 @@ class WebSocketROS2Bridge(Node):
             10
         )
 
+        # 串行化 execution state 门禁提交与 BVH 请求，避免状态/runtime 分裂。
+        self._bvh_gate_lock = threading.RLock()
+        self.latest_execution_state = {}
+
         # 订阅舵机状态反馈
         self.servo_state_sub = self.create_subscription(
             ServoState,
@@ -139,7 +144,6 @@ class WebSocketROS2Bridge(Node):
             self.execution_state_callback,
             10
         )
-        self.latest_execution_state = {}
 
         # 订阅 IMU 传感器数据
         self.imu_data_sub = None
@@ -153,8 +157,8 @@ class WebSocketROS2Bridge(Node):
         else:
             self.get_logger().warn('ImuData消息不可用，已跳过IMU订阅')
 
-        # BVH播放器
-        self.bvh_player = BvhActionPlayer(
+        # BVH 播放 runtime 由 record_load_action 持有播放器与生命周期状态。
+        self.bvh_runtime = BvhPlaybackRuntime(
             publish_callback=self._publish_bvh_command,
             logger=self.get_logger()
         )
@@ -342,37 +346,24 @@ class WebSocketROS2Bridge(Node):
                 details={"received_data": payload},
             )
 
-        action = request.get("action")
-        loop = bool(request.get("loop", False))
-        speed_ms = request.get("speed_ms")
-        playback_rate = request.get("playback_rate")
-        frame_ms = request.get("frame_ms")
-
-        try:
-            if action in (None, '', 'null'):
-                self.bvh_player.stop()
-            else:
-                self._ensure_bvh_play_allowed()
-                self.bvh_player.play(
-                    action,
-                    loop=loop,
-                    speed_ms=speed_ms,
-                    playback_rate=playback_rate,
-                    frame_ms=frame_ms
+        with self._bvh_gate_lock:
+            try:
+                result = self.bvh_runtime.apply_request(request)
+            except BvhPlaybackBlockedError:
+                # 拒绝详情必须与触发 runtime 阻塞的 execution state 一致。
+                self._raise_bvh_play_blocked()
+            except Exception as exc:
+                cause = getattr(exc, 'cause', None) or exc
+                raise WebSocketException(
+                    error_code=ErrorCode.ROS_CALLBACK_FAILED,
+                    message=f"BVH play failed: {str(cause)}",
+                    details={"payload": request, "exception": str(cause)},
                 )
-        except WebSocketException:
-            raise
-        except Exception as exc:
-            raise WebSocketException(
-                error_code=ErrorCode.ROS_CALLBACK_FAILED,
-                message=f"BVH play failed: {str(exc)}",
-                details={"payload": request, "exception": str(exc)},
-            )
 
         return {
             "status": "accepted",
-            "action": action,
-            "loop": loop,
+            "action": result.get("action"),
+            "loop": bool(result.get("loop", False)),
         }
 
     async def handle_heartbeat(self, context: dict | None = None):
@@ -444,18 +435,23 @@ class WebSocketROS2Bridge(Node):
     def execution_state_callback(self, msg: ExecutionState):
         """处理 execution_manager 状态反馈。"""
         try:
-            was_teleop_active = self._teleop_control_is_active()
             state = self._execution_state_msg_to_dict(msg)
-            changed = state != self.latest_execution_state
-            self.latest_execution_state = state
+            with self._bvh_gate_lock:
+                changed = state != self.latest_execution_state
+                self.latest_execution_state = state
 
-            if (
-                changed
-                and not was_teleop_active
-                and self._teleop_control_is_active()
-                and self.bvh_player
-            ):
-                self.bvh_player.stop()
+                bvh_blocked = self._teleop_control_is_active()
+                bvh_blocked_changed = False
+                try:
+                    bvh_blocked_changed = self.bvh_runtime.set_blocked(
+                        bvh_blocked
+                    )
+                except Exception as exc:
+                    self.get_logger().error(
+                        f'更新 BVH 播放阻塞状态失败: {exc}'
+                    )
+
+            if bvh_blocked_changed and bvh_blocked:
                 self._debug_log(
                     "bvh_play",
                     "stopped because teleop control became active",
@@ -729,28 +725,26 @@ class WebSocketROS2Bridge(Node):
             },
         )
 
-    def _ensure_bvh_play_allowed(self) -> None:
-        execution_state = dict(self.latest_execution_state)
-        teleop_active = bool(execution_state.get('teleop_active'))
-        active_source = str(execution_state.get('active_source') or '')
+    def _raise_bvh_play_blocked(self) -> None:
+        with self._bvh_gate_lock:
+            execution_state = dict(self.latest_execution_state)
+            teleop_active = bool(execution_state.get('teleop_active'))
+            active_source = str(execution_state.get('active_source') or '')
 
-        if not teleop_active or active_source != 'teleop':
-            return
-
-        raise TeleopControlRejectedException(
-            message='bvh play rejected: bvh_blocked_by_active_teleop',
-            details={
-                'reason': 'bvh_blocked_by_active_teleop',
-                'teleop_holder_id': str(
-                    execution_state.get('teleop_holder_id') or ''
-                ),
-                'teleop_lease_id': str(
-                    execution_state.get('teleop_lease_id') or ''
-                ),
-                'teleop_active': teleop_active,
-                'active_source': active_source,
-            },
-        )
+            raise TeleopControlRejectedException(
+                message='bvh play rejected: bvh_blocked_by_active_teleop',
+                details={
+                    'reason': 'bvh_blocked_by_active_teleop',
+                    'teleop_holder_id': str(
+                        execution_state.get('teleop_holder_id') or ''
+                    ),
+                    'teleop_lease_id': str(
+                        execution_state.get('teleop_lease_id') or ''
+                    ),
+                    'teleop_active': teleop_active,
+                    'active_source': active_source,
+                },
+            )
 
     @staticmethod
     def _motion_value_encoding_for_servo_type(servo_type: str) -> str:
@@ -891,9 +885,17 @@ class WebSocketROS2Bridge(Node):
         """关闭节点和WebSocket服务器"""
         self.get_logger().info('开始关闭WebSocket桥接节点...')
 
-        # 停止BVH播放
-        if self.bvh_player:
-            self.bvh_player.stop()
+        # 先关闭 BVH runtime，禁止新播放并停止当前 worker。
+        bvh_runtime_closed = False
+        for _attempt in range(2):
+            try:
+                self.bvh_runtime.close()
+                bvh_runtime_closed = True
+                break
+            except Exception as exc:
+                self.get_logger().error(
+                    f'关闭 BVH 播放 runtime 失败: {exc}'
+                )
 
         # 停止WebSocket服务器
         if self.ws_server and self.ws_loop:
@@ -915,7 +917,12 @@ class WebSocketROS2Bridge(Node):
         if self.ws_thread and self.ws_thread.is_alive():
             self.ws_thread.join(timeout=2.0)
 
-        self.get_logger().info('WebSocket桥接节点已关闭')
+        if bvh_runtime_closed:
+            self.get_logger().info('WebSocket桥接节点已关闭')
+        else:
+            self.get_logger().error(
+                'WebSocket桥接资源已清理，但 BVH runtime 未确认关闭'
+            )
 
 
 def main(args=None):

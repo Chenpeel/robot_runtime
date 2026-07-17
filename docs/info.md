@@ -81,12 +81,26 @@
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
 - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-  `bvh_play` 并调用上述 normalizer，同时保持 `bvh_play_ack` / 错误映射、
-  teleop guard 与 `/execution/motion/command` 输出不变。
-- 当执行层当前处于 teleop 活跃态时，新的 BVH 播放请求当前也会被桥接层直
-  接拒绝；若 teleop 在播放过程中变为活跃态，当前 BVH 播放也会立即停止。
-- demo/BVH 播放器的创建与运行生命周期当前仍留在 `websocket_bridge`，能力
-  边界尚未完成最终拆出。
+  `bvh_play` 并调用上述 normalizer；既有 accepted `bvh_play_ack` 形状、
+  teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
+  `ROS_CALLBACK_FAILED` 类别继续保留。
+- `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
+  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有 runtime
+  适配引用，不再直接持有播放器。
+- 当执行层进入 teleop 活跃态时，桥接层会把 runtime 置为 blocked；runtime
+  会先阻断新播放再停止当前播放。节点关闭时则进入 closed/blocked 终态并停
+  止播放器，停止失败的关闭仍可重试，显式停止请求在 blocked/closed 状态下
+  仍被允许。
+- blocked 状态下若停止尚未完成，后续同状态 `set_blocked(True)` 会继续重
+  试；`bridge_node` 也会通过同一原子门禁同步 execution state、runtime
+  blocked 状态与播放准入，shutdown 对未完成 close 只额外重试一次。
+- `BvhActionPlayer` 当前为每代 worker 使用独立 `Event`，并以 bool
+  `play()` / `stop()` 报告操作结果；只有确认上一代退出后才会启动下一代，
+  超时后仍存活的 worker 会保留句柄并拒绝替代线程。
+- `/execution/motion/command` topic、播放 timing 字段透传和 teleop 联锁语义
+  保持不变；但当 player 明确返回 `False` 时，现在会通过既有
+  `ROS_CALLBACK_FAILED` 类别显式失败，而不是沿用旧 player 未暴露该结果时
+  的隐式成功路径，这是本轮的安全性收紧。
 - 仿真域 package-level launch contract、默认参数归属与 bringup public
   surface 在本轮也已基本收口完成；当前剩余更多是最终包边界合并与必要维
   护，而不再是主推进阻塞项。

@@ -41,14 +41,19 @@ class BvhActionPlayer:
         self,
         publish_callback: Callable[[str, int, int, int], None],
         config_path: str = '',
-        logger=None
+        logger=None,
+        *,
+        stop_timeout_sec: float = 1.0
     ):
         self._publish = publish_callback
         self._config_path = config_path or ''
         self._logger = logger
+        self._stop_timeout_sec = max(0.0, float(stop_timeout_sec))
         self._thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
-        self._lock = threading.Lock()
+        self._stop_event: Optional[threading.Event] = None
+        self._generation = 0
+        self._operation_lock = threading.Lock()
+        self._state_lock = threading.Lock()
         self._bvh_cache: Dict[str, Dict] = {}
         self._action_file_cache: Dict[str, Dict] = {}
 
@@ -770,30 +775,115 @@ class BvhActionPlayer:
     def play(self, action, loop: bool = False, speed_ms: Optional[int] = None,
              playback_rate: Optional[float] = None,
              frame_ms: Optional[float] = None) -> bool:
-        if action in (None, '', 'null'):
-            self.stop()
-            return False
+        with self._operation_lock:
+            if action in (None, '', 'null'):
+                self._stop_locked()
+                return False
 
-        with self._lock:
-            self.stop()
-            self._stop_event = threading.Event()
-            self._thread = threading.Thread(
-                target=self._run,
-                args=(action, loop, speed_ms, playback_rate, frame_ms),
-                daemon=True
-            )
-            self._thread.start()
+            # 必须确认上一代 worker 已退出，才允许创建下一代。
+            if not self._stop_locked():
+                return False
+
+            local_stop_event = threading.Event()
+            with self._state_lock:
+                self._generation += 1
+                generation = self._generation
+                worker = threading.Thread(
+                    target=self._worker_entry,
+                    args=(
+                        generation,
+                        local_stop_event,
+                        action,
+                        loop,
+                        speed_ms,
+                        playback_rate,
+                        frame_ms,
+                    ),
+                    daemon=True
+                )
+                self._thread = worker
+                self._stop_event = local_stop_event
+
+            try:
+                worker.start()
+            except Exception as exc:
+                with self._state_lock:
+                    if (
+                        self._generation == generation and
+                        self._thread is worker
+                    ):
+                        self._thread = None
+                        self._stop_event = None
+                self._log('error', f'Failed to start BVH worker: {exc}')
+                return False
             return True
 
-    def stop(self) -> None:
-        if self._thread and self._thread.is_alive():
-            self._stop_event.set()
-            self._thread.join(timeout=1.0)
-        self._thread = None
+    def stop(self) -> bool:
+        with self._operation_lock:
+            return self._stop_locked()
+
+    def _stop_locked(self) -> bool:
+        """停止当前 worker；调用方必须持有 ``_operation_lock``。"""
+        with self._state_lock:
+            worker = self._thread
+            local_stop_event = self._stop_event
+            generation = self._generation
+
+        if worker is None:
+            return True
+
+        if local_stop_event is not None:
+            local_stop_event.set()
+
+        # publish 回调可能在 worker 内同步调用 stop()，线程不能 join 自身。
+        if worker is threading.current_thread():
+            return False
+
+        worker.join(timeout=self._stop_timeout_sec)
+        if worker.is_alive():
+            # 保留仍存活 worker 的句柄，禁止后续 play() 创建替代线程。
+            return False
+
+        with self._state_lock:
+            if (
+                self._generation == generation and
+                self._thread is worker
+            ):
+                self._thread = None
+                self._stop_event = None
+        return True
+
+    def _worker_entry(self, generation: int,
+                      local_stop_event: threading.Event,
+                      action, loop: bool, speed_ms: Optional[int],
+                      playback_rate: Optional[float],
+                      frame_ms: Optional[float]) -> None:
+        worker = threading.current_thread()
+        try:
+            self._run(
+                action,
+                loop,
+                speed_ms,
+                playback_rate,
+                frame_ms,
+                local_stop_event,
+            )
+        except Exception as exc:
+            self._log('error', f'BVH worker failed: {exc}')
+        finally:
+            # 旧 worker 只能清理自己的代次，不能覆盖新 worker 状态。
+            with self._state_lock:
+                if (
+                    self._generation == generation and
+                    self._thread is worker
+                ):
+                    self._thread = None
+                    self._stop_event = None
 
     def _run(self, action, loop: bool, speed_ms: Optional[int],
              playback_rate: Optional[float],
-             frame_ms: Optional[float]) -> None:
+             frame_ms: Optional[float],
+             local_stop_event: threading.Event) -> None:
         config, path = self._load_config()
         if not config:
             self._log('warn', 'BVH action config is empty')
@@ -872,32 +962,14 @@ class BvhActionPlayer:
 
         while True:
             for frame in frames:
-                if self._stop_event.is_set():
+                if local_stop_event.is_set():
                     self._log('info', f'BVH play stopped: {action_name}')
                     return
 
                 if frame_delay_ms is not None:
-                    start_ts = time.time()
+                    start_ts = time.monotonic()
                     for cmd in frame:
-                        try:
-                            servo_type = cmd.get('servo_type', default_servo_type)
-                            servo_id = int(cmd.get('id'))
-                            position = int(cmd.get('position'))
-                            position = _limit_position(servo_id, position)
-                            self._publish(servo_type, servo_id, position, fixed_speed)
-                        except Exception as exc:
-                            self._log('warn', f'BVH publish failed: {exc}')
-                            continue
-
-                    delay = frame_delay_ms
-                    if delay and delay > 0:
-                        elapsed = (time.time() - start_ts) * 1000.0
-                        remaining = max(0.0, delay - elapsed)
-                        if remaining > 0:
-                            time.sleep(remaining / 1000.0)
-                else:
-                    for cmd in frame:
-                        if self._stop_event.is_set():
+                        if local_stop_event.is_set():
                             self._log('info', f'BVH play stopped: {action_name}')
                             return
                         try:
@@ -910,7 +982,34 @@ class BvhActionPlayer:
                             self._log('warn', f'BVH publish failed: {exc}')
                             continue
 
-                        time.sleep(fixed_speed / 1000.0)
+                    delay = frame_delay_ms
+                    if delay and delay > 0:
+                        elapsed = (time.monotonic() - start_ts) * 1000.0
+                        remaining = max(0.0, delay - elapsed)
+                        if (
+                            remaining > 0 and
+                            local_stop_event.wait(remaining / 1000.0)
+                        ):
+                            self._log('info', f'BVH play stopped: {action_name}')
+                            return
+                else:
+                    for cmd in frame:
+                        if local_stop_event.is_set():
+                            self._log('info', f'BVH play stopped: {action_name}')
+                            return
+                        try:
+                            servo_type = cmd.get('servo_type', default_servo_type)
+                            servo_id = int(cmd.get('id'))
+                            position = int(cmd.get('position'))
+                            position = _limit_position(servo_id, position)
+                            self._publish(servo_type, servo_id, position, fixed_speed)
+                        except Exception as exc:
+                            self._log('warn', f'BVH publish failed: {exc}')
+                            continue
+
+                        if local_stop_event.wait(fixed_speed / 1000.0):
+                            self._log('info', f'BVH play stopped: {action_name}')
+                            return
 
             if not loop:
                 break
