@@ -86,8 +86,8 @@ class TestNodeInitialization(unittest.TestCase):
         self.assertIn("motion_msg.requester_id = ''", source)
         self.assertIn("motion_msg.lease_id = ''", source)
 
-    def test_motion_command_does_not_mirror_duration_into_compat_speed_field(self):
-        """motion 控制输出只写入显式 duration_ms，不镜像旧 speed 字段"""
+    def test_motion_command_uses_explicit_duration_without_speed_fallback(self):
+        """motion 控制输出只读取显式 duration_ms，不再依赖旧 speed 字段"""
         source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -96,6 +96,8 @@ class TestNodeInitialization(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn("def _build_motion_command", source)
+        self.assertIn("duration_ms = int(cmd['duration_ms'])", source)
+        self.assertNotIn("cmd.get('duration_ms', cmd['speed'])", source)
         self.assertIn("motion_msg.duration_ms = duration_ms", source)
         self.assertNotIn("motion_msg.speed = duration_ms", source)
 

@@ -212,7 +212,7 @@ class Parallel3DOFControllerNode(Node):
 
     def _build_motion_command(self, cmd: dict) -> MotionCommand:
         target_pulse_us = int(cmd['position'])
-        duration_ms = int(cmd.get('duration_ms', cmd['speed']))
+        duration_ms = int(cmd['duration_ms'])
 
         motion_msg = MotionCommand()
         motion_msg.servo_type = "bus"

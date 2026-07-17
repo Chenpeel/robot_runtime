@@ -181,8 +181,8 @@
   `execution_manager` 已优先读取新字段，`websocket_bridge` 仍保留双写；其中
   `parallel_3dof_controller` 已先在 producer 内部显式以
   `duration_ms` / `value_encoding` 作为主语义，求解器输出当前也已补充
-  `duration_ms`，控制器发布 `MotionCommand` 时只写入这组显式字段，不再镜像
-  旧 `speed`。
+  `duration_ms`，控制器只接受该显式时长，并在发布 `MotionCommand` 时只写入
+  这组显式字段，不再回退或镜像旧 `speed`。
 - `execution_manager` 当前也已移除 consumer 侧旧 `speed` 时长回退：内部
   setpoint 时长只来自显式正值 `duration_ms`，旧 `MotionCommand.speed` 不
   再被提升为内部执行时长。

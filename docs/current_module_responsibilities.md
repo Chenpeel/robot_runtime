@@ -236,8 +236,8 @@
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
     `value_encoding` 作为主语义，不再镜像写入旧 `speed` 字段。
-  - 求解器输出当前也已补充 `duration_ms`，控制器优先消费该字段；旧
-    `speed` 字段只保留在求解器内部的同值兼容镜像中，不再传入
+  - 求解器输出当前也已补充 `duration_ms`，控制器只消费该字段；旧 `speed`
+    字段只保留在求解器内部的同值兼容镜像中，不再被 controller 读取或传入
     `MotionCommand`。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
