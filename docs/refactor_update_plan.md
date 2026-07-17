@@ -174,8 +174,11 @@
   `execution_manager` 已优先读取新字段，`websocket_bridge` 与
   `parallel_3dof_controller` 也已开始双写；其中
   `parallel_3dof_controller` 已先在 producer 内部显式以
-  `duration_ms` / `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜
-  像字段。
+  `duration_ms` / `value_encoding` 作为主语义，求解器输出当前也已补充
+  `duration_ms`，控制器优先消费该字段，并将 `speed` 保留为兼容镜像字段。
+- `execution_manager` 当前也已把 consumer 侧时长回退继续收紧为：显式
+  `duration_ms` 为主，旧 `speed` 只在正值时作为兼容回退，避免无效旧字段继
+  续被提升为内部 setpoint 时长。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `MotionCommand` 风格字段：显式补 `value_encoding` / `duration_ms`，并把
   bus 目标值在桥接前归一到 pulse us；`speed` 则只继续作为兼容镜像字段。
@@ -203,14 +206,15 @@
   对 WebSocket 实现的依赖。
 - `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
   接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
-  runtime 装配。
+  runtime 装配；显式消息类型和 BVH 播放失败细节也由 adapter 统一提供给
+  bridge 映射。
 - 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
-- `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-  `bvh_play` 并调用上述 adapter；既有 accepted `bvh_play_ack` 形状、teleop
-  拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
-  `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
+- `bridge_node` 仍是当前 WebSocket 适配点：通过 adapter 暴露的显式消息类
+  型注册通用消息回调，并调用上述 adapter；既有 accepted `bvh_play_ack`
+  形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败
+  使用的 `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
 - `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
   `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
   `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
@@ -237,8 +241,9 @@
    义。
 2. 继续收紧 `motion_msgs` 的字段语义，减少过渡式 servo 风格字段长期保留；
    当前已先在 `execution_manager` 内部补上中性适配层，并已为消息增量补充更
-   明确的时长和编码语义。下一步重点转为继续扩大 producer/consumer 对新字
-   段的优先级，逐步弱化旧字段的歧义。
+   明确的时长和编码语义；consumer 侧时长回退也已收紧为只接受正值旧
+   `speed`。下一步重点转为继续扩大 producer/consumer 对新字段的优先级，逐
+   步弱化旧字段的歧义。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
    明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
    但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端

@@ -119,8 +119,23 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn('self.bvh_playback = BvhWebSocketPlaybackAdapter(', source)
         self.assertIn('self.bvh_playback.set_blocked(', source)
         self.assertIn('self.bvh_playback.close()', source)
+        self.assertIn('BvhWebSocketPlaybackError', source)
         self.assertNotIn('BvhPlaybackRuntime', source)
         self.assertNotIn('BvhActionPlayer', source)
+        self.assertNotIn('BvhPlaybackBlockedError', source)
+        self.assertNotIn('BvhPlaybackInvalidRequestError', source)
+
+    def test_bvh_message_type_registration_is_owned_by_record_adapter(self):
+        """bridge_node 不应继续硬编码 BVH 显式消息名。"""
+        source = Path(
+            os.path.join(
+                os.path.dirname(__file__),
+                '../websocket_bridge/bridge_node.py'
+            )
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('self.bvh_playback.message_type', source)
+        self.assertNotIn('set_message_callback("bvh_play"', source)
 
     def test_bridge_node_no_longer_exposes_bvh_config_parameter(self):
         """BVH 配置路径不应继续作为 websocket bridge 的 public 参数暴露"""

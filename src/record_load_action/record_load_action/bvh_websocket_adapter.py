@@ -3,19 +3,81 @@
 from typing import Callable, Dict
 
 from .bvh_request import normalize_bvh_play_request
+from .bvh_runtime import BvhPlaybackBlockedError
 from .bvh_runtime import BvhPlaybackRuntime
 
 
-class BvhPlaybackInvalidRequestError(ValueError):
+class BvhWebSocketPlaybackError(RuntimeError):
+    """WebSocket-facing BVH 播放错误。"""
+
+    INVALID_REQUEST = 'invalid_request'
+    BLOCKED = 'blocked'
+    OPERATION_FAILED = 'operation_failed'
+
+    def __init__(
+        self,
+        kind: str,
+        message: str,
+        details: Dict | None = None,
+        payload=None,
+        cause=None,
+    ):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.details = details or {}
+        self.payload = payload
+        self.cause = cause
+
+    @classmethod
+    def invalid_request(cls, payload):
+        return BvhPlaybackInvalidRequestError(payload)
+
+    @classmethod
+    def blocked(cls, payload, cause):
+        return cls(
+            cls.BLOCKED,
+            'BVH playback is blocked',
+            details={
+                'payload': payload,
+                'exception': str(cause),
+            },
+            payload=payload,
+            cause=cause,
+        )
+
+    @classmethod
+    def operation_failed(cls, payload, exc):
+        cause = getattr(exc, 'cause', None) or exc
+        request = getattr(exc, 'request', payload)
+        return cls(
+            cls.OPERATION_FAILED,
+            f'BVH play failed: {str(cause)}',
+            details={
+                'payload': request,
+                'exception': str(cause),
+            },
+            payload=request,
+            cause=cause,
+        )
+
+
+class BvhPlaybackInvalidRequestError(BvhWebSocketPlaybackError):
     """显式 ``bvh_play`` payload 无法规范化。"""
 
     def __init__(self, payload):
-        super().__init__('Invalid BVH play payload')
-        self.payload = payload
+        super().__init__(
+            BvhWebSocketPlaybackError.INVALID_REQUEST,
+            'BVH action payload invalid',
+            details={'received_data': payload},
+            payload=payload,
+        )
 
 
 class BvhWebSocketPlaybackAdapter:
     """持有 BVH runtime，并将显式 ``bvh_play`` payload 适配到播放请求。"""
+
+    message_type = 'bvh_play'
 
     def __init__(
         self,
@@ -43,9 +105,17 @@ class BvhWebSocketPlaybackAdapter:
         """处理 ``bvh_play`` payload，并返回既有 ack 数据。"""
         request = normalize_bvh_play_request(payload)
         if request is None:
-            raise BvhPlaybackInvalidRequestError(payload)
+            raise BvhWebSocketPlaybackError.invalid_request(payload)
 
-        result = self._runtime.apply_request(request)
+        try:
+            result = self._runtime.apply_request(request)
+        except BvhPlaybackBlockedError as exc:
+            raise BvhWebSocketPlaybackError.blocked(payload, exc) from exc
+        except Exception as exc:
+            raise BvhWebSocketPlaybackError.operation_failed(
+                payload,
+                exc,
+            ) from exc
 
         return {
             'status': 'accepted',

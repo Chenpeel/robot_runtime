@@ -145,7 +145,8 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   callback surface。`bridge_node` 当前只保留 WebSocket/ROS 适配并持有
   `BvhWebSocketPlaybackAdapter`，不再直接创建或持有 `BvhActionPlayer` 或
   `BvhPlaybackRuntime`；播放器、runtime 装配和生命周期所有权已迁入
-  `record_load_action`。
+  `record_load_action`。显式消息类型和 BVH 播放失败细节也由 adapter 统一
+  提供给 bridge 映射。
 - `bridge_node` 会根据执行状态切换 adapter/runtime 的 blocked 状态，并在节
   点关闭时调用 `close()`；blocked 会先阻断新播放再停止当前播放，若停止未
   完成，同状态的后续同步会继续重试。closed 后仍允许显式停止请求收敛状态。

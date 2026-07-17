@@ -14,6 +14,7 @@ from record_load_action.bvh_runtime import BvhPlaybackBlockedError
 from record_load_action.bvh_websocket_adapter import (
     BvhPlaybackInvalidRequestError,
 )
+from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackError
 from record_load_action.bvh_websocket_adapter import (
     BvhWebSocketPlaybackAdapter,
 )
@@ -105,16 +106,45 @@ class BvhWebSocketPlaybackAdapterTest(unittest.TestCase):
         self.assertEqual(ctx.exception.payload['type'], 'bvh_play')
         self.assertEqual(runtime.requests, [])
 
-    def test_runtime_blocked_error_is_preserved_for_bridge_mapping(self):
+    def test_runtime_blocked_error_is_wrapped_for_bridge_mapping(self):
         runtime = _Runtime()
         runtime.exception = BvhPlaybackBlockedError('blocked')
         adapter = self._adapter(runtime)
 
-        with self.assertRaises(BvhPlaybackBlockedError):
+        with self.assertRaises(BvhWebSocketPlaybackError) as ctx:
             adapter.handle_play_payload({
                 'type': 'bvh_play',
                 'action': 'wave',
             })
+
+        self.assertEqual(
+            ctx.exception.kind,
+            BvhWebSocketPlaybackError.BLOCKED,
+        )
+
+    def test_runtime_failure_is_wrapped_with_existing_error_details(self):
+        runtime = _Runtime()
+        runtime.exception = RuntimeError('player failed')
+        adapter = self._adapter(runtime)
+
+        with self.assertRaises(BvhWebSocketPlaybackError) as ctx:
+            adapter.handle_play_payload({
+                'type': 'bvh_play',
+                'action': 'wave',
+            })
+
+        self.assertEqual(
+            ctx.exception.kind,
+            BvhWebSocketPlaybackError.OPERATION_FAILED,
+        )
+        self.assertEqual(ctx.exception.message, 'BVH play failed: player failed')
+        self.assertEqual(
+            ctx.exception.details,
+            {
+                'payload': {'type': 'bvh_play', 'action': 'wave'},
+                'exception': 'player failed',
+            },
+        )
 
     def test_runtime_lifecycle_methods_are_delegated(self):
         runtime = _Runtime()

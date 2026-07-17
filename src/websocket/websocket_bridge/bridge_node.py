@@ -31,8 +31,7 @@ from .ws_server import WebSocketBridgeServer
 from .error_codes import ErrorCode
 from .error_codes import TeleopControlRejectedException
 from .error_codes import WebSocketException
-from record_load_action.bvh_runtime import BvhPlaybackBlockedError
-from record_load_action.bvh_websocket_adapter import BvhPlaybackInvalidRequestError
+from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackError
 from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackAdapter
 from .debug_aggregator import DebugAggregator
 
@@ -199,7 +198,10 @@ class WebSocketROS2Bridge(Node):
             self.ws_server.set_teleop_release_callback(self.handle_teleop_release)
             self.ws_server.set_heartbeat_callback(self.handle_heartbeat)
             self.ws_server.set_status_query_callback(self.handle_status_query)
-            self.ws_server.set_message_callback("bvh_play", self.handle_bvh_play)
+            self.ws_server.set_message_callback(
+                self.bvh_playback.message_type,
+                self.handle_bvh_play,
+            )
 
             # 运行服务器
             try:
@@ -341,22 +343,26 @@ class WebSocketROS2Bridge(Node):
         with self._bvh_gate_lock:
             try:
                 return self.bvh_playback.handle_play_payload(payload)
-            except BvhPlaybackInvalidRequestError as exc:
-                raise WebSocketException(
-                    error_code=ErrorCode.INVALID_PARAMETER_VALUE,
-                    message="BVH action payload invalid",
-                    details={"received_data": exc.payload},
+            except BvhWebSocketPlaybackError as exc:
+                if exc.kind == BvhWebSocketPlaybackError.BLOCKED:
+                    # 拒绝详情必须与触发 runtime 阻塞的 execution state 一致。
+                    self._raise_bvh_play_blocked()
+
+                error_code = (
+                    ErrorCode.INVALID_PARAMETER_VALUE
+                    if exc.kind == BvhWebSocketPlaybackError.INVALID_REQUEST
+                    else ErrorCode.ROS_CALLBACK_FAILED
                 )
-            except BvhPlaybackBlockedError:
-                # 拒绝详情必须与触发 runtime 阻塞的 execution state 一致。
-                self._raise_bvh_play_blocked()
+                raise WebSocketException(
+                    error_code=error_code,
+                    message=exc.message,
+                    details=exc.details,
+                )
             except Exception as exc:
-                cause = getattr(exc, 'cause', None) or exc
-                request = getattr(exc, 'request', payload)
                 raise WebSocketException(
                     error_code=ErrorCode.ROS_CALLBACK_FAILED,
-                    message=f"BVH play failed: {str(cause)}",
-                    details={"payload": request, "exception": str(cause)},
+                    message=f"BVH play failed: {str(exc)}",
+                    details={"payload": payload, "exception": str(exc)},
                 )
 
         raise WebSocketException(

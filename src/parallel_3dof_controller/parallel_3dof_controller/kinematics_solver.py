@@ -229,16 +229,17 @@ class Parallel3DOFKinematicsSolver:
             pitch: 俯仰角 (弧度)
             yaw: 偏航角 (弧度)
             ankle_side: 'right'/'left' 或自定义舵机组名
-            speed: 舵机运动时间 (毫秒)
+            speed: 舵机运动时间 (毫秒，兼容参数名)
 
         返回:
-            舵机命令列表 [{'id': int, 'position': int, 'speed': int}, ...]
+            舵机命令列表
+            [{'id': int, 'position': int, 'duration_ms': int, 'speed': int}, ...]
 
         示例:
             >>> solver = Parallel3DOFKinematicsSolver()
             >>> commands = solver.rpy_to_servo_commands(0.1, 0.1, 0.0)
             >>> print(commands)
-            [{'id': 10, 'position': 1500, 'speed': 100}, ...]
+            [{'id': 10, 'position': 1500, 'duration_ms': 100, 'speed': 100}, ...]
         """
         # 1. 将RPY转换为theta角
         kinematics_result = self.rpy_to_theta_angles(roll, pitch, yaw)
@@ -271,6 +272,8 @@ class Parallel3DOFKinematicsSolver:
             servo_group['servo_3']
         ]
 
+        duration_ms = int(speed)
+
         # 3. 转换为舵机命令
         commands = []
         for i, (theta, config) in enumerate(zip(theta_angles, servo_configs)):
@@ -278,7 +281,8 @@ class Parallel3DOFKinematicsSolver:
             commands.append({
                 'id': config['id'],
                 'position': position,
-                'speed': speed,
+                'duration_ms': duration_ms,
+                'speed': duration_ms,
                 'theta': float(theta),  # 调试信息
                 'theta_deg': float(np.degrees(theta))  # 调试信息
             })

@@ -117,11 +117,11 @@ def _install_bridge_node_test_stubs():
 
 _install_bridge_node_test_stubs()
 
-from record_load_action.bvh_runtime import BvhPlaybackBlockedError
 from record_load_action.bvh_runtime import BvhPlaybackRuntime
 from record_load_action.bvh_websocket_adapter import (
     BvhPlaybackInvalidRequestError,
 )
+from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackError
 from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackAdapter
 from websocket_bridge.bridge_node import WebSocketROS2Bridge
 from websocket_bridge.error_codes import ErrorCode
@@ -494,7 +494,10 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
 
             def handle_play_payload(self, payload):
                 self.requests.append(payload)
-                raise BvhPlaybackBlockedError('blocked')
+                raise BvhWebSocketPlaybackError.blocked(
+                    payload,
+                    RuntimeError('blocked'),
+                )
 
         bridge = self._bridge(
             {
@@ -604,7 +607,10 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         class _Playback:
             def handle_play_payload(self, payload):
                 del payload
-                raise RuntimeError('player failed')
+                raise BvhWebSocketPlaybackError.operation_failed(
+                    {'type': 'bvh_play', 'action': 'wave'},
+                    RuntimeError('player failed'),
+                )
 
         bridge = self._bridge()
         bridge.bvh_playback = _Playback()
@@ -805,7 +811,10 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
                 del payload
                 self.handle_called.set()
                 if self.blocked:
-                    raise BvhPlaybackBlockedError('blocked')
+                    raise BvhWebSocketPlaybackError.blocked(
+                        {'type': 'bvh_play', 'action': 'wave'},
+                        RuntimeError('blocked'),
+                    )
                 return {
                     'status': 'accepted',
                     'action': 'wave',

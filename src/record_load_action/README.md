@@ -68,7 +68,8 @@ Action file (`config/bvh/walking.json`) example:
   runtime, not the player itself.
 - `BvhWebSocketPlaybackAdapter` owns the WebSocket-facing runtime assembly for
   `bvh_play`, including request normalization and accepted ack payload data.
-  The bridge maps adapter/runtime exceptions to its WebSocket error categories.
+  It also exposes the explicit message type and normalizes BVH playback failure
+  details before the bridge maps them to WebSocket error categories.
 - Entering blocked state closes admission before stopping current playback.
   If that stop is incomplete, a repeated `set_blocked(True)` retries it even
   though the blocked state itself did not change. Once stopping completes,

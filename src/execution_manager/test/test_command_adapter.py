@@ -71,3 +71,45 @@ def test_motion_command_to_setpoint_prefers_explicit_duration_and_encoding():
         value_encoding='bus_pulse_us',
         duration_ms=45,
     )
+
+
+def test_motion_command_to_setpoint_ignores_invalid_compat_speed():
+    msg = SimpleNamespace(
+        servo_type='bus',
+        servo_id=4,
+        position=1600,
+        speed=-10,
+        value_encoding='bus_pulse_us',
+        duration_ms=0,
+    )
+
+    setpoint = motion_command_to_setpoint(msg)
+
+    assert setpoint == ActuatorSetpoint(
+        actuator_type='bus',
+        actuator_id=4,
+        target_raw=1600,
+        value_encoding='bus_pulse_us',
+        duration_ms=0,
+    )
+
+
+def test_motion_command_to_setpoint_keeps_explicit_duration_when_speed_invalid():
+    msg = SimpleNamespace(
+        servo_type='pca',
+        servo_id=5,
+        position=300,
+        speed='invalid',
+        value_encoding='pca_tick',
+        duration_ms=35,
+    )
+
+    setpoint = motion_command_to_setpoint(msg)
+
+    assert setpoint == ActuatorSetpoint(
+        actuator_type='pca',
+        actuator_id=5,
+        target_raw=300,
+        value_encoding='pca_tick',
+        duration_ms=35,
+    )

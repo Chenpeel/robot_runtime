@@ -120,14 +120,15 @@
     与基础结构校验；`bvh_player` 只保留兼容导入出口。
   - `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它
     承接 `bvh_play` 请求规范化、accepted ack payload 生成，以及
-    WebSocket-facing runtime 装配。
+    WebSocket-facing runtime 装配；显式消息类型和 BVH 播放失败细节也由
+    adapter 统一提供给 bridge 映射。
   - 通用 `MessageHandler` 当前已移除 `BVH_PLAY` 枚举和
     `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式
     `type` 分发扩展，不再内建 BVH 协议知识。
-  - `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-    `bvh_play`、调用上述 adapter；既有 accepted `bvh_play_ack` 形状、
-    teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别与播放器操作失败使用的
-    `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
+  - `bridge_node` 仍是当前 WebSocket 适配点：通过 adapter 暴露的显式消息
+    类型注册通用消息回调、调用上述 adapter；既有 accepted `bvh_play_ack`
+    形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别与播放器操作失败使
+    用的 `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
   - `bridge_node` 当前只持有 `BvhWebSocketPlaybackAdapter`，不再直接装配
     `BvhPlaybackRuntime` 或持有 `BvhActionPlayer`；播放器实例与生命周期由
     `record_load_action` 内的 runtime 管理。
@@ -275,6 +276,8 @@
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
     `value_encoding` 作为主语义，并将 `speed` 保留为兼容镜像字段。
+  - 求解器输出当前也已补充 `duration_ms`，控制器优先消费该字段；旧
+    `speed` 字段只继续作为同值兼容镜像。
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
@@ -321,8 +324,8 @@
     setpoint 语义，再继续仲裁并转发到驱动层。
   - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间与 teleop
     身份做仲裁，不再要求一层伪 `CommandFrame` 中间快照。
-  - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`，在过渡期回退
-    兼容旧字段语义。
+  - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`；时长解析只在
+    显式 `duration_ms` 非正值时回退读取正值旧 `speed`。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
@@ -349,8 +352,9 @@
     未演进成更正式的跨入口统一准入协议；另外 keepalive / release 对空
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
-    先补上一层中性 setpoint 适配，且 producer 也开始双写更明确的时长与编
-    码字段，但外部命令字段仍带有明显的 servo 风格命名。
+    先补上一层中性 setpoint 适配、consumer 侧时长回退已收紧到正值旧字段，
+    且 producer 也开始双写更明确的时长与编码字段，但外部命令字段仍带有明
+    显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进
@@ -590,7 +594,8 @@
     `bvh_play` 直接字段的规范化与基础结构校验。
   - 提供 `BvhWebSocketPlaybackAdapter`，承接 `bvh_play` 请求规范化、accepted
     ack payload 生成和 WebSocket-facing runtime 装配；WebSocket bridge 只注
-    册该能力并映射自身错误类别。
+    册该能力并映射自身错误类别。显式消息类型和 BVH 播放失败细节也由该
+    adapter 统一提供给 bridge。
   - 提供 `BvhPlaybackRuntime`，由它创建并持有 `BvhActionPlayer`，串行化播
     放、blocked 状态切换与 close 生命周期。
   - runtime 在进入 blocked 时先关闭新播放入口再停止当前播放；close 会进入

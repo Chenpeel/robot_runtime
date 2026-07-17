@@ -56,10 +56,13 @@
 - teleop 控制权链已落地显式 claim / keepalive / release。
 - teleop `MotionCommand` 已收紧为显式 requester / lease 约束。
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
-  `value_encoding` 表达 `MotionCommand` 语义。
+  `value_encoding` 表达 `MotionCommand` 语义；求解器输出当前也已补充
+  `duration_ms`，控制器优先消费该字段，`speed` 仅保留为兼容镜像。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
   前归一到 pulse us，`speed` 仅保留为兼容镜像。
+- `execution_manager` 当前也已继续收紧 `MotionCommand` consumer 侧时长解
+  析：显式 `duration_ms` 仍是主语义，旧 `speed` 只在正值时作为兼容回退。
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
@@ -80,14 +83,15 @@
   基础结构校验；`bvh_player` 只保留兼容导入出口。
 - `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
   接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
-  runtime 装配。
+  runtime 装配；显式消息类型和 BVH 播放失败细节也由 adapter 统一提供给
+  bridge 映射。
 - 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
-- `bridge_node` 仍是当前 WebSocket 适配点：通过通用消息注册面接入
-  `bvh_play` 并调用上述 adapter；既有 accepted `bvh_play_ack` 形状、teleop
-  拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败使用的
-  `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
+- `bridge_node` 仍是当前 WebSocket 适配点：通过 adapter 暴露的显式消息类
+  型注册通用消息回调，并调用上述 adapter；既有 accepted `bvh_play_ack`
+  形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败
+  使用的 `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
 - `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
   `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
   `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
@@ -154,10 +158,14 @@
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会优先采用这组显式语义继续下发。
-- `bvh_play` 请求的显式直接字段规范化、ack payload 生成与 WebSocket-facing
-  runtime 装配当前也已从 `bridge_node` 继续收回 `record_load_action`；
-  WebSocket 通用层会优先按已注册的显式扩展分发，`bridge_node` 保留当前传
-  输适配、错误类别映射与执行联锁。
+- `execution_manager/command_adapter.py` 当前也已把 consumer 侧时长回退收紧
+  为“先读正值 `duration_ms`，再读正值旧 `speed`”，无效旧字段不再被提升为
+  内部执行时长。
+- `bvh_play` 请求的显式直接字段规范化、ack payload 生成、显式消息类型、
+  BVH 播放错误细节归一化与 WebSocket-facing runtime 装配当前也已从
+  `bridge_node` 继续收回 `record_load_action`；WebSocket 通用层会优先按
+  已注册的显式扩展分发，`bridge_node` 保留当前传输适配、错误类别映射与
+  执行联锁。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接

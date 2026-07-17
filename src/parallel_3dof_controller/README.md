@@ -85,8 +85,10 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 - `command_topic` 指定的话题 (motion_msgs/MotionCommand)
   - 舵机控制命令
   - id: 舵机ID
-  - position: 位置值（us）
-  - speed: 运动时间（毫秒）
+  - position: 兼容目标值字段，当前写入 bus pulse us
+  - value_encoding: 目标值编码，当前写入 `bus_pulse_us`
+  - duration_ms: 显式运动时长（毫秒）
+  - speed: 兼容镜像字段，当前等于 `duration_ms`
   - 默认值为 `/execution/motion/command`
   - 当前仍保留 `servo_type`、`servo_id` 等过渡字段
 
@@ -102,7 +104,7 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 | l1 | float | 0.01 | 动平台到O点距离（米） |
 | l2 | float | 0.03 | 静平台到O点距离（米） |
 | ankle_side | string | 'right' | 控制哪侧脚踝（'right'/'left'） |
-| default_speed | int | 100 | 默认舵机速度（毫秒） |
+| default_speed | int | 100 | 默认运动时长（毫秒，保留旧参数名） |
 | debug | bool | false | 是否打印调试信息 |
 | command_topic | string | `/execution/motion/command` | 执行请求输出话题（`motion_msgs/MotionCommand`） |
 
