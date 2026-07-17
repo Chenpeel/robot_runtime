@@ -10,7 +10,7 @@ uint16 servo_id
 # 目标位置
 uint16 position
 
-# 兼容字段：执行时长（毫秒）
+# 兼容镜像字段：旧 producer/driver 语义中的执行时长（毫秒）
 uint16 speed
 
 # 目标值编码
@@ -19,7 +19,7 @@ uint16 speed
 string value_encoding
 
 # 显式执行时长（毫秒）
-# 为 0 时，consumer 应回退读取 speed
+# execution_manager 仅从该字段读取内部执行时长；0 表示未显式指定
 uint16 duration_ms
 
 # 请求方标识

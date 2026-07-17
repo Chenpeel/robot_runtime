@@ -12,7 +12,7 @@ from command_adapter import motion_command_to_setpoint
 from command_adapter import setpoint_to_servo_fields
 
 
-def test_motion_command_to_setpoint_uses_internal_duration_semantics():
+def test_motion_command_to_setpoint_requires_explicit_duration_ms():
     msg = SimpleNamespace(
         servo_type='bus',
         servo_id=7,
@@ -29,7 +29,7 @@ def test_motion_command_to_setpoint_uses_internal_duration_semantics():
         actuator_id=7,
         target_raw=1500,
         value_encoding='bus_pulse_us',
-        duration_ms=120,
+        duration_ms=0,
     )
 
 
@@ -73,14 +73,34 @@ def test_motion_command_to_setpoint_prefers_explicit_duration_and_encoding():
     )
 
 
-def test_motion_command_to_setpoint_ignores_invalid_compat_speed():
+def test_motion_command_to_setpoint_ignores_speed_when_duration_missing():
     msg = SimpleNamespace(
         servo_type='bus',
         servo_id=4,
         position=1600,
-        speed=-10,
+        speed=120,
         value_encoding='bus_pulse_us',
         duration_ms=0,
+    )
+
+    setpoint = motion_command_to_setpoint(msg)
+
+    assert setpoint == ActuatorSetpoint(
+        actuator_type='bus',
+        actuator_id=4,
+        target_raw=1600,
+        value_encoding='bus_pulse_us',
+        duration_ms=0,
+    )
+
+
+def test_motion_command_to_setpoint_ignores_missing_duration_attribute_speed():
+    msg = SimpleNamespace(
+        servo_type='bus',
+        servo_id=4,
+        position=1600,
+        speed=120,
+        value_encoding='bus_pulse_us',
     )
 
     setpoint = motion_command_to_setpoint(msg)

@@ -62,7 +62,8 @@
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
   前归一到 pulse us，`speed` 仅保留为兼容镜像。
 - `execution_manager` 当前也已继续收紧 `MotionCommand` consumer 侧时长解
-  析：显式 `duration_ms` 仍是主语义，旧 `speed` 只在正值时作为兼容回退。
+  析：内部 setpoint 时长只来自显式正值 `duration_ms`，不再从旧
+  `speed` 回退推导。
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
@@ -135,8 +136,8 @@
 - BVH/demo 已完成 opt-in 断依赖，sim 域 package-level surface 也已基本收
   口，这两块不再是当前主推进阻塞项。
 - `MotionCommand.duration_ms` / `value_encoding` 已成为 producer 与 consumer
-  的主语义，但旧 `speed` 回退和 servo 风格字段仍存在于公共接口及多个生产
-  者中。
+  的主语义；execution consumer 侧旧 `speed` 回退已移除，但 servo 风格字段
+  仍存在于公共接口及多个 producer 中。
 - 当前更适合沿既有中性 setpoint 适配层做小步收紧，而不是立即改包名、移动
   目录或继续深挖 demo 内部实现。
 
@@ -147,8 +148,8 @@
 
 - 审计 `MotionCommand` 的所有 producer / consumer，只选择一个可独立验证
   的旧字段依赖继续收紧；不在同一阶段同时改消息定义和所有调用方。
-- 继续稳定 `duration_ms`、`value_encoding` 的主语义优先级，优先消除内部
-  对旧 `speed` 回退的实际依赖，再评估公共字段删除。
+- 继续稳定 `duration_ms`、`value_encoding` 的主语义优先级；consumer 侧旧
+  `speed` 时长回退已移除，后续再评估 producer 镜像与公共字段删除。
 - `websocket_bridge` 后续只继续处理 teleop / debug / status 的剩余混杂，
   不重新把 BVH capability、配置或样例放回默认核心。
 - 仿真域后续只保留必要维护，不再把内部实现细节重新上抬到
@@ -163,9 +164,8 @@
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会优先采用这组显式语义继续下发。
-- `execution_manager/command_adapter.py` 当前也已把 consumer 侧时长回退收紧
-  为“先读正值 `duration_ms`，再读正值旧 `speed`”，无效旧字段不再被提升为
-  内部执行时长。
+- `execution_manager/command_adapter.py` 当前也已移除 consumer 侧旧
+  `speed` 时长回退，只把正值 `duration_ms` 提升为内部执行时长。
 - `bvh_play` 请求规范化、ack、错误映射、motion publisher、执行联锁与播放
   生命周期当前均已收回 `record_load_action` 的可选 capability；
   `bridge_node` 只保留通用扩展工厂、状态通知与关闭钩子。

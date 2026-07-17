@@ -21,7 +21,7 @@ def motion_command_to_setpoint(msg) -> ActuatorSetpoint:
     这里显式收敛当前过渡语义：
     - ``position`` 在执行层内部视为原始目标值 ``target_raw``
     - ``duration_ms`` 是执行时长主字段
-    - ``speed`` 只作为旧 producer 兼容回退字段
+    - ``speed`` 只作为旧 producer 的兼容镜像字段，不再参与内部时长解析
     """
     return ActuatorSetpoint(
         actuator_type=str(msg.servo_type),
@@ -33,7 +33,6 @@ def motion_command_to_setpoint(msg) -> ActuatorSetpoint:
         ),
         duration_ms=_resolve_duration_ms(
             duration_ms=getattr(msg, 'duration_ms', 0),
-            speed=getattr(msg, 'speed', 0),
         ),
     )
 
@@ -61,14 +60,10 @@ def _resolve_value_encoding(actuator_type: str, value_encoding: str) -> str:
     return ''
 
 
-def _resolve_duration_ms(duration_ms, speed) -> int:
+def _resolve_duration_ms(duration_ms) -> int:
     explicit_duration_ms = _coerce_int(duration_ms)
     if explicit_duration_ms > 0:
         return explicit_duration_ms
-
-    compat_speed = _coerce_int(speed)
-    if compat_speed > 0:
-        return compat_speed
 
     return 0
 

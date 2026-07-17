@@ -284,8 +284,9 @@
     setpoint 语义，再继续仲裁并转发到驱动层。
   - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间与 teleop
     身份做仲裁，不再要求一层伪 `CommandFrame` 中间快照。
-  - 优先读取 `MotionCommand.duration_ms` 与 `value_encoding`；时长解析只在
-    显式 `duration_ms` 非正值时回退读取正值旧 `speed`。
+  - 优先读取 `MotionCommand.value_encoding`，缺失时按 actuator type 补过渡
+    默认编码；内部 setpoint 时长只读取显式正值 `duration_ms`，不再回退读取
+    旧 `MotionCommand.speed`。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
     `/servo/command`。
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
@@ -312,7 +313,7 @@
     未演进成更正式的跨入口统一准入协议；另外 keepalive / release 对空
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
-    先补上一层中性 setpoint 适配、consumer 侧时长回退已收紧到正值旧字段，
+    先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
     且 producer 也开始双写更明确的时长与编码字段，但外部命令字段仍带有明
     显的 servo 风格命名。
 - 与长期规划的关系
