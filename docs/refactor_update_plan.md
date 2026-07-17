@@ -178,18 +178,19 @@
   一层伪 `CommandFrame` 中间快照，而是由节点在 setpoint 适配后直接送入仲
   裁，再把被接受的请求转回驱动层命令。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
-  `execution_manager` 已优先读取新字段，`websocket_bridge` 仍保留双写；其中
-  `parallel_3dof_controller` 已先在 producer 内部显式以
-  `duration_ms` / `value_encoding` 作为主语义；求解器输出当前只保留
-  `duration_ms` 时长字段，控制器只接受该显式时长，并在发布 `MotionCommand`
-  时只写入这组显式字段，不再回退或镜像旧 `speed`。该包内旧词表仅保留在
-  `speed` / `default_speed` 参数名中。
+  `execution_manager` 已优先读取新字段，默认 WebSocket teleop producer 与
+  `parallel_3dof_controller` 也已停止写入旧 `speed` 镜像；其中后者已先在
+  producer 内部显式以 `duration_ms` / `value_encoding` 作为主语义；求解器
+  输出当前只保留 `duration_ms` 时长字段，控制器只接受该显式时长，并在发布
+  `MotionCommand` 时只写入这组显式字段，不再回退或镜像旧 `speed`。该包内
+  旧词表仅保留在 `speed` / `default_speed` 参数名中。
 - `execution_manager` 当前也已移除 consumer 侧旧 `speed` 时长回退：内部
   setpoint 时长只来自显式正值 `duration_ms`，旧 `MotionCommand.speed` 不
   再被提升为内部执行时长。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `MotionCommand` 风格字段：显式补 `value_encoding` / `duration_ms`，并把
-  bus 目标值在桥接前归一到 pulse us；`speed` 则只继续作为兼容镜像字段。
+  bus 目标值在桥接前归一到 pulse us；WebSocket payload 与规范化 ack 仍保留
+  兼容 `speed`，但默认 teleop `MotionCommand` producer 已不再写入该镜像。
 - `websocket_bridge` 核心已将可选 capability 收口到通用字符串参数
   `extension_factories`；它按 `module:callable` 动态装配扩展，默认值为空。
 - 核心节点现在只调用扩展的 `register_message_handlers`、

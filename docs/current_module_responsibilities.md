@@ -99,6 +99,8 @@
   - `servo_control` 输入当前也已开始被标准化为 `MotionCommand` 风格字段：
     显式补 `value_encoding` / `duration_ms`，并在 bus 输入为角度时先归一到
     pulse us 后再下发。
+  - WebSocket payload 与规范化 ack 仍保留兼容 `speed`；默认 teleop
+    `MotionCommand` producer 只写入 `duration_ms`，不再镜像旧 `speed` 字段。
   - 在将 teleop 命令下发到执行层前，先基于最新 `execution_state` 做一层
     holder / lease 预校验；若当前连接缺少 requester / lease 或尚未确认控制
     权，会直接返回错误回包。
@@ -157,10 +159,10 @@
     对空 lease 仍保留过渡兼容。
   - 当前 teleop 命令预校验依赖 `websocket_bridge` 持有的最新
     `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
-  - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`。当前也已开始
-    双写 `duration_ms` 与 `value_encoding`；同时 WebSocket 输入当前也已开始
-    优先收敛到这组显式语义。但外部消息层仍保留 `servo_type`、`servo_id`、
-    `position`、`speed` 这类过渡定义。
+  - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，且默认 teleop
+    producer 已只写入 `duration_ms` / `value_encoding` 这组显式语义；但
+    WebSocket payload 仍保留兼容 `speed`，公共消息层也仍保留
+    `servo_type`、`servo_id`、`position`、`speed` 这类过渡定义。
 - 与长期规划的关系
   - 长期上更接近 `teleoperation_bridge` 的前身。
   - 整机主 launch 已迁到 `robot_bringup`。
@@ -315,9 +317,9 @@
     lease 仍保留过渡兼容。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
-    `parallel_3dof_controller` 也已清除 solver dict 与 `MotionCommand` 输出两层
-    `speed` 镜像，但仍有其他 producer 保留兼容镜像，且外部命令字段仍带有
-    明显的 servo 风格命名。
+    `parallel_3dof_controller` 与默认 WebSocket teleop producer 也已清除各自
+    的 `speed` 镜像，但可选 BVH 等其他 producer 仍保留兼容镜像，且外部命令
+    字段仍带有明显的 servo 风格命名。
 - 与长期规划的关系
   - 已补出控制层与驱动层之间的最小正式边界。
   - 当前执行层状态已经开始被 `websocket_bridge` 消费，但后续还需要继续演进

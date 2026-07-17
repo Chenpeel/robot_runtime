@@ -302,7 +302,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(msg.position, 1500)
         self.assertEqual(msg.value_encoding, "bus_pulse_us")
         self.assertEqual(msg.duration_ms, 45)
-        self.assertEqual(msg.speed, 45)
+        self.assertFalse(hasattr(msg, 'speed'))
         self.assertEqual(msg.requester_id, "client-a")
         self.assertEqual(msg.lease_id, "lease-1")
 
@@ -330,7 +330,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         self.assertEqual(msg.position, 1500)
         self.assertEqual(msg.value_encoding, "bus_pulse_us")
         self.assertEqual(msg.duration_ms, 70)
-        self.assertEqual(msg.speed, 70)
+        self.assertFalse(hasattr(msg, 'speed'))
 
     def test_normalize_motion_position_keeps_raw_bus_pulse(self):
         bridge = types.SimpleNamespace()
@@ -422,7 +422,7 @@ class TestBridgeNodeTeleopGuard(unittest.TestCase):
         )
         self.assertEqual(msg.value_encoding, 'bus_pulse_us')
         self.assertEqual(msg.duration_ms, 45)
-        self.assertEqual(msg.speed, 45)
+        self.assertFalse(hasattr(msg, 'speed'))
         self.assertEqual(msg.requester_id, 'client-a')
         self.assertEqual(msg.lease_id, 'lease-1')
 

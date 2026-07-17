@@ -81,7 +81,7 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("msg.lease_id", source)
 
     def test_motion_command_publish_includes_explicit_semantic_fields(self):
-        """MotionCommand 发布应双写新语义字段"""
+        """MotionCommand 发布应只使用显式时长，不再镜像旧 speed"""
         source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -93,6 +93,7 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("msg.duration_ms", source)
         self.assertIn("msg.requester_id", source)
         self.assertIn("msg.lease_id", source)
+        self.assertNotIn("msg.speed = int(duration_ms)", source)
 
     def test_teleop_ack_payload_includes_execution_snapshot(self):
         """teleop ack 应携带当前 execution_state 快照语义"""

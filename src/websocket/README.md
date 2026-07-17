@@ -120,14 +120,16 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   等执行层拒绝。
 - 舵机控制命令仍走 `MotionCommand`，但最终是否执行由
   `execution_manager` 仲裁。
-- 当前 `bridge_node` 发布 `MotionCommand` 时会同时写入：
-  - 兼容字段：`position`、`speed`
+- 当前 `bridge_node` 发布 `MotionCommand` 时会写入：
+  - 兼容目标值字段：`position`
   - 增量语义字段：`value_encoding`、`duration_ms`
   - teleop 身份字段：`requester_id`、`lease_id`
+  - 不再把 `duration_ms` 镜像到公共消息的旧 `speed` 字段
 - `servo_control` 输入当前也开始被标准化为同一套 motion 语义：
   - bus 输入默认仍可写角度值，但会在桥接前归一为 pulse us
   - 若显式提供 `value_encoding == "bus_pulse_us"`，则会保留原始脉宽值
   - 若同时提供 `duration_ms` 与 `speed`，会优先采用 `duration_ms`
+  - WebSocket payload 仍接受 `speed` / `s`，规范化 ack 也继续回显 `speed`
 - `bridge_node` 提供通用可选扩展宿主：按逗号分隔的
   `module:callable` 工厂加载扩展，并统一调用扩展的消息注册、执行状态通知和
   关闭钩子。

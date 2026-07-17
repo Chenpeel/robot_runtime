@@ -61,7 +61,8 @@
   `speed` 字段；该包内旧词表仅保留在 `speed` / `default_speed` 参数名中。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
-  前归一到 pulse us，`speed` 仅保留为兼容镜像。
+  前归一到 pulse us。WebSocket payload 与规范化 ack 仍保留兼容 `speed`，但
+  默认 teleop producer 发布 `MotionCommand` 时已不再写入该镜像。
 - `execution_manager` 当前也已继续收紧 `MotionCommand` consumer 侧时长解
   析：内部 setpoint 时长只来自显式正值 `duration_ms`，不再从旧
   `speed` 回退推导。
@@ -164,7 +165,7 @@
 - `websocket_bridge/message_handler.py` 当前也已开始把 `servo_control`
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
-  也会优先采用这组显式语义继续下发。
+  也会只采用这组显式时长语义继续下发，不再镜像旧 `MotionCommand.speed`。
 - `execution_manager/command_adapter.py` 当前也已移除 consumer 侧旧
   `speed` 时长回退，只把正值 `duration_ms` 提升为内部执行时长。
 - `bvh_play` 请求规范化、ack、错误映射、motion publisher、执行联锁与播放

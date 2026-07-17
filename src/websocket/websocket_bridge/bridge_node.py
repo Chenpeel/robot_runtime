@@ -824,8 +824,6 @@ class WebSocketROS2Bridge(Node):
             or self._motion_value_encoding_for_servo_type(servo_type)
         )
         msg.duration_ms = int(duration_ms)
-        # 过渡期继续镜像到旧字段，便于旧 consumer 保持兼容。
-        msg.speed = int(duration_ms)
         msg.requester_id = str(requester_id)
         msg.lease_id = str(lease_id)
         msg.stamp = self.get_clock().now().to_msg()
