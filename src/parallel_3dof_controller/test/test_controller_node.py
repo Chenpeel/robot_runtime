@@ -132,7 +132,6 @@ class TestMessageConversion(unittest.TestCase):
             'id': 10,
             'position': 1500,
             'duration_ms': 100,
-            'speed': 100,
             'theta': 0.785,  # 45度弧度值
             'theta_deg': 45.0
         }
@@ -141,10 +140,9 @@ class TestMessageConversion(unittest.TestCase):
         assert 'id' in expected_command
         assert 'position' in expected_command
         assert 'duration_ms' in expected_command
-        assert 'speed' in expected_command
+        assert 'speed' not in expected_command
         assert 500 <= expected_command['position'] <= 2500
         assert expected_command['duration_ms'] > 0
-        assert expected_command['speed'] == expected_command['duration_ms']
 
 
 class TestEndToEndWorkflow(unittest.TestCase):
@@ -179,8 +177,7 @@ class TestEndToEndWorkflow(unittest.TestCase):
                     self.assertIn('id', cmd)
                     self.assertIn('position', cmd)
                     self.assertIn('duration_ms', cmd)
-                    self.assertIn('speed', cmd)
-                    self.assertEqual(cmd['speed'], cmd['duration_ms'])
+                    self.assertNotIn('speed', cmd)
                     self.assertGreaterEqual(cmd['position'], 500)
                     self.assertLessEqual(cmd['position'], 2500)
 

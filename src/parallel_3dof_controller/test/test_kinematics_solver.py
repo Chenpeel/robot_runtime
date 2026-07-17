@@ -320,10 +320,9 @@ class TestFullConversion:
             assert 'id' in cmd
             assert 'position' in cmd
             assert 'duration_ms' in cmd
-            assert 'speed' in cmd
+            assert 'speed' not in cmd
             assert 'theta' in cmd
             assert 'theta_deg' in cmd
-            assert cmd['speed'] == cmd['duration_ms']
 
     def test_right_ankle_servo_ids(self, solver):
         """测试右脚舵机ID"""
@@ -349,10 +348,10 @@ class TestFullConversion:
         commands = solver.rpy_to_servo_commands(
             0.0, 0.0, 0.0, speed=duration_ms)
 
-        # 所有舵机的运动时长应该是指定值，speed 仅作为兼容镜像。
+        # 兼容参数名 speed 仍用于传入时长，输出只保留 duration_ms。
         for cmd in commands:
             assert cmd['duration_ms'] == duration_ms
-            assert cmd['speed'] == duration_ms
+            assert 'speed' not in cmd
 
     def test_position_range(self, solver):
         """测试舵机位置在合理范围内"""

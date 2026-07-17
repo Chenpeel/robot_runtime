@@ -108,6 +108,9 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 | debug | bool | false | 是否打印调试信息 |
 | command_topic | string | `/execution/motion/command` | 执行请求输出话题（`motion_msgs/MotionCommand`） |
 
+`default_speed` 与求解器的 `speed` 形参仍表示运动时长并保留旧参数名；求解器
+返回的命令 dict 只使用 `duration_ms` 表达该时长，不再返回 `speed` 镜像。
+
 ## 工作空间限制
 
 默认工作空间范围：

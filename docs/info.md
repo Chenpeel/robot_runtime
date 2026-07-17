@@ -56,9 +56,9 @@
 - teleop 控制权链已落地显式 claim / keepalive / release。
 - teleop `MotionCommand` 已收紧为显式 requester / lease 约束。
 - `parallel_3dof_controller` 已更明确地以 `duration_ms` /
-  `value_encoding` 表达 `MotionCommand` 语义；求解器输出当前也已补充
-  `duration_ms`，控制器只读取该显式时长并发布，不再回退或镜像旧 `speed`
-  字段。
+  `value_encoding` 表达 `MotionCommand` 语义；求解器输出当前只保留
+  `duration_ms` 时长字段，控制器只读取该显式时长并发布，不再回退或镜像旧
+  `speed` 字段；该包内旧词表仅保留在 `speed` / `default_speed` 参数名中。
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `value_encoding` / `duration_ms` 优先的 motion 语义；bus 目标值会在桥接
   前归一到 pulse us，`speed` 仅保留为兼容镜像。

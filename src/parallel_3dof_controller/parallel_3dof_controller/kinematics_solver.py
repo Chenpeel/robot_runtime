@@ -233,13 +233,13 @@ class Parallel3DOFKinematicsSolver:
 
         返回:
             舵机命令列表
-            [{'id': int, 'position': int, 'duration_ms': int, 'speed': int}, ...]
+            [{'id': int, 'position': int, 'duration_ms': int}, ...]
 
         示例:
             >>> solver = Parallel3DOFKinematicsSolver()
             >>> commands = solver.rpy_to_servo_commands(0.1, 0.1, 0.0)
             >>> print(commands)
-            [{'id': 10, 'position': 1500, 'duration_ms': 100, 'speed': 100}, ...]
+            [{'id': 10, 'position': 1500, 'duration_ms': 100}, ...]
         """
         # 1. 将RPY转换为theta角
         kinematics_result = self.rpy_to_theta_angles(roll, pitch, yaw)
@@ -282,7 +282,6 @@ class Parallel3DOFKinematicsSolver:
                 'id': config['id'],
                 'position': position,
                 'duration_ms': duration_ms,
-                'speed': duration_ms,
                 'theta': float(theta),  # 调试信息
                 'theta_deg': float(np.degrees(theta))  # 调试信息
             })
