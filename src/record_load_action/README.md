@@ -5,9 +5,11 @@ This package stores action resources and playback helpers (BVH now, more modes l
 ## Layout
 
 - config/bvh_action_map.json: BVH action config
+- config/bvh_play_request.json: explicit WebSocket request example
 - config/bvh/*.bvh: BVH files
 - config/bvh/*.json: per-action frame data (for example `walking.json`)
 - config/bvh/name.json: BVH skeleton bones list
+- launch/bvh_websocket_demo.launch.py: opt-in WebSocket demo assembly
 
 ## BVH Config (bvh_action_map.json)
 
@@ -57,19 +59,47 @@ Action file (`config/bvh/walking.json`) example:
 }
 ```
 
+## Opt-in WebSocket Demo
+
+BVH is not part of the default `websocket_bridge` or `robot_bringup` surface.
+Start the optional capability explicitly:
+
+```bash
+ros2 launch record_load_action bvh_websocket_demo.launch.py
+```
+
+The demo launch includes the regular WebSocket teleop/execution command path
+and configures the generic bridge extension factory as:
+
+```text
+record_load_action.bvh_websocket_extension:create_extension
+```
+
+The core WebSocket package has no package dependency on `record_load_action`.
+When this demo is enabled, dependency direction is reversed: this package loads
+the generic bridge host and owns the BVH-specific capability.
+
+This launch does not start physical hardware or a simulator. Start the desired
+hardware/simulation consumer separately before expecting motion at the robot.
+It already starts its own WebSocket bridge and execution manager, so do not run
+it beside `full_system.launch.py` on the same WebSocket port.
+
 ## Runtime Behavior
 
 - BVH/demo playback publishes `MotionCommand` to `/execution/motion/command`.
 - It does not reuse the teleop command entry.
 - If teleop is currently active, a new BVH playback request is rejected.
 - If teleop becomes active during playback, the current BVH playback is stopped.
+- `BvhWebSocketExtension` owns the motion publisher, explicit `bvh_play`
+  registration, WebSocket error mapping, execution-state interlock, and
+  capability lifecycle.
 - `BvhPlaybackRuntime` creates and owns `BvhActionPlayer`, and serializes play,
   blocked-state changes, and close operations. Transport adapters hold the
   runtime, not the player itself.
 - `BvhWebSocketPlaybackAdapter` owns the WebSocket-facing runtime assembly for
   `bvh_play`, including request normalization and accepted ack payload data.
-  It also exposes the explicit message type and normalizes BVH playback failure
-  details before the bridge maps them to WebSocket error categories.
+  It also serializes request, blocked-state, and close operations, and retains
+  the execution-state snapshot associated with a blocked admission decision.
 - Entering blocked state closes admission before stopping current playback.
   If that stop is incomplete, a repeated `set_blocked(True)` retries it even
   though the blocked state itself did not change. Once stopping completes,
@@ -82,10 +112,11 @@ Action file (`config/bvh/walking.json`) example:
   `stop()` return bool results, and a replacement worker is started only after
   the previous worker is confirmed stopped. A timed-out live worker remains
   tracked and causes replacement playback to be rejected.
-- The accepted `bvh_play_ack` shape, `TELEOP_CONTROL_REJECTED` category for
-  teleop blocking, and `ROS_CALLBACK_FAILED` category for player operation
-  failures remain transport-owned and stable. The motion output topic, timing
-  field forwarding, and teleop interlock also remain stable.
+- The capability preserves the accepted `bvh_play_ack` shape,
+  `TELEOP_CONTROL_REJECTED` category for teleop blocking, and
+  `ROS_CALLBACK_FAILED` category for player operation failures. The motion
+  output topic, timing field forwarding, and teleop interlock also remain
+  stable.
 - A player result of explicit `False` is now surfaced through the existing
   `ROS_CALLBACK_FAILED` category. The old player API did not expose that bool
   failure, so this is an intentional, observable safety tightening.
@@ -104,9 +135,9 @@ accepted direct fields are:
 
 Legacy nested `action.bvh` payloads and the top-level `bvh` alias are not
 accepted. `record_load_action.bvh_player` re-exports this normalizer for
-existing local imports. WebSocket acknowledgement payload data is now built by
-the package adapter; the transport bridge still owns device-level response
-wrapping and error-code categories.
+existing local imports. The package adapter builds acknowledgement payload data;
+the optional BVH extension owns BVH-specific WebSocket error mapping, while the
+generic transport handler still wraps responses with device-level metadata.
 
 ## Static Conversion (optional)
 

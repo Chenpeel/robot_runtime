@@ -109,7 +109,8 @@ source install/setup.bash
 
 ## BVH 动作配置
 
-BVH 动作配置与运行说明均已收回 `record_load_action` 包，不再由
-`websocket_bridge` 的配置文档承接，详见：
+BVH 动作配置、请求样例、可选 demo launch 与运行说明均归属
+`record_load_action` 包。默认 WebSocket schema 不再广告或装配 BVH，详见：
 
 - `src/record_load_action/README.md`
+- `src/record_load_action/config/bvh_play_request.json`

@@ -79,6 +79,11 @@ def generate_launch_description():
         default_value=LaunchConfiguration('debug'),
         description='WebSocket桥接节点调试模式',
     )
+    bridge_extension_factories_arg = DeclareLaunchArgument(
+        'bridge_extension_factories',
+        default_value='',
+        description='WebSocket桥接可选扩展工厂（逗号分隔）',
+    )
     imu_debug_arg = DeclareLaunchArgument(
         'imu_debug',
         default_value='false',
@@ -145,9 +150,13 @@ def generate_launch_description():
             {'device_id': LaunchConfiguration('device_id')},
             {'debug': LaunchConfiguration('bridge_debug')},
             {'command_topic': execution_teleop_command_topic},
-            {'bvh_command_topic': execution_motion_command_topic},
             {'teleop_control_topic': execution_teleop_control_topic},
             {'execution_state_topic': execution_state_topic},
+            {
+                'extension_factories': LaunchConfiguration(
+                    'bridge_extension_factories'
+                ),
+            },
             {'imu_debug': LaunchConfiguration('imu_debug')},
             {'heartbeat_debug': LaunchConfiguration('heartbeat_debug')},
             {'ws_debug': LaunchConfiguration('ws_debug')},
@@ -167,9 +176,6 @@ def generate_launch_description():
             '\n',
             '  Teleop入口: ',
             execution_teleop_command_topic,
-            '\n',
-            '  Demo/BVH入口: ',
-            execution_motion_command_topic,
             '\n',
             '  Teleop控制权: ',
             execution_teleop_control_topic,
@@ -198,6 +204,7 @@ def generate_launch_description():
         execution_motion_timeout_sec_arg,
         execution_debug_arg,
         bridge_debug_arg,
+        bridge_extension_factories_arg,
         imu_debug_arg,
         heartbeat_debug_arg,
         ws_debug_arg,

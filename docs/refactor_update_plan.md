@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文是截至 2026-03-23 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-07-17 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -25,8 +25,10 @@
 当前仓库最重要的现实约束有六点：
 
 1. `websocket_bridge` 目前是混合职责包。
-   - 它仍同时承担 WebSocket 接入、人工遥控、状态回传、IMU 上行与 BVH 播
-     放等多类职责。
+   - 它仍同时承担 WebSocket 接入、人工遥控、状态回传与 IMU 上行；
+     核心另提供默认为空的通用扩展装配机制。
+   - BVH 已收口到 `record_load_action` 的显式 opt-in 扩展，不再属于
+     默认 `websocket_bridge` 核心。
 2. `motion_msgs` 已经落地最小接口，但字段语义仍保留明显的过渡态。
 3. `robot_bringup` 已经独立承接整机主 launch，并开始按硬件、遥控、仿真拆
    分启动入口。
@@ -86,18 +88,21 @@
 - 场景化 launch 当前也已开始复用 `robot_bringup.launch_utils` 统一解析总线协议
   缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `websocket_bridge` 不再默认承接系统级编排。
+- `websocket_bridge` 核心已收口为默认不加载任何 capability 的通用
+  WebSocket/teleop 节点，BVH 只由 `record_load_action` 的 demo launch 显式装配。
 
 动作：
 
-1. 将 `websocket_bridge` 内部职责拆成四类看待：
+1. 将 `websocket_bridge` 核心职责拆成三类看待：
    - teleop 入口
    - 状态与传感器上行桥
-   - demo/BVH 能力
-   - 仿真桥与 launch 编排
+   - 通用可选扩展的加载与生命周期钩子
 2. 约束后续新增功能：
    - 不再继续把仿真和 demo 逻辑往 `bridge_node` 里堆。
    - 不再继续把系统级编排逻辑默认放进 `websocket_bridge`。
-3. 让文档和 launch 组织先反映出边界，而不是所有东西都以
+3. demo/BVH 等具体 capability 必须由各自所有者包实现，并通过独立场景
+   launch 显式 opt-in，不得成为默认 teleop/full-system 依赖。
+4. 让文档和 launch 组织先反映出边界，而不是所有东西都以
    `websocket_bridge` 为中心。
 
 完成标准：
@@ -105,6 +110,8 @@
 - 现有系统仍能启动。
 - 文档和 launch 结构已经能反映出 teleop、simulation、hardware 的职责差
   异。
+- 默认 teleop/full-system 可以在不启用 BVH 的情况下运行，BVH 仅由显式
+  demo launch 装配。
 
 ### Phase C：引入执行边界
 
@@ -182,56 +189,40 @@
 - `websocket_bridge` 当前也已开始把 `servo_control` 输入标准化为
   `MotionCommand` 风格字段：显式补 `value_encoding` / `duration_ms`，并把
   bus 目标值在桥接前归一到 pulse us；`speed` 则只继续作为兼容镜像字段。
-- `websocket_bridge` 内部的 demo/BVH 回放链路也已开始默认改走
-  `/execution/motion/command`，不再复用 teleop 命令入口，降低 demo 能力与
-  teleop 控制权约束的耦合。
-- BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
-  `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源，继续减少 demo
-  能力对 teleop 包边界的历史耦合。
-- BVH 的运行说明当前也已继续收回 `record_load_action/README.md`；
-  `websocket/config/README.md` 只保留指向说明，继续减少 demo 文档职责留在
-  `websocket_bridge` 包内。
-- `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
-  `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
-  回 `record_load_action`，继续减少 demo 配置入口留在 teleop 包边界。
-- BVH 触发入口当前也已收紧为显式 `bvh_play` 消息；旧的泛化 `action` 别
-  名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都已清掉，继续
-  减少 demo 能力混入通用消息面。
-- `bvh_play` payload 当前也已继续只保留显式直接字段；旧的 `action.bvh`
-  嵌套 payload 与顶层 `bvh` 历史别名都已不再继续作为当前 public
-  contract 保留。
-- `record_load_action` 当前也已提供传输层无关的
-  `bvh_request.normalize_bvh_play_request`，统一承接显式直接字段的规范化与基
-  础结构校验；`bvh_player` 只保留兼容导入出口，继续减少 BVH 请求 contract
-  对 WebSocket 实现的依赖。
-- `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
-  接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
-  runtime 装配；显式消息类型和 BVH 播放失败细节也由 adapter 统一提供给
-  bridge 映射。
-- 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
-  `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
-  分发扩展，不再内建 BVH 协议知识。
-- `bridge_node` 仍是当前 WebSocket 适配点：通过 adapter 暴露的显式消息类
-  型注册通用消息回调，并调用上述 adapter；既有 accepted `bvh_play_ack`
-  形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败
-  使用的 `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
-- `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
-  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
-  `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
-- 当执行层进入 teleop 活跃态时，桥接层会把 runtime 置为 blocked；runtime
-  会先阻断新播放再停止当前播放。节点关闭时则进入 closed/blocked 终态并停
-  止播放器，停止失败的关闭仍可重试，显式停止请求在 blocked/closed 状态下
-  仍被允许。
-- blocked 状态下若停止尚未完成，后续同状态 `set_blocked(True)` 会继续重
-  试；`bridge_node` 也会通过同一原子门禁同步 execution state、adapter
-  blocked 状态与播放准入，shutdown 对未完成 close 只额外重试一次。
-- `BvhActionPlayer` 当前为每代 worker 使用独立 `Event`，并以 bool
-  `play()` / `stop()` 报告操作结果；只有确认上一代退出后才会启动下一代，
-  超时后仍存活的 worker 会保留句柄并拒绝替代线程。
-- `/execution/motion/command` topic、播放 timing 字段透传和 teleop 联锁语义
-  保持不变；但当 player 明确返回 `False` 时，现在会通过既有
-  `ROS_CALLBACK_FAILED` 类别显式失败，而不是沿用旧 player 未暴露该结果时
-  的隐式成功路径，这是本轮的安全性收紧。
+- `websocket_bridge` 核心已将可选 capability 收口到通用字符串参数
+  `extension_factories`；它按 `module:callable` 动态装配扩展，默认值为空。
+- 核心节点现在只调用扩展的 `register_message_handlers`、
+  `on_execution_state` 和 `close` 钩子；它不再声明 BVH topic，不再创建
+  BVH publisher，也不再承担 `bvh_play` 注册、teleop 联锁或 BVH 错误映射。
+- `websocket_bridge/package.xml` 已移除 `record_load_action` 依赖，核心
+  Python 模块也已移除具体 BVH 导入。
+- 通用 `MessageHandler` 已移除 `BVH_PLAY` 枚举与 `parse_bvh_action`；
+  `WebSocketHandler` 只按已注册的显式 `type` 分发扩展。
+- `record_load_action` 已提供 `BvhWebSocketExtension` 和
+  `create_extension`；该扩展独立持有 `/execution/motion/command` publisher，
+  并承担 `bvh_play` 注册、accepted ack、错误映射、execution state 联锁以及
+  `BvhWebSocketPlaybackAdapter` / `BvhPlaybackRuntime` 关闭生命周期。
+- `record_load_action/launch/bvh_websocket_demo.launch.py` 作为显式 opt-in 入口
+  include `robot_bringup/teleop.launch.py`，传入
+  `record_load_action.bvh_websocket_extension:create_extension`，并将 motion 入口
+  固定为 `/execution/motion/command`。
+- 默认 `teleop.launch.py`、`full_system.launch.py` 和 WebSocket core schema
+  均不启用或广告 BVH；显式请求示例已迁入
+  `record_load_action/config/bvh_play_request.json`。
+- `bvh_action_map.json` 和默认路径解析仍由 `record_load_action` 唯一所有；
+  `robot_bringup` 与 `websocket_bridge` 仍不公开 `bvh_action_file` 参数。
+- BVH 对外合同保持不变：只保留显式 `bvh_play` 与直接字段；旧的泛化
+  消息类型别名 `action`、`action.bvh` 嵌套 payload、顶层 `bvh` 别名、
+  直发舵机或 private 触发路径仍不存在。
+- `/execution/motion/command` topic、播放 timing 透传、teleop 活跃时的播放
+  阻断、accepted `bvh_play_ack`、`TELEOP_CONTROL_REJECTED` 和
+  `ROS_CALLBACK_FAILED` 错误类别保持不变。
+- `BvhPlaybackRuntime` 仍负责播放/blocked/close 串行化；
+  `BvhActionPlayer` 仍为每代 worker 使用独立 `Event`，并以 bool
+  `play()` / `stop()` 报告结果，上一代未退出时不创建替代线程。
+- player 明确返回 `False` 时仍通过 `ROS_CALLBACK_FAILED` 显式失败；
+  blocked 停止未完成时仍可重试，节点 shutdown 则通过通用扩展 `close`
+  策略完成有限次数的清理重试。
 - `websocket_bridge` 已开始消费 `motion_msgs/ExecutionState`，并将执行层状
   态上行到 WebSocket 状态查询/广播链路。
 
@@ -443,8 +434,8 @@
 
 1. 评估 `parallel_3dof_controller -> motion_control` 的迁移。
 2. 评估 `websocket_bridge -> teleoperation_bridge` 的迁移。
-3. 在需要时引入 `motion_msgs`，替代上层模块对 `servo_msgs` 的长期直接依
-   赖。
+3. 继续收紧已落地的 `motion_msgs` 语义，逐步淘汰上层模块中保留的
+   servo 风格过渡字段。
 4. 更远期再评估 `task_service_bridge`、`task_api_msgs`、`speech_interface`、
    `vision_perception` 的落地顺序。
 
@@ -458,15 +449,16 @@
 
 如果只按投入产出比排序，建议顺序如下：
 
-1. 文档分层
-   - 先补事实文档，停止让规划文档承载当前状态。
-2. 执行边界
-   - 这是控制层和桥接层解耦的前提。
-3. `websocket_bridge` 降职责
-   - 当前 sim 收口已基本完成，下一步更值得继续压缩 teleop/debug/demo 的混
-     合包边界。
+1. `motion_msgs` 语义收紧
+   - 扩大 producer/consumer 对 `duration_ms` 与 `value_encoding` 的优先使用，
+     逐步弱化 servo 风格过渡字段。
+2. 继续稳定执行边界
+   - 后续再按独立阶段收紧 teleop lease、抢占、超时与跨入口统一准入语义。
+3. `websocket_bridge` 剩余职责收紧
+   - sim 收口与 BVH 可选扩展抽离已基本完成，下一步只继续压缩
+     teleop/debug/status/IMU 上行的混合包边界。
 4. 正式命名收敛
-   - 只有在前面四步稳定后才值得做。
+   - 只有在前面边界稳定后才值得做。
 
 
 ## 6. 需要持续遵守的约束
@@ -487,6 +479,8 @@
 长期规划文档仍然有效，但当前仓库离那套目标架构还有几步关键过渡工作。
 因此更合理的做法不是去覆盖旧规划，而是补充一层“当前事实 + 近期执行顺序”
 文档：先把边界整理清楚。当前整机主 launch 已从 `websocket_bridge` 拆到
-`robot_bringup`，仿真域本轮也已基本完成 package-level 收口；下一步更应围
-绕 `websocket_bridge` 降职责与执行边界继续推进，最后再做正式命名和远期模
-块落地。
+`robot_bringup`，仿真域本轮也已基本完成 package-level 收口；BVH 已收口为
+`record_load_action` 所有的显式 opt-in 扩展，默认 teleop/full-system 与
+WebSocket schema 均不再启用或广告该能力。下一步更应围绕执行边界、
+`motion_msgs` 语义和 `websocket_bridge` 剩余 teleop/debug/status/IMU 职责继续
+收紧，最后再做正式命名和远期模块落地。

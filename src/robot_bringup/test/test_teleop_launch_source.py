@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 class TestTeleopLaunchSource(unittest.TestCase):
-    """验证 teleop.launch.py 的 BVH/demo 接线不会退回 teleop 入口。"""
+    """验证 teleop.launch.py 仅暴露通用的可选扩展装配面。"""
 
     def _read_launch(self, file_name: str) -> str:
         return Path(
@@ -19,14 +19,27 @@ class TestTeleopLaunchSource(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-    def test_bridge_node_routes_bvh_to_motion_topic(self):
+    def test_bridge_extensions_are_opt_in_by_default(self):
         source = self._read_launch('teleop.launch.py')
 
         self.assertIn(
-            "{'bvh_command_topic': execution_motion_command_topic}",
+            "bridge_extension_factories_arg = DeclareLaunchArgument(",
             source,
         )
-        self.assertIn('Demo/BVH入口:', source)
+        self.assertIn("'bridge_extension_factories'", source)
+        self.assertIn("default_value=''", source)
+        self.assertIn("'extension_factories': LaunchConfiguration(", source)
+
+    def test_default_teleop_surface_has_no_bvh_wiring(self):
+        source = self._read_launch('teleop.launch.py')
+
+        self.assertNotIn("{'bvh_command_topic':", source)
+        self.assertNotIn('Demo/BVH入口:', source)
+        self.assertIn(
+            "{'motion_command_topic': execution_motion_command_topic}",
+            source,
+        )
+        self.assertIn('Motion入口:', source)
 
     def test_teleop_launch_no_longer_exposes_bvh_config_path(self):
         source = self._read_launch('teleop.launch.py')

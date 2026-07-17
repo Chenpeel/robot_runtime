@@ -38,8 +38,8 @@ class TestBridgeNodeTopics(unittest.TestCase):
             source
         )
 
-    def test_default_bvh_command_topic_constant(self):
-        """BVH/demo 默认应走 motion 执行入口，而不是复用 teleop 入口"""
+    def test_extension_factories_default_to_empty_string(self):
+        """核心桥接默认不装配任何可选扩展。"""
         source = Path(
             os.path.join(
                 os.path.dirname(__file__),
@@ -48,8 +48,8 @@ class TestBridgeNodeTopics(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn(
-            "DEFAULT_BVH_COMMAND_TOPIC = '/execution/motion/command'",
-            source
+            "self.declare_parameter('extension_factories', '')",
+            source,
         )
 
     def test_execution_state_mapping_includes_teleop_control_feedback(self):
@@ -93,62 +93,6 @@ class TestBridgeNodeTopics(unittest.TestCase):
         self.assertIn("msg.duration_ms", source)
         self.assertIn("msg.requester_id", source)
         self.assertIn("msg.lease_id", source)
-
-    def test_bvh_publish_uses_dedicated_motion_topic(self):
-        """BVH/demo 应通过独立 motion publisher 下发，避免复用 teleop 入口"""
-        source = Path(
-            os.path.join(
-                os.path.dirname(__file__),
-                '../websocket_bridge/bridge_node.py'
-            )
-        ).read_text(encoding='utf-8')
-
-        self.assertIn("self.bvh_command_pub = self.create_publisher(", source)
-        self.assertIn("self.bvh_command_pub.publish(msg)", source)
-
-    def test_bvh_playback_lifecycle_is_owned_by_record_adapter(self):
-        """bridge_node 不应继续直接创建播放器或 runtime。"""
-        source = Path(
-            os.path.join(
-                os.path.dirname(__file__),
-                '../websocket_bridge/bridge_node.py'
-            )
-        ).read_text(encoding='utf-8')
-
-        self.assertIn('BvhWebSocketPlaybackAdapter', source)
-        self.assertIn('self.bvh_playback = BvhWebSocketPlaybackAdapter(', source)
-        self.assertIn('self.bvh_playback.set_blocked(', source)
-        self.assertIn('self.bvh_playback.close()', source)
-        self.assertIn('BvhWebSocketPlaybackError', source)
-        self.assertNotIn('BvhPlaybackRuntime', source)
-        self.assertNotIn('BvhActionPlayer', source)
-        self.assertNotIn('BvhPlaybackBlockedError', source)
-        self.assertNotIn('BvhPlaybackInvalidRequestError', source)
-
-    def test_bvh_message_type_registration_is_owned_by_record_adapter(self):
-        """bridge_node 不应继续硬编码 BVH 显式消息名。"""
-        source = Path(
-            os.path.join(
-                os.path.dirname(__file__),
-                '../websocket_bridge/bridge_node.py'
-            )
-        ).read_text(encoding='utf-8')
-
-        self.assertIn('self.bvh_playback.message_type', source)
-        self.assertNotIn('set_message_callback("bvh_play"', source)
-
-    def test_bridge_node_no_longer_exposes_bvh_config_parameter(self):
-        """BVH 配置路径不应继续作为 websocket bridge 的 public 参数暴露"""
-        source = Path(
-            os.path.join(
-                os.path.dirname(__file__),
-                '../websocket_bridge/bridge_node.py'
-            )
-        ).read_text(encoding='utf-8')
-
-        self.assertNotIn("self.declare_parameter('bvh_action_file'", source)
-        self.assertNotIn("self.get_parameter('bvh_action_file')", source)
-        self.assertNotIn('config_path=self.bvh_action_file', source)
 
     def test_teleop_ack_payload_includes_execution_snapshot(self):
         """teleop ack 应携带当前 execution_state 快照语义"""

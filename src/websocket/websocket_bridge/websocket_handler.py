@@ -115,6 +115,12 @@ class WebSocketHandler:
             callback: async def callback(data: dict) -> Optional[str]
         """
         normalized_type = str(msg_type).strip().lower()
+        if not normalized_type:
+            raise ValueError('消息类型不能为空')
+        if self._is_builtin_message_type(normalized_type):
+            raise ValueError(f"内建消息类型不可由扩展注册: {normalized_type!r}")
+        if normalized_type in self.message_callbacks:
+            raise ValueError(f"消息类型已注册: {normalized_type!r}")
         self.message_callbacks[normalized_type] = callback
         self.message_handler.register_handler(normalized_type, callback)
     

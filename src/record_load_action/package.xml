@@ -3,13 +3,21 @@
 <package format="3">
   <name>record_load_action</name>
   <version>0.0.0</version>
-  <description>动作资源包（BVH/其它模式），用于WebSocket桥接动作播放</description>
+  <description>独立动作资源包（BVH/其它模式），含可选传输适配能力</description>
   <maintainer email="chenpeel@foxmail.com">Chenpeel</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>motion_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>robot_bringup</exec_depend>
+  <exec_depend>websocket_bridge</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

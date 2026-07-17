@@ -72,22 +72,19 @@ python -m websocket_bridge.ws_server --host 0.0.0.0 --port 9105 --debug
 `teleop_control_topic` 指定的话题，消息类型为
 `motion_msgs/TeleopControl`，默认值为 `/execution/teleop/control`。
 
-舵机控制请求仍通过参数 `command_topic` 发布到
+舵机控制请求通过参数 `command_topic` 发布到
 `motion_msgs/MotionCommand`，默认值为 `/execution/teleop/command`。
-
-BVH/demo 回放请求则通过参数 `bvh_command_topic` 发布到
-`motion_msgs/MotionCommand`，默认值为 `/execution/motion/command`。
 
 完整系统默认链路如下：
 
 ```text
 WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
           -> bridge_node -> MotionCommand (teleop) -> /execution/teleop/command
-          -> bridge_node -> MotionCommand (bvh/demo) -> /execution/motion/command
           -> execution_manager -> ServoCommand -> /servo/command
 ```
 
-如需联调时临时直连驱动层，可显式覆盖为 `/servo/command`。
+默认核心节点不装配 demo/BVH。可选能力通过通用参数
+`extension_factories` 显式加载，未配置时不导入任何扩展包。
 
 当前 teleop 链路约束如下：
 
@@ -131,34 +128,18 @@ WebSocket -> bridge_node -> TeleopControl -> /execution/teleop/control
   - bus 输入默认仍可写角度值，但会在桥接前归一为 pulse us
   - 若显式提供 `value_encoding == "bus_pulse_us"`，则会保留原始脉宽值
   - 若同时提供 `duration_ms` 与 `speed`，会优先采用 `duration_ms`
-- `bvh_play` 触发的 demo/BVH 回放默认会走 `bvh_command_topic`，即
-  `/execution/motion/command`，不再复用 teleop 的 `command_topic`。
-- 当前只保留显式 `type == "bvh_play"` 作为 BVH 触发入口；旧的泛化
-  `action` 别名，以及经由直发舵机/private 路径隐式转 BVH 的历史入口都不
-  再保留。
-- `bvh_play` payload 当前也只接受直接字段：
-  `action`、`loop`、`speed_ms`、`playback_rate`、`frame_ms`；
-  旧的 `action.bvh` 嵌套 payload 和顶层 `bvh` 别名都不再保留；这组字段
-  的规范化与基础结构校验当前由 `record_load_action` 持有。
-- 在通用 WebSocket 层内部，`bvh_play` 现在通过显式类型的通用消息注册面
-  接入；`MessageHandler` 不再保留 BVH 枚举、专用 payload parser 或专用
-  callback surface。`bridge_node` 当前只保留 WebSocket/ROS 适配并持有
-  `BvhWebSocketPlaybackAdapter`，不再直接创建或持有 `BvhActionPlayer` 或
-  `BvhPlaybackRuntime`；播放器、runtime 装配和生命周期所有权已迁入
-  `record_load_action`。显式消息类型和 BVH 播放失败细节也由 adapter 统一
-  提供给 bridge 映射。
-- `bridge_node` 会根据执行状态切换 adapter/runtime 的 blocked 状态，并在节
-  点关闭时调用 `close()`；blocked 会先阻断新播放再停止当前播放，若停止未
-  完成，同状态的后续同步会继续重试。closed 后仍允许显式停止请求收敛状态。
-- 播放请求、最新 execution state 与 runtime blocked 状态由同一原子门禁保
-  护，避免播放准入与 teleop 状态切换之间出现竞态。shutdown 首次 close 未
-  完成时只额外重试一次，随后继续 WebSocket 与线程清理。
-- 既有 accepted `bvh_play_ack` 仍返回 `status` / `action` / `loop`，teleop
-  阻断仍使用 `TELEOP_CONTROL_REJECTED`，播放器操作失败仍归入
-  `ROS_CALLBACK_FAILED`。当 player 明确返回 `False` 时，现在会通过后一类
-  错误显式失败；旧 player 未暴露该 bool 结果，因此这是安全性收紧。
-- `/execution/motion/command` 输出、`speed_ms` / `playback_rate` / `frame_ms`
-  透传及既有 teleop 联锁语义保持不变。
+- `bridge_node` 提供通用可选扩展宿主：按逗号分隔的
+  `module:callable` 工厂加载扩展，并统一调用扩展的消息注册、执行状态通知和
+  关闭钩子。
+- 默认 `extension_factories` 为空；核心包可以在未安装
+  `record_load_action` 时独立构建、导入和启动。
+- 显式配置的扩展若缺包、工厂不可调用、生命周期接口不完整或消息类型冲突，
+  节点会在 WebSocket 线程启动前直接失败，不会静默降级为“已启用”。
+- 扩展关闭先于 WebSocket 资源清理；首次关闭失败时核心只额外重试一次，最
+  终失败不会阻断其余资源清理。
+- BVH 的消息、发布、联锁、错误合同和专用 demo launch 已归属
+  `record_load_action`，不再是本包默认职责。运行方式见
+  `src/record_load_action/README.md`。
 
 状态查询与状态广播现在也会携带执行层反馈：
 
@@ -187,7 +168,22 @@ teleop 控制权的最小反馈信息，例如：
 - `known_teleop_active`
 - `control_confirmed`
 
-### 5. 仿真 servo 桥接
+### 5. 可选 BVH demo
+
+默认 `robot_bringup` 不注册 `bvh_play`，默认 WebSocket schema 也不再广告
+BVH。需要演示链路时显式运行：
+
+```bash
+ros2 launch record_load_action bvh_websocket_demo.launch.py
+```
+
+该入口通过通用扩展工厂装配 BVH capability，并继续将动作命令发送到
+`/execution/motion/command`，由 `execution_manager` 仲裁。该 launch 只组装
+WebSocket 与执行命令链，不会启动硬件或仿真 consumer；需要实际动作时应另行
+启动对应链路。该入口会自行启动 WebSocket bridge 与 execution manager，不能
+与同端口的 `full_system.launch.py` 重复启动。
+
+### 6. 仿真 servo 桥接
 
 用于仿真侧 servo 话题与 ROS 舵机链路直连：
 

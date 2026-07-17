@@ -2,6 +2,7 @@
 
 import os
 import sys
+import threading
 import unittest
 
 
@@ -27,6 +28,7 @@ class _Runtime:
         self.blocked_calls = []
         self.closed = False
         self.exception = None
+        self.blocked = False
 
     def apply_request(self, request):
         self.requests.append(request)
@@ -39,6 +41,7 @@ class _Runtime:
 
     def set_blocked(self, blocked):
         self.blocked_calls.append(bool(blocked))
+        self.blocked = bool(blocked)
         return True
 
     def close(self):
@@ -154,6 +157,135 @@ class BvhWebSocketPlaybackAdapterTest(unittest.TestCase):
         adapter.close()
 
         self.assertEqual(runtime.blocked_calls, [True])
+        self.assertTrue(runtime.closed)
+
+    def test_blocked_error_keeps_atomic_block_context(self):
+        runtime = _Runtime()
+        runtime.exception = BvhPlaybackBlockedError('blocked')
+        adapter = self._adapter(runtime)
+        block_context = {
+            'teleop_holder_id': 'client-a',
+            'teleop_lease_id': 'lease-1',
+        }
+
+        adapter.set_blocked(True, block_context=block_context)
+
+        with self.assertRaises(BvhWebSocketPlaybackError) as ctx:
+            adapter.handle_play_payload({
+                'type': 'bvh_play',
+                'action': 'wave',
+            })
+
+        self.assertEqual(ctx.exception.block_context, block_context)
+        self.assertIsNot(ctx.exception.block_context, block_context)
+
+    def test_play_waits_for_atomic_block_transition(self):
+        class _CoordinatedRuntime(_Runtime):
+            def __init__(self):
+                super().__init__()
+                self.block_entered = threading.Event()
+                self.finish_block = threading.Event()
+                self.apply_called = threading.Event()
+
+            def set_blocked(self, blocked):
+                self.block_entered.set()
+                if not self.finish_block.wait(timeout=1.0):
+                    raise RuntimeError('block coordination timed out')
+                return super().set_blocked(blocked)
+
+            def apply_request(self, request):
+                self.apply_called.set()
+                if self.blocked:
+                    raise BvhPlaybackBlockedError('blocked')
+                return super().apply_request(request)
+
+        runtime = _CoordinatedRuntime()
+        adapter = self._adapter(runtime)
+        block_context = {'teleop_holder_id': 'client-race'}
+        outcomes = []
+
+        block_thread = threading.Thread(
+            target=lambda: adapter.set_blocked(
+                True,
+                block_context=block_context,
+            ),
+        )
+
+        def _play():
+            try:
+                outcomes.append(adapter.handle_play_payload({
+                    'type': 'bvh_play',
+                    'action': 'wave',
+                }))
+            except Exception as exc:
+                outcomes.append(exc)
+
+        play_thread = threading.Thread(target=_play)
+        block_thread.start()
+        self.assertTrue(runtime.block_entered.wait(timeout=1.0))
+        play_thread.start()
+        try:
+            self.assertFalse(runtime.apply_called.wait(timeout=0.02))
+        finally:
+            runtime.finish_block.set()
+
+        block_thread.join(timeout=1.0)
+        play_thread.join(timeout=1.0)
+
+        self.assertFalse(block_thread.is_alive())
+        self.assertFalse(play_thread.is_alive())
+        self.assertTrue(runtime.apply_called.is_set())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], BvhWebSocketPlaybackError)
+        self.assertEqual(
+            outcomes[0].kind,
+            BvhWebSocketPlaybackError.BLOCKED,
+        )
+        self.assertEqual(outcomes[0].block_context, block_context)
+        self.assertIsNot(outcomes[0].block_context, block_context)
+
+    def test_close_waits_for_active_play_request(self):
+        class _CoordinatedRuntime(_Runtime):
+            def __init__(self):
+                super().__init__()
+                self.apply_entered = threading.Event()
+                self.finish_apply = threading.Event()
+                self.close_called = threading.Event()
+
+            def apply_request(self, request):
+                self.apply_entered.set()
+                if not self.finish_apply.wait(timeout=1.0):
+                    raise RuntimeError('apply coordination timed out')
+                return super().apply_request(request)
+
+            def close(self):
+                self.close_called.set()
+                super().close()
+
+        runtime = _CoordinatedRuntime()
+        adapter = self._adapter(runtime)
+        play_thread = threading.Thread(
+            target=lambda: adapter.handle_play_payload({
+                'type': 'bvh_play',
+                'action': 'wave',
+            }),
+        )
+        close_thread = threading.Thread(target=adapter.close)
+
+        play_thread.start()
+        self.assertTrue(runtime.apply_entered.wait(timeout=1.0))
+        close_thread.start()
+        try:
+            self.assertFalse(runtime.close_called.wait(timeout=0.02))
+        finally:
+            runtime.finish_apply.set()
+
+        play_thread.join(timeout=1.0)
+        close_thread.join(timeout=1.0)
+
+        self.assertFalse(play_thread.is_alive())
+        self.assertFalse(close_thread.is_alive())
+        self.assertTrue(runtime.close_called.is_set())
         self.assertTrue(runtime.closed)
 
 

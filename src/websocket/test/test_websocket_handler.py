@@ -444,6 +444,12 @@ class TestWebSocketHandler:
         # 验证处理器已注册到底层 MessageHandler
         assert "custom_type" in self.handler.message_handler.message_callbacks
 
+        with pytest.raises(ValueError, match="消息类型已注册"):
+            self.handler.register_message_handler(
+                " CUSTOM_TYPE ",
+                custom_handler,
+            )
+
     @pytest.mark.asyncio
     async def test_heartbeat_callback_exception_handling(self):
         """测试心跳回调异常处理"""

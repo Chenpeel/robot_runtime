@@ -27,13 +27,12 @@ class TestStreamSchemas:
         # 应该包含舵机控制相关字段
         assert "web_servo" in schema or "controller_type" in schema
 
-    def test_web2ros_schema_uses_explicit_bvh_play_sample(self):
-        """测试默认 schema 使用显式 bvh_play 示例而非旧 action 嵌套结构。"""
+    def test_web2ros_schema_does_not_advertise_optional_bvh(self):
+        """默认 core schema 不应广告可选 BVH capability。"""
         schema = self.schemas.get_web2jiyuan_schema()
 
-        assert "bvh_play" in schema
-        assert schema["bvh_play"]["type"] == "bvh_play"
-        assert "action" not in schema
+        assert "bvh_play" not in schema
+        assert schema["controller_type"] == "web_servo | xbox_controller"
 
     def test_load_ros2web_schema(self):
         """测试加载 ROS → Web 格式定义"""

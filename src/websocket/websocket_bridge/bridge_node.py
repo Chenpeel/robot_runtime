@@ -4,11 +4,11 @@ WebSocket桥接节点 - 连接WebSocket服务器和ROS 2舵机驱动
 数据流:
 1. WebSocket客户端 -> WebSocket服务器 -> bridge_node
    -> /execution/teleop/control + /execution/teleop/command -> execution_manager
-   -> /execution/motion/command (BVH/demo) -> execution_manager
 2. 舵机驱动节点 -> /servo/state话题 -> bridge_node -> WebSocket服务器 -> WebSocket客户端
 """
 
 import asyncio
+from importlib import import_module
 import threading
 from typing import Optional
 
@@ -28,15 +28,10 @@ except Exception:  # pragma: no cover - optional dependency
     HAS_IMU_DATA = False
 
 from .ws_server import WebSocketBridgeServer
-from .error_codes import ErrorCode
 from .error_codes import TeleopControlRejectedException
-from .error_codes import WebSocketException
-from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackError
-from record_load_action.bvh_websocket_adapter import BvhWebSocketPlaybackAdapter
 from .debug_aggregator import DebugAggregator
 
 DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
-DEFAULT_BVH_COMMAND_TOPIC = '/execution/motion/command'
 DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
 BUS_MIN_US = 500
 BUS_MAX_US = 2500
@@ -70,9 +65,9 @@ class WebSocketROS2Bridge(Node):
         self.declare_parameter('device_id', device_id)
         self.declare_parameter('debug', debug)
         self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
-        self.declare_parameter('bvh_command_topic', DEFAULT_BVH_COMMAND_TOPIC)
         self.declare_parameter('teleop_control_topic', DEFAULT_TELEOP_CONTROL_TOPIC)
         self.declare_parameter('execution_state_topic', '/execution/state')
+        self.declare_parameter('extension_factories', '')
         self.declare_parameter('imu_debug', debug)
         self.declare_parameter('heartbeat_debug', False)
         self.declare_parameter('ws_debug', False)
@@ -86,9 +81,11 @@ class WebSocketROS2Bridge(Node):
         self.device_id = self.get_parameter('device_id').value
         self.debug = self.get_parameter('debug').value
         self.command_topic = self.get_parameter('command_topic').value
-        self.bvh_command_topic = self.get_parameter('bvh_command_topic').value
         self.teleop_control_topic = self.get_parameter('teleop_control_topic').value
         self.execution_state_topic = self.get_parameter('execution_state_topic').value
+        self.extension_factories = str(
+            self.get_parameter('extension_factories').value or ''
+        )
         self.imu_debug = self.get_parameter('imu_debug').value
         self.heartbeat_debug = self.get_parameter('heartbeat_debug').value
         self.ws_debug = self.get_parameter('ws_debug').value
@@ -114,20 +111,12 @@ class WebSocketROS2Bridge(Node):
             self.command_topic,
             10
         )
-        # 发布 demo/BVH MotionCommand 到 motion 入口
-        self.bvh_command_pub = self.create_publisher(
-            MotionCommand,
-            self.bvh_command_topic,
-            10
-        )
         self.teleop_control_pub = self.create_publisher(
             TeleopControl,
             self.teleop_control_topic,
             10
         )
 
-        # 串行化 execution state 门禁提交与 BVH 请求，避免状态/runtime 分裂。
-        self._bvh_gate_lock = threading.RLock()
         self.latest_execution_state = {}
 
         # 订阅舵机状态反馈
@@ -156,11 +145,7 @@ class WebSocketROS2Bridge(Node):
         else:
             self.get_logger().warn('ImuData消息不可用，已跳过IMU订阅')
 
-        # BVH WebSocket 适配由 record_load_action 持有 runtime 装配与生命周期。
-        self.bvh_playback = BvhWebSocketPlaybackAdapter(
-            publish_callback=self._publish_bvh_command,
-            logger=self.get_logger()
-        )
+        self.extensions = self._load_extensions(self.extension_factories)
 
         # WebSocket服务器
         self.ws_server: Optional[WebSocketBridgeServer] = None
@@ -170,38 +155,120 @@ class WebSocketROS2Bridge(Node):
         self.get_logger().info(
             f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}, '
             f'command_topic={self.command_topic}, '
-            f'bvh_command_topic={self.bvh_command_topic}, '
             f'teleop_control_topic={self.teleop_control_topic}, '
-            f'execution_state_topic={self.execution_state_topic}'
+            f'execution_state_topic={self.execution_state_topic}, '
+            f'extensions={len(self.extensions)}'
         )
+
+    def _load_extensions(self, factory_specs: str) -> list:
+        """按 ``module:callable`` 列表加载显式配置的扩展。"""
+        extensions = []
+        try:
+            for raw_spec in str(factory_specs or '').split(','):
+                spec = raw_spec.strip()
+                if not spec:
+                    continue
+
+                extension = self._load_extension(spec)
+                extensions.append(extension)
+        except Exception:
+            # 节点初始化将失败，但已创建的扩展仍需先尽力释放自身资源。
+            for extension in reversed(extensions):
+                try:
+                    extension.close()
+                except Exception as close_error:
+                    self.get_logger().error(
+                        f'回滚扩展 {type(extension).__name__} 失败: '
+                        f'{close_error}'
+                    )
+            raise
+
+        return extensions
+
+    def _load_extension(self, spec: str):
+        """加载并校验单个 ``module:callable`` 扩展工厂。"""
+        try:
+            module_name, factory_name = spec.rsplit(':', 1)
+        except ValueError as exc:
+            raise ValueError(f'扩展工厂格式无效: {spec!r}') from exc
+
+        module_name = module_name.strip()
+        factory_name = factory_name.strip()
+        if not module_name or not factory_name:
+            raise ValueError(f'扩展工厂格式无效: {spec!r}')
+
+        module = import_module(module_name)
+        factory = getattr(module, factory_name)
+        if not callable(factory):
+            raise TypeError(f'扩展工厂不可调用: {spec!r}')
+
+        extension = factory(self)
+        try:
+            self._validate_extension(extension, spec)
+        except Exception:
+            close_extension = getattr(extension, 'close', None)
+            if callable(close_extension):
+                try:
+                    close_extension()
+                except Exception as close_error:
+                    self.get_logger().error(
+                        f'回滚无效扩展 {type(extension).__name__} 失败: '
+                        f'{close_error}'
+                    )
+            raise
+        return extension
+
+    @staticmethod
+    def _validate_extension(extension, factory_spec: str) -> None:
+        """验证扩展实现完整的生命周期契约。"""
+        required_methods = (
+            'register_message_handlers',
+            'on_execution_state',
+            'close',
+        )
+        missing_methods = [
+            method_name
+            for method_name in required_methods
+            if not callable(getattr(extension, method_name, None))
+        ]
+        if missing_methods:
+            raise TypeError(
+                f'扩展 {factory_spec!r} 缺少可调用方法: '
+                f'{", ".join(missing_methods)}'
+            )
+
+    def _register_extension_message_handlers(self, server) -> None:
+        """将已加载扩展的消息处理器注册到 WebSocket 服务。"""
+        for extension in self.extensions:
+            extension.register_message_handlers(server)
+
+    def _create_websocket_server(self) -> WebSocketBridgeServer:
+        """同步创建并配置服务，使扩展注册错误在启动线程前暴露。"""
+        server = WebSocketBridgeServer(
+            host=self.ws_host,
+            port=self.ws_port,
+            device_id=self.device_id,
+            debug=self.ws_debug,
+            debug_logger=self.debug_aggregator,
+        )
+        server.set_servo_command_callback(self.handle_servo_command)
+        server.set_teleop_claim_callback(self.handle_teleop_claim)
+        server.set_teleop_release_callback(self.handle_teleop_release)
+        server.set_heartbeat_callback(self.handle_heartbeat)
+        server.set_status_query_callback(self.handle_status_query)
+        self._register_extension_message_handlers(server)
+        return server
 
     def start_websocket_server(self):
         """在独立线程中启动WebSocket服务器"""
+        # 服务与扩展注册在当前线程完成；显式配置错误必须阻止节点假启动。
+        self.ws_server = self._create_websocket_server()
+
         def run_ws_server():
             """WebSocket服务器运行函数（在独立线程中）"""
             # 创建新的事件循环
             self.ws_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.ws_loop)
-
-            # 创建WebSocket服务器
-            self.ws_server = WebSocketBridgeServer(
-                host=self.ws_host,
-                port=self.ws_port,
-                device_id=self.device_id,
-                debug=self.ws_debug,
-                debug_logger=self.debug_aggregator
-            )
-
-            # 注册回调
-            self.ws_server.set_servo_command_callback(self.handle_servo_command)
-            self.ws_server.set_teleop_claim_callback(self.handle_teleop_claim)
-            self.ws_server.set_teleop_release_callback(self.handle_teleop_release)
-            self.ws_server.set_heartbeat_callback(self.handle_heartbeat)
-            self.ws_server.set_status_query_callback(self.handle_status_query)
-            self.ws_server.set_message_callback(
-                self.bvh_playback.message_type,
-                self.handle_bvh_play,
-            )
 
             # 运行服务器
             try:
@@ -325,52 +392,6 @@ class WebSocketROS2Bridge(Node):
             self.get_logger().error(f'处理舵机命令失败: {e}')
             raise
 
-    def _publish_bvh_command(self, servo_type: str, servo_id: int,
-                             position: int, speed: int) -> None:
-        msg = self._build_motion_command(
-            servo_type=servo_type,
-            servo_id=int(servo_id),
-            position=int(position),
-            value_encoding=self._motion_value_encoding_for_servo_type(servo_type),
-            duration_ms=int(speed),
-            requester_id='',
-            lease_id='',
-        )
-        self.bvh_command_pub.publish(msg)
-
-    async def handle_bvh_play(self, payload: dict):
-        """处理BVH动作播放请求"""
-        with self._bvh_gate_lock:
-            try:
-                return self.bvh_playback.handle_play_payload(payload)
-            except BvhWebSocketPlaybackError as exc:
-                if exc.kind == BvhWebSocketPlaybackError.BLOCKED:
-                    # 拒绝详情必须与触发 runtime 阻塞的 execution state 一致。
-                    self._raise_bvh_play_blocked()
-
-                error_code = (
-                    ErrorCode.INVALID_PARAMETER_VALUE
-                    if exc.kind == BvhWebSocketPlaybackError.INVALID_REQUEST
-                    else ErrorCode.ROS_CALLBACK_FAILED
-                )
-                raise WebSocketException(
-                    error_code=error_code,
-                    message=exc.message,
-                    details=exc.details,
-                )
-            except Exception as exc:
-                raise WebSocketException(
-                    error_code=ErrorCode.ROS_CALLBACK_FAILED,
-                    message=f"BVH play failed: {str(exc)}",
-                    details={"payload": payload, "exception": str(exc)},
-                )
-
-        raise WebSocketException(
-            error_code=ErrorCode.ROS_CALLBACK_FAILED,
-            message="BVH play failed: unknown adapter result",
-            details={"payload": payload, "exception": "unknown adapter result"},
-        )
-
     async def handle_heartbeat(self, context: dict | None = None):
         """处理心跳消息"""
         requester_id = self._extract_requester_id(context)
@@ -441,27 +462,17 @@ class WebSocketROS2Bridge(Node):
         """处理 execution_manager 状态反馈。"""
         try:
             state = self._execution_state_msg_to_dict(msg)
-            with self._bvh_gate_lock:
-                changed = state != self.latest_execution_state
-                self.latest_execution_state = state
+            changed = state != self.latest_execution_state
+            self.latest_execution_state = state
 
-                bvh_blocked = self._teleop_control_is_active()
-                bvh_blocked_changed = False
+            for extension in self.extensions:
                 try:
-                    bvh_blocked_changed = self.bvh_playback.set_blocked(
-                        bvh_blocked
-                    )
+                    extension.on_execution_state(dict(state))
                 except Exception as exc:
                     self.get_logger().error(
-                        f'更新 BVH 播放阻塞状态失败: {exc}'
+                        f'扩展 {type(extension).__name__} '
+                        f'处理 execution state 失败: {exc}'
                     )
-
-            if bvh_blocked_changed and bvh_blocked:
-                self._debug_log(
-                    "bvh_play",
-                    "stopped because teleop control became active",
-                    self.debug,
-                )
 
             if self.ws_server:
                 self.ws_server.update_execution_state(state)
@@ -730,27 +741,6 @@ class WebSocketROS2Bridge(Node):
             },
         )
 
-    def _raise_bvh_play_blocked(self) -> None:
-        with self._bvh_gate_lock:
-            execution_state = dict(self.latest_execution_state)
-            teleop_active = bool(execution_state.get('teleop_active'))
-            active_source = str(execution_state.get('active_source') or '')
-
-            raise TeleopControlRejectedException(
-                message='bvh play rejected: bvh_blocked_by_active_teleop',
-                details={
-                    'reason': 'bvh_blocked_by_active_teleop',
-                    'teleop_holder_id': str(
-                        execution_state.get('teleop_holder_id') or ''
-                    ),
-                    'teleop_lease_id': str(
-                        execution_state.get('teleop_lease_id') or ''
-                    ),
-                    'teleop_active': teleop_active,
-                    'active_source': active_source,
-                },
-            )
-
     @staticmethod
     def _motion_value_encoding_for_servo_type(servo_type: str) -> str:
         normalized_type = str(servo_type).strip().lower()
@@ -890,17 +880,7 @@ class WebSocketROS2Bridge(Node):
         """关闭节点和WebSocket服务器"""
         self.get_logger().info('开始关闭WebSocket桥接节点...')
 
-        # 先关闭 BVH runtime，禁止新播放并停止当前 worker。
-        bvh_runtime_closed = False
-        for _attempt in range(2):
-            try:
-                self.bvh_playback.close()
-                bvh_runtime_closed = True
-                break
-            except Exception as exc:
-                self.get_logger().error(
-                    f'关闭 BVH 播放 runtime 失败: {exc}'
-                )
+        extensions_closed = self._close_extensions()
 
         # 停止WebSocket服务器
         if self.ws_server and self.ws_loop:
@@ -922,37 +902,57 @@ class WebSocketROS2Bridge(Node):
         if self.ws_thread and self.ws_thread.is_alive():
             self.ws_thread.join(timeout=2.0)
 
-        if bvh_runtime_closed:
+        if extensions_closed:
             self.get_logger().info('WebSocket桥接节点已关闭')
         else:
             self.get_logger().error(
-                'WebSocket桥接资源已清理，但 BVH runtime 未确认关闭'
+                'WebSocket桥接资源已清理，但部分扩展未确认关闭'
             )
+
+    def _close_extensions(self) -> bool:
+        """关闭所有扩展，单个扩展失败时最多额外重试一次。"""
+        all_closed = True
+        for extension in self.extensions:
+            closed = False
+            for attempt in range(2):
+                try:
+                    extension.close()
+                    closed = True
+                    break
+                except Exception as exc:
+                    self.get_logger().error(
+                        f'关闭扩展 {type(extension).__name__} 失败 '
+                        f'(第 {attempt + 1}/2 次): {exc}'
+                    )
+            if not closed:
+                all_closed = False
+
+        return all_closed
 
 
 def main(args=None):
     """主函数"""
     rclpy.init(args=args)
-
-    # 创建桥接节点(使用默认值,实际值从launch文件参数传入)
-    bridge = WebSocketROS2Bridge()
-
-    # 启动WebSocket服务器（在独立线程）
-    bridge.start_websocket_server()
-
-    # 使用多线程执行器
-    executor = MultiThreadedExecutor()
-    executor.add_node(bridge)
+    bridge = None
 
     try:
+        # 创建桥接节点(使用默认值,实际值从launch文件参数传入)
+        bridge = WebSocketROS2Bridge()
+        bridge.start_websocket_server()
+
+        executor = MultiThreadedExecutor()
+        executor.add_node(bridge)
+
         # 运行ROS 2节点
         bridge.get_logger().info('WebSocket桥接节点开始运行...')
         executor.spin()
     except KeyboardInterrupt:
-        bridge.get_logger().info('收到退出信号')
+        if bridge is not None:
+            bridge.get_logger().info('收到退出信号')
     finally:
-        bridge.shutdown()
-        bridge.destroy_node()
+        if bridge is not None:
+            bridge.shutdown()
+            bridge.destroy_node()
         rclpy.shutdown()
 
 

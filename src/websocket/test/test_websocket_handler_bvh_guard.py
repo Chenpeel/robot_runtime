@@ -84,6 +84,30 @@ class TestWebSocketHandlerBvhGuard(unittest.TestCase):
             }],
         )
 
+    def test_generic_extension_registration_rejects_type_conflicts(self):
+        async def first_callback(payload):
+            return payload
+
+        async def second_callback(payload):
+            return payload
+
+        self.handler.register_message_handler(
+            'custom_extension',
+            first_callback,
+        )
+
+        with self.assertRaisesRegex(ValueError, '消息类型已注册'):
+            self.handler.register_message_handler(
+                ' CUSTOM_EXTENSION ',
+                second_callback,
+            )
+
+        with self.assertRaisesRegex(ValueError, '内建消息类型不可由扩展注册'):
+            self.handler.register_message_handler(
+                'heartbeat',
+                second_callback,
+            )
+
 
 if __name__ == '__main__':
     unittest.main()

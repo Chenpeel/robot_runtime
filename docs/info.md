@@ -46,7 +46,7 @@
 
 ## 3. 当前阶段判断
 
-截至 2026-03-24，当前重构已经完成的关键基础包括：
+截至 2026-07-17，当前重构已经完成的关键基础包括：
 
 - `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / simulation 三个子域。
 - `robot_bringup` 场景化 launch 当前也已开始复用 `launch_utils` 统一解析总线
@@ -66,7 +66,8 @@
 - `execution_manager` 当前也已把内部仲裁器从命令载荷细节中进一步解耦；
   `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求一
   层伪 `CommandFrame` 中间快照。
-- BVH/demo 回放已默认改走 `/execution/motion/command`，不再复用 teleop 命令入口。
+- BVH/demo capability 的动作输出已改走 `/execution/motion/command`，不再复
+  用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
 - BVH 的运行说明当前也已继续收回 `record_load_action/README.md`；
@@ -82,26 +83,28 @@
   `bvh_request.normalize_bvh_play_request`，统一承接显式直接字段的规范化与
   基础结构校验；`bvh_player` 只保留兼容导入出口。
 - `record_load_action` 当前也已提供 `BvhWebSocketPlaybackAdapter`，由它承
-  接 `bvh_play` 请求规范化、accepted ack payload 生成，以及 WebSocket-facing
-  runtime 装配；显式消息类型和 BVH 播放失败细节也由 adapter 统一提供给
-  bridge 映射。
+  接 `bvh_play` 请求规范化、accepted ack payload 生成、WebSocket-facing
+  runtime 装配，以及播放、阻断与关闭操作的原子串行化。
 - 通用 `MessageHandler` 当前也已移除 `BVH_PLAY` 枚举和
   `parse_bvh_action`；`WebSocketHandler` 会优先按已注册的未知显式 `type`
   分发扩展，不再内建 BVH 协议知识。
-- `bridge_node` 仍是当前 WebSocket 适配点：通过 adapter 暴露的显式消息类
-  型注册通用消息回调，并调用上述 adapter；既有 accepted `bvh_play_ack`
-  形状、teleop 拒绝的 `TELEOP_CONTROL_REJECTED` 类别，以及播放器操作失败
-  使用的 `ROS_CALLBACK_FAILED` 类别继续由 bridge 映射并保持稳定。
-- `BvhPlaybackRuntime` 当前已迁入 `record_load_action`，由它创建并持有
-  `BvhActionPlayer`、串行化播放/阻断/关闭操作；`bridge_node` 只持有
-  `BvhWebSocketPlaybackAdapter`，不再直接装配 runtime 或持有播放器。
-- 当执行层进入 teleop 活跃态时，桥接层会把 runtime 置为 blocked；runtime
-  会先阻断新播放再停止当前播放。节点关闭时则进入 closed/blocked 终态并停
-  止播放器，停止失败的关闭仍可重试，显式停止请求在 blocked/closed 状态下
-  仍被允许。
+- `websocket_bridge` 核心当前只提供通用 `extension_factories` 动态装配面，
+  默认不加载任何扩展；其源码与包清单均不再直接依赖
+  `record_load_action`，也不再持有 BVH topic、publisher、注册、错误映射或
+  execution-state 联锁。
+- `record_load_action` 当前已提供 `BvhWebSocketExtension`，由它持有
+  `/execution/motion/command` publisher、注册显式 `bvh_play`、映射既有 ack
+  与错误类别，并将 execution state 原子提交到播放门禁。
+- `record_load_action/bvh_websocket_demo.launch.py` 是当前显式 opt-in 入口；
+  默认 `robot_bringup` teleop/full-system 与默认 WebSocket schema 均不再装
+  配或广告 BVH。
+- `BvhPlaybackRuntime` 继续创建并持有 `BvhActionPlayer`；进入 blocked 时先
+  阻断新播放再停止当前播放，节点关闭时进入 closed/blocked 终态。显式停止
+  在 blocked/closed 状态下仍可执行，停止或关闭失败仍可按既有策略重试。
 - blocked 状态下若停止尚未完成，后续同状态 `set_blocked(True)` 会继续重
-  试；`bridge_node` 也会通过同一原子门禁同步 execution state、adapter
-  blocked 状态与播放准入，shutdown 对未完成 close 只额外重试一次。
+  试；adapter 自身的原子门禁保证播放请求只能在 execution-state 阻断提交完
+  成后进入，并为拒绝保留同一状态快照。核心扩展宿主对 close 最多额外重试
+  一次，然后继续清理其余 WebSocket 资源。
 - `BvhActionPlayer` 当前为每代 worker 使用独立 `Event`，并以 bool
   `play()` / `stop()` 报告操作结果；只有确认上一代退出后才会启动下一代，
   超时后仍存活的 worker 会保留句柄并拒绝替代线程。
@@ -125,27 +128,29 @@
 
 下一优先级定义为：
 
-**Phase B/C-Next：继续收缩 `websocket_bridge` 的混合职责**
+**Phase C-Next：继续收紧 `MotionCommand` 的中性执行语义**
 
 原因：
 
-- 从全局蓝本看，`websocket_bridge` 不应长期同时承担 teleop、debug、状
-  态桥接与 demo/BVH 混合职责。
-- 从当前事实看，sim 域本轮已经完成主要收口，继续深挖仿真内部细节的投入
-  产出比已经下降。
-- `execution_manager`、BVH 配置归属与 bringup 编排都已进一步收紧，当前
-  已具备继续压缩 `websocket_bridge` 历史耦合的条件。
+- BVH/demo 已完成 opt-in 断依赖，sim 域 package-level surface 也已基本收
+  口，这两块不再是当前主推进阻塞项。
+- `MotionCommand.duration_ms` / `value_encoding` 已成为 producer 与 consumer
+  的主语义，但旧 `speed` 回退和 servo 风格字段仍存在于公共接口及多个生产
+  者中。
+- 当前更适合沿既有中性 setpoint 适配层做小步收紧，而不是立即改包名、移动
+  目录或继续深挖 demo 内部实现。
 
 
 ## 5. 下一阶段建议范围
 
 下一阶段建议范围控制在：
 
-- 继续从 `websocket_bridge` 收回 demo/BVH 的触发、配置与说明职责，避免它
-  继续作为 teleop 主链路之外能力的历史挂载点。
-- 继续稳定 `motion_msgs/MotionCommand` 在 producer / consumer 两侧对
-  `duration_ms`、`value_encoding` 的主语义优先级，减少过渡式驱动字段长
-  期占据外部接口中心。
+- 审计 `MotionCommand` 的所有 producer / consumer，只选择一个可独立验证
+  的旧字段依赖继续收紧；不在同一阶段同时改消息定义和所有调用方。
+- 继续稳定 `duration_ms`、`value_encoding` 的主语义优先级，优先消除内部
+  对旧 `speed` 回退的实际依赖，再评估公共字段删除。
+- `websocket_bridge` 后续只继续处理 teleop / debug / status 的剩余混杂，
+  不重新把 BVH capability、配置或样例放回默认核心。
 - 仿真域后续只保留必要维护，不再把内部实现细节重新上抬到
   `robot_bringup` 或 package-level public surface。
 
@@ -161,11 +166,12 @@
 - `execution_manager/command_adapter.py` 当前也已把 consumer 侧时长回退收紧
   为“先读正值 `duration_ms`，再读正值旧 `speed`”，无效旧字段不再被提升为
   内部执行时长。
-- `bvh_play` 请求的显式直接字段规范化、ack payload 生成、显式消息类型、
-  BVH 播放错误细节归一化与 WebSocket-facing runtime 装配当前也已从
-  `bridge_node` 继续收回 `record_load_action`；WebSocket 通用层会优先按
-  已注册的显式扩展分发，`bridge_node` 保留当前传输适配、错误类别映射与
-  执行联锁。
+- `bvh_play` 请求规范化、ack、错误映射、motion publisher、执行联锁与播放
+  生命周期当前均已收回 `record_load_action` 的可选 capability；
+  `bridge_node` 只保留通用扩展工厂、状态通知与关闭钩子。
+- 默认 teleop/full-system 不启用 BVH；需要演示链路时由
+  `record_load_action/bvh_websocket_demo.launch.py` 显式装配，并继续走
+  `/execution/motion/command` 与 `execution_manager`。
 - `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接
@@ -239,12 +245,11 @@
 
 建议优先修改的文件：
 
+- `src/execution_manager/execution_manager/command_adapter.py`
+- `src/execution_manager/test/test_command_adapter.py`
+- `src/parallel_3dof_controller/parallel_3dof_controller/controller_node.py`
 - `src/websocket/websocket_bridge/bridge_node.py`
-- `src/websocket/websocket_bridge/ws_server.py`
-- `src/record_load_action/record_load_action/bvh_player.py`
-- `src/record_load_action/README.md`
-- `src/websocket/config/README.md`
-- `src/websocket/test/test_bridge_node_teleop_guard.py`
+- `src/record_load_action/record_load_action/bvh_websocket_extension.py`
 
 实施后必须同步更新：
 
@@ -257,6 +262,7 @@
 现阶段暂不优先：
 
 - 再做一轮 teleop requester / lease 语义深挖
+- 立即把 `record_load_action` 的离线工具与 demo 集成拆成多个 ROS 包
 - 立即推动 `parallel_3dof_controller -> motion_control` 正式改名
 - 立即把所有 `servo_msgs` 依赖一次性替换掉
 - 大规模目录迁移
