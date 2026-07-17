@@ -66,6 +66,30 @@
 - `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / simulation 三个子域。
 - `robot_bringup` 场景化 launch 当前也已开始复用 `launch_utils` 统一解析总线
   协议缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
+- `robot_bringup` 当前已增加 `docs/plan.md` Phase 2 仓库级完成合同，以 AST、
+  XML 和 JSON 结构化验证 WebSocket/simulation 包级分离、独立
+  `sensor_hardware` 所有权、BVH 默认 opt-in 依赖方向，以及
+  `full_system` 对 hardware / teleop / simulation 三个子 launch 的真实组合；
+  Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，共
+  38 项直接证据通过。
+- Phase 2 收尾同时修复了三个仓库级用户入口残留：`preprocess_bvh.py` 不再
+  指向 WebSocket 的旧 BVH 配置，会相对配置文件目录解析 `bvh_dir`，并已对齐
+  正式播放器的嵌套 target、`joint_alias`、踝关节轴映射、舵机限位和正反向
+  语义；随仓 5 个动作均可离线生成 250 帧，生成结果与正式静态转换器逐帧
+  一致。根 README 不再启动已删除的 `isaac_bridge_node`；
+  `sim_bridge_co_test.sh` 不再向 full-system 传递已删除的实现级开关，只使用
+  `enable_simulation`。
+- 基于上述实现与自动化证据，`docs/plan.md` Phase 2 已从 `75%` 调整为
+  `100%`：全局原始进度由 `39.3%` 提升到 `42.9%`，按最近 `5%` 展示由
+  `40%` 提升到 `45%`，实际推进约 `3.6` 个百分点。该完成状态只覆盖 Phase 2
+  拆包目标，不代表 Phase 1 的 colcon/launch 验收、WebSocket 剩余职责拆分或
+  `sim_joint_bridge_cpp` 最终合并已经完成。
+- 本轮 source-level 定向回归按 `robot_bringup` 15 项、
+  `record_load_action` 58 项、simulation/WebSocket 定向合同 15 项分组，共
+  88 项通过。前述 38 项是独立归档的 Phase 2 直接证据集，与 88 项定向回归
+  中的 32 项重叠；两组分别用于调分审计与较宽回归，不能相加。当前环境未提
+  供 `colcon`、`ros2` 与 Docker Compose，因此没有把 ROS 构建、安装后 entry
+  point、launch 启动或容器联测计入本轮完成证据。
 - `execution_manager` 已建立最小执行边界，teleop 与 motion 已不再都直接碰驱动层。
 - `sensor_hardware` 已独立成 ROS 包。
 - teleop 控制权链已落地显式 claim / keepalive / release。

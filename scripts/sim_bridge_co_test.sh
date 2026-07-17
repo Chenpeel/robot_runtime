@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isaac <-> ROS 联调快捷脚本（ROS 侧）
+# Simulation <-> ROS 联调快捷脚本（ROS 侧）
 # 目标：统一命令入口，避免手敲长命令导致参数顺序或环境差异。
 
 set -euo pipefail
@@ -123,7 +123,7 @@ usage() {
     cat <<'USAGE'
 用法:
   ./scripts/sim_bridge_co_test.sh up            # 启动 ROS Docker（production profile）
-  ./scripts/sim_bridge_co_test.sh launch        # 启动 full_system（C++桥开，Python桥关）
+  ./scripts/sim_bridge_co_test.sh launch        # 启动 full_system（simulation域启用）
   ./scripts/sim_bridge_co_test.sh down          # 停止 Docker
 
   ./scripts/sim_bridge_co_test.sh hz_all        # 采集四条关键话题 hz（每条默认 8s）
@@ -153,8 +153,7 @@ case "${CMD}" in
 
     launch)
         run_ros_cmd ros2 launch robot_bringup full_system.launch.py \
-            enable_sim_cpp_bridge:=true \
-            enable_isaac_bridge:=false
+            enable_simulation:=true
         ;;
 
     down)

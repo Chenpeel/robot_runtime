@@ -1,13 +1,13 @@
-> **基于 `docs/plan.md` 的全局重构进度：40%**
+> **基于 `docs/plan.md` 的全局重构进度：45%**
 >
-> `[████████░░░░░░░░░░░░]`
+> `[█████████░░░░░░░░░░░]`
 >
-> 阶段快照：Phase 0 `100%` / Phase 1 `25%` / Phase 2 `75%` /
+> 阶段快照：Phase 0 `100%` / Phase 1 `25%` / Phase 2 `100%` /
 > Phase 3 `50%` / Phase 4 `25%` / Phase 5 `0%` / Phase 6 `0%`
 >
 > 评估日期：2026-07-17。Phase 0–6 等权，单阶段只取
 > `0% / 25% / 50% / 75% / 100%` 五档；算术平均后取最近的 `5%`。
-> 当前原始均值为 `39.3%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
+> 当前原始均值为 `42.9%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
 > 测试覆盖率或外部迁移完成度。
 
 # 重构更新计划
@@ -102,6 +102,24 @@
 - `websocket_bridge` 不再默认承接系统级编排。
 - `websocket_bridge` 核心已收口为默认不加载任何 capability 的通用
   WebSocket/teleop 节点，BVH 只由 `record_load_action` 的 demo launch 显式装配。
+- `robot_bringup` 已增加 `docs/plan.md` Phase 2 仓库级完成合同，通过结构化
+  AST、XML 与 JSON 检查固定四项拆包结果：WebSocket 与 simulation 包级分
+  离、IMU 只由独立 `sensor_hardware` 导出、BVH 只由可选 demo 反向装配，
+  以及 `full_system` 实际返回 hardware / teleop / simulation 三个子域
+  include。Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，
+  共 38 项直接证据通过，已形成可重复的 source-level 验收。
+- Phase 2 收尾也已清除用户入口中的旧边界引用：BVH 预处理脚本默认配置与相
+  对资源目录均从 `record_load_action` 解析，并与正式播放器的嵌套 target、
+  `joint_alias`、轴映射、舵机限位和正反向语义保持一致；随仓 5 个动作均可生
+  成 250 帧，且输出与正式静态转换器逐帧一致。根 README 改用当前
+  `sim_servo_bridge_node`，仿真联测脚本只传递 `enable_simulation` 域级开关。
+- 本轮 source-level 定向回归按 `robot_bringup` 15 项、
+  `record_load_action` 58 项、simulation/WebSocket 定向合同 15 项分组，共
+  88 项通过。前述 38 项是独立归档的 Phase 2 直接证据集，与 88 项定向回归
+  中的 32 项重叠；两组分别用于调分审计与较宽回归，不能相加。当前环境没有
+  `colcon`、`ros2` 与 Docker Compose，未把 ROS 构建、安装后 entry point、
+  launch 启动或容器联测计入 Phase 2 完成证据，这些仍受 Phase 1 和后续运行
+  验收约束。
 
 动作：
 
@@ -436,6 +454,9 @@
 - 对应的 sim source-level contract 测试当前也已减重为以当前 public
   contract 为主，只保留少量关键旧词表回归断言，避免继续大面积固化历史过
   渡实现细节。
+- `docs/plan.md` Phase 2 所要求的 simulation 包级拆出当前已通过仓库级完成
+  合同；`sim_joint_bridge_cpp` 的最终包边界合并与统一消息合同仍属于本
+  Phase 的后续仿真域收口，不因 Phase 2 拆包验收完成而提前标记完成。
 
 动作：
 

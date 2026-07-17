@@ -62,6 +62,9 @@
     `websocket` 源码树绝对路径。
   - 已开始收回 simulation 域内部的 driver-facing 接线细节，避免整机层继续
     把 `/servo/command` / `/servo/state` 当成仿真入口的公共参数面。
+  - 当前持有 `docs/plan.md` Phase 2 仓库级完成合同，以结构化源码检查统一验
+    收 WebSocket/simulation 包级分离、sensor 独立所有权、BVH 默认 opt-in
+    和 full-system 三分域组合，防止已拆出的职责重新混回默认主链。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
@@ -223,7 +226,8 @@
   - 不负责视觉感知。
   - 不负责执行器协议。
 - 当前问题
-  - 仍需继续核对其它 launch 和文档引用是否全部切到新包。
+  - Phase 2 合同已固定独立 package、entry point、旧源码清理和 bringup 装
+    配事实；后续仍需在具备 ROS 环境时补充独立 build/install/start 验收。
 - 与长期规划的关系
   - 已达到“独立 `sensor_hardware` ROS 包”的阶段目标。
 
@@ -387,6 +391,9 @@
   - 当前 `simulation_bridge` 的包元数据描述与运行说明也已改用
     simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
     为 Isaac 专名节点。
+  - Phase 2 的 WebSocket/simulation 包级分离已经通过仓库级完成合同；当前
+    剩余的 `sim_joint_bridge_cpp` 最终包合并与统一消息合同属于后续仿真域
+    收口，不能由 Phase 2 完成状态替代。
   - 当前 `sim_joint_bridge.launch.py` 也已不再继续声明 bridge-specific 的调
     试 launch 参数；对应默认值现在统一由
     `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
@@ -553,6 +560,12 @@
   - 承载 BVH 运行说明与使用约束说明。
   - 提供 BVH 动作播放与静态转换工具。
   - 作为 `bvh_action_map.json` 的唯一配置所有者与默认解析入口。
+  - 仓库级 `scripts/preprocess_bvh.py` 当前也默认从本包读取
+    `bvh_action_map.json`，并以配置文件父目录为基准解析相对 `bvh_dir`，不
+    再依赖 WebSocket 配置目录或 shell 当前工作目录。
+  - 该脚本已与正式播放器的嵌套 target、`joint_alias`、轴映射、舵机限位和
+    `sign` / `invert` 语义对齐；随仓 5 个动作均可生成 250 帧，且离线结果与
+    正式静态转换器逐帧一致。
   - 提供传输层无关的 `bvh_request.normalize_bvh_play_request`，负责显式
     `bvh_play` 直接字段的规范化与基础结构校验。
   - 提供 `BvhWebSocketPlaybackAdapter`，承接 `bvh_play` 请求规范化、accepted

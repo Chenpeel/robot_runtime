@@ -2,12 +2,34 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 def _default_config_path() -> Path:
     repo_root = Path(__file__).resolve().parents[1]
-    return repo_root / 'src' / 'websocket' / 'config' / 'bvh_action_map.json'
+    return (
+        repo_root
+        / 'src'
+        / 'record_load_action'
+        / 'config'
+        / 'bvh_action_map.json'
+    )
+
+
+def _resolve_input_dir(
+    config_path: Path,
+    override: Optional[Path],
+    configured_dir,
+) -> Optional[Path]:
+    """解析 BVH 输入目录；配置内相对路径以配置文件目录为基准。"""
+    raw_path = override if override is not None else configured_dir
+    if raw_path is None or not str(raw_path).strip():
+        return None
+
+    input_dir = Path(raw_path).expanduser()
+    if override is None and not input_dir.is_absolute():
+        input_dir = config_path.parent / input_dir
+    return input_dir.resolve()
 
 
 def _load_json(path: Path) -> Dict:
@@ -100,7 +122,7 @@ def _parse_bvh(path: Path) -> Tuple[List[Tuple[str, str]], List[List[float]], fl
     return channels, frames, frame_time
 
 
-def _parse_servo_id(value) -> int:
+def _parse_servo_id(value) -> Optional[int]:
     if value is None:
         return None
     if isinstance(value, str):
@@ -112,78 +134,172 @@ def _parse_servo_id(value) -> int:
         return None
 
 
-def _expand_joint_map(joint_map, defaults: Dict) -> List[Dict]:
+def _coerce_float(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _expand_joint_map(
+    joint_map,
+    defaults: Dict,
+    joint_alias=None,
+    axis_channel_map=None,
+    servo_limits=None,
+) -> List[Dict]:
+    """将兼容格式的关节映射展开为统一的舵机目标描述。"""
     entries: List[Dict] = []
+    reverse_alias = {}
+    if isinstance(joint_alias, dict):
+        for bvh_joint, canonical_joint in joint_alias.items():
+            if (
+                isinstance(bvh_joint, str)
+                and isinstance(canonical_joint, str)
+                and canonical_joint not in reverse_alias
+            ):
+                reverse_alias[canonical_joint] = bvh_joint
+
+    channels_by_axis = {
+        'roll': 'Xrotation',
+        'pitch': 'Yrotation',
+        'yaw': 'Zrotation',
+    }
+    if isinstance(axis_channel_map, dict):
+        for axis_name, channel_name in axis_channel_map.items():
+            if isinstance(axis_name, str) and isinstance(channel_name, str):
+                channels_by_axis[axis_name.strip().lower()] = _normalize_channel(
+                    channel_name
+                )
+
+    def _limits_for(servo_id: int) -> Tuple[Optional[float], Optional[float]]:
+        if not isinstance(servo_limits, dict):
+            return None, None
+        limits = servo_limits.get(str(servo_id))
+        if limits is None:
+            limits = servo_limits.get(servo_id)
+        if not isinstance(limits, dict):
+            return None, None
+        return (
+            _coerce_float(limits.get('min'), None),
+            _coerce_float(limits.get('max'), None),
+        )
+
+    def _append_target(canonical_joint: str, target) -> None:
+        if isinstance(target, dict):
+            servo_id_value = (
+                target.get('servo_id')
+                if 'servo_id' in target
+                else target.get('id')
+            )
+            target_joint = (
+                target.get('bvh_joint')
+                or target.get('joint')
+                or target.get('name')
+                or canonical_joint
+            )
+            channel = target.get('channel') or target.get('axis')
+            scale = _coerce_float(target.get('scale'), defaults['scale'])
+            bias = _coerce_float(target.get('bias'), defaults['bias'])
+            min_value = _coerce_float(target.get('min'), defaults['min'])
+            max_value = _coerce_float(target.get('max'), defaults['max'])
+            servo_type = target.get('servo_type', defaults['servo_type'])
+            sign_value = target.get('sign')
+            if sign_value is None:
+                invert = str(target.get('invert', False)).strip().lower()
+                sign = -1.0 if invert in ('1', 'true', 'yes') else 1.0
+            else:
+                sign = _coerce_float(sign_value, 1.0)
+            target_has_limits = 'min' in target or 'max' in target
+        else:
+            servo_id_value = target
+            target_joint = canonical_joint
+            channel = None
+            scale = defaults['scale']
+            bias = defaults['bias']
+            min_value = defaults['min']
+            max_value = defaults['max']
+            servo_type = defaults['servo_type']
+            sign = 1.0
+            target_has_limits = False
+
+        servo_id = _parse_servo_id(servo_id_value)
+        if servo_id is None or not isinstance(target_joint, str):
+            return
+
+        if not target_has_limits:
+            limit_min, limit_max = _limits_for(servo_id)
+            if limit_min is not None:
+                min_value = limit_min
+            if limit_max is not None:
+                max_value = limit_max
+
+        entries.append({
+            'bvh_joint': reverse_alias.get(target_joint, target_joint),
+            'servo_id': servo_id,
+            'channel': _normalize_channel(channel or defaults['channel']),
+            'scale': scale,
+            'bias': bias,
+            'min': min_value,
+            'max': max_value,
+            'servo_type': servo_type,
+            'sign': sign,
+        })
 
     if isinstance(joint_map, list):
         for item in joint_map:
             if not isinstance(item, dict):
                 continue
-            bvh_joint = item.get('bvh_joint') or item.get('joint') or item.get('name')
-            servo_id = _parse_servo_id(item.get('servo_id') or item.get('id'))
-            if not bvh_joint or servo_id is None:
-                continue
-            entry = {
-                'bvh_joint': bvh_joint,
-                'servo_id': servo_id,
-                'channel': _normalize_channel(item.get('channel') or item.get('axis') or defaults['channel']),
-                'scale': float(item.get('scale', defaults['scale'])),
-                'bias': float(item.get('bias', defaults['bias'])),
-                'min': float(item.get('min', defaults['min'])),
-                'max': float(item.get('max', defaults['max'])),
-                'servo_type': item.get('servo_type', defaults['servo_type'])
-            }
-            entries.append(entry)
+            canonical_joint = (
+                item.get('bvh_joint') or item.get('joint') or item.get('name')
+            )
+            if isinstance(canonical_joint, str):
+                _append_target(canonical_joint, item)
         return entries
 
-    if isinstance(joint_map, dict):
-        for bvh_joint, mapping in joint_map.items():
-            if mapping is None:
-                continue
-            if isinstance(mapping, dict):
-                for _, servo_id in mapping.items():
-                    sid = _parse_servo_id(servo_id)
-                    if sid is None:
-                        continue
-                    entries.append({
-                        'bvh_joint': bvh_joint,
-                        'servo_id': sid,
-                        'channel': defaults['channel'],
-                        'scale': defaults['scale'],
-                        'bias': defaults['bias'],
-                        'min': defaults['min'],
-                        'max': defaults['max'],
-                        'servo_type': defaults['servo_type']
-                    })
-            elif isinstance(mapping, list):
-                for servo_id in mapping:
-                    sid = _parse_servo_id(servo_id)
-                    if sid is None:
-                        continue
-                    entries.append({
-                        'bvh_joint': bvh_joint,
-                        'servo_id': sid,
-                        'channel': defaults['channel'],
-                        'scale': defaults['scale'],
-                        'bias': defaults['bias'],
-                        'min': defaults['min'],
-                        'max': defaults['max'],
-                        'servo_type': defaults['servo_type']
-                    })
-            else:
-                sid = _parse_servo_id(mapping)
-                if sid is None:
+    if not isinstance(joint_map, dict):
+        return entries
+
+    for canonical_joint, mapping in joint_map.items():
+        if not isinstance(canonical_joint, str) or mapping is None:
+            continue
+
+        axis_targets = []
+        if isinstance(mapping, dict):
+            for servo_id, axis_reference in mapping.items():
+                if (
+                    not isinstance(servo_id, str)
+                    or not servo_id.isdigit()
+                    or not isinstance(axis_reference, str)
+                    or '.' not in axis_reference
+                ):
                     continue
-                entries.append({
-                    'bvh_joint': bvh_joint,
-                    'servo_id': sid,
-                    'channel': defaults['channel'],
-                    'scale': defaults['scale'],
-                    'bias': defaults['bias'],
-                    'min': defaults['min'],
-                    'max': defaults['max'],
-                    'servo_type': defaults['servo_type']
-                })
+                joint_name, axis_name = axis_reference.rsplit('.', 1)
+                channel = channels_by_axis.get(axis_name.strip().lower())
+                if channel:
+                    axis_targets.append({
+                        'id': servo_id,
+                        'bvh_joint': joint_name.strip() or canonical_joint,
+                        'channel': channel,
+                    })
+
+        if axis_targets:
+            for target in axis_targets:
+                _append_target(canonical_joint, target)
+            continue
+
+        if isinstance(mapping, dict):
+            if 'id' in mapping or 'servo_id' in mapping:
+                targets = [mapping]
+            else:
+                targets = list(mapping.values())
+        elif isinstance(mapping, list):
+            targets = mapping
+        else:
+            targets = [mapping]
+
+        for target in targets:
+            _append_target(canonical_joint, target)
 
     return entries
 
@@ -227,10 +343,13 @@ def main() -> None:
         raise SystemExit(f'Config file not found: {config_path}')
 
     config = _load_json(config_path)
-    input_dir = args.input_dir or Path(config.get('bvh_dir') or '')
-    if not input_dir:
+    input_dir = _resolve_input_dir(
+        config_path=config_path,
+        override=args.input_dir,
+        configured_dir=config.get('bvh_dir'),
+    )
+    if input_dir is None:
         raise SystemExit('Missing --input-dir and no bvh_dir in config')
-    input_dir = input_dir.expanduser().resolve()
 
     if not input_dir.exists():
         raise SystemExit(f'BVH directory not found: {input_dir}')
@@ -254,7 +373,13 @@ def main() -> None:
     }
 
     joint_map = config.get('joint_map') or {}
-    mapping_entries = _expand_joint_map(joint_map, defaults)
+    mapping_entries = _expand_joint_map(
+        joint_map,
+        defaults,
+        joint_alias=config.get('joint_alias'),
+        axis_channel_map=config.get('axis_channel_map'),
+        servo_limits=config.get('servo_limits'),
+    )
     if not mapping_entries:
         raise SystemExit('joint_map is empty or unsupported')
 
@@ -295,7 +420,10 @@ def main() -> None:
             frame_cmds: List[Dict] = []
             for entry in entries_with_index:
                 angle = frame_values[entry['index']]
-                pos = entry['bias'] + entry['scale'] * angle
+                pos = (
+                    entry['bias']
+                    + entry['scale'] * angle * entry['sign']
+                )
                 pos = max(entry['min'], min(entry['max'], pos))
                 cmd = {
                     'id': entry['servo_id'],

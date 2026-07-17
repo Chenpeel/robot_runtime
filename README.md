@@ -227,8 +227,8 @@ ros2 run servo_hardware bus_protocol_router --ros-args \
 # 3. 启动PCA舵机驱动
 ros2 run servo_hardware pca_servo_driver
 
-# 4. 启动 Isaac 桥接节点（可选，full_system 默认已启用）
-ros2 run simulation_bridge isaac_bridge_node
+# 4. 启动 simulation servo 桥接节点（可选，full_system 默认已启用）
+ros2 run simulation_bridge sim_servo_bridge_node
 ```
 
 ---
