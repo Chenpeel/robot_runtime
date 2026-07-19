@@ -1,13 +1,13 @@
-> **基于 `docs/plan.md` 的全局重构进度：45%**
+> **基于 `docs/plan.md` 的全局重构进度：50%**
 >
-> `[█████████░░░░░░░░░░░]`
+> `[██████████░░░░░░░░░░]`
 >
 > 阶段快照：Phase 0 `100%` / Phase 1 `25%` / Phase 2 `100%` /
-> Phase 3 `75%` / Phase 4 `25%` / Phase 5 `0%` / Phase 6 `0%`
+> Phase 3 `75%` / Phase 4 `50%` / Phase 5 `0%` / Phase 6 `0%`
 >
 > 评估日期：2026-07-17。Phase 0–6 等权，单阶段只取
 > `0% / 25% / 50% / 75% / 100%` 五档；算术平均后取最近的 `5%`。
-> 当前原始均值为 `46.4%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
+> 当前原始均值为 `50.0%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
 > 测试覆盖率或外部迁移完成度。
 
 # 重构更新计划
@@ -193,6 +193,45 @@
   `MotionCommand.duration_ms → ServoCommand.speed` 双向适配。该证据证明当前
   接口在 Humble 可生成和运行；仓库目标 Jazzy 的发布前回归仍需在对应镜像或
   目标环境补充，不能由本次跨发行版结构验收替代。
+- `motion_msgs` 已新增独立的内部任务执行准入接口
+  `TaskExecutionControl` / `TaskExecutionState`，不修改既有
+  `MotionCommand` / `ExecutionState` 字段布局，也不把它们冒充为外部
+  `task_api_msgs`。控制接口携带 `task_id` / `trace_id` / `session_id`，由
+  `execution_manager` 生成并校验 task lease；状态接口提供
+  `status` / `reason` / `recoverable`、剩余租约、控制/命令计数和最近 task
+  命令的独立准入结果。finish/cancel/timeout/estop 会立即撤销 lease，但保留
+  最近一次成功准入的完整 task/trace/session 身份供终态关联。
+- `execution_manager` 已增加 `/execution/task/control`、
+  `/execution/task/command`、`/execution/task/state` 三条内部链路与
+  `task_active` 模式。仲裁顺序当前固定为 estop、正式 task、普通 teleop、
+  普通 motion/demo：task 活跃时只接受 requester 等于当前 `task_id` 且 lease
+  匹配的 task topic 命令；普通 motion、空 requester 的 BVH/demo 和新的
+  teleop claim 均被拒绝。正式 task start 会清理普通 teleop lease 与被抢占
+  的旧 motion 活跃窗口；finish、cancel、timeout 和 estop 会撤销 task 准
+  入，estop 同时清理已有 teleop/task lease，解除后仍保留 blocked 终态且必
+  须重新申请。最近 256 个终态身份会形成进程内 tombstone，延迟 start 重放
+  会被拒绝为 `task_control_replay`。
+- BVH 可选扩展现在会在 `task_active` 时本地阻断并返回稳定的
+  `bvh_blocked_by_active_task`，执行层仍保留最终裁决；WebSocket 核心只从既
+  有 `ExecutionState.mode/active_source` 派生 task 活跃状态，不生产 task
+  control/command，也没有新增正式任务 WebSocket 协议。
+- Phase 4A 新增 12 项 task 仲裁单元测试和 7 项仓库级入口边界合同；BVH task
+  联锁增加 1 项、WebSocket task 状态回归增加 2 项，共 22 项 source-level
+  直接证据；另有 1 项由 pytest/colcon 自动发现的真实 ROS pub/sub smoke。
+  ARM64 ROS 2 Humble 隔离环境已完成 `robot_bringup` 10 包依赖闭包及额外
+  `record_load_action` 构建，共 11 包；`motion_msgs`、`execution_manager`、
+  `robot_bringup` 的 `colcon test-result` 汇总 72 项零失败（69 个
+  Python/pytest 用例和 3 个 `ament_cmake_pytest` / CTest 注册项），接口生成
+  与三层 launch 参数解析通过。
+- 自动 ROS smoke 通过真实 DDS/pub-sub 确认：错误 task lease 的独立拒绝反馈
+  可见；普通 motion 与 teleop 在 task 窗口被拒；匹配 task lease 的命令产生
+  `ServoCommand`；finish/cancel/timeout/estop 终态保留完整任务身份；解除
+  estop 后 blocked 终态仍可见；延迟 start 重放被拒；finish 后普通 motion
+  恢复。该场景不包含真实硬件或外部 `/task/execute` Action。
+- 更宽的 `websocket_bridge` 包级 colcon 仍受既有 flake8/pep257 基线约束，
+  结果为 132 passed、30 skipped、2 failed，未计入本轮 72 项零失败集合；本
+  轮直接受影响的 WebSocket 定向回归已通过。Humble 结果不替代仓库目标
+  Jazzy 的发布前回归。
 - `execution_manager` 已开始通过独立控制话题处理 teleop claim / release /
   keepalive，并拒绝未持有 teleop 控制权的 teleop 命令。
 - `ExecutionState` 已开始提供第一版 teleop 控制权反馈，包括剩余租约时间、
@@ -226,9 +265,9 @@
 - `execution_manager` 内部已开始把 `MotionCommand` 先适配为更中性的内部
   setpoint 语义，再继续仲裁并转发到驱动层。
 - `execution_manager` 当前也已进一步把仲裁器从命令载荷细节中解耦；
-  `CommandArbitrator` 现在只按来源、时间与 teleop 身份做仲裁，不再要求
-  一层伪 `CommandFrame` 中间快照，而是由节点在 setpoint 适配后直接送入仲
-  裁，再把被接受的请求转回驱动层命令。
+  `CommandArbitrator` 现在只按来源、时间以及 task/teleop 身份与 lease 做仲
+  裁，不再要求一层伪 `CommandFrame` 中间快照，而是由节点在 setpoint 适配
+  后直接送入仲裁，再把被接受的请求转回驱动层命令。
 - `MotionCommand` 已开始增量补充 `duration_ms` 与 `value_encoding`，
   `execution_manager` 已优先读取新字段；默认 WebSocket teleop producer、
   `parallel_3dof_controller` 与可选 BVH producer 也已停止写入旧 `speed`
@@ -301,16 +340,12 @@
    `servo_type`、`servo_id`、`position` 等剩余字段的目标 schema，并完成仓外
    依赖与 breaking 切换确认，再决定一次性公共接口变更范围。
 3. 继续稳定 teleop 显式 claim / release / keepalive 接口与上层调用约束，
-   明确哪些行为是正式入口，哪些仍是过渡态；当前虽已有连接级 holder 语义，
-   但仍缺更正式的 lease token、抢占策略、跨入口约束，以及更正式的客户端
-   侧控制权确认流程。当前虽已在 register / status_query / execution_state
-   广播中显式暴露 requester 视角，并已补上第一版 lease token。当前
-   teleop `MotionCommand` 已不再接受空 requester，且在已有活跃 lease 时
-   也不再接受空 lease；现阶段的兼容回退主要还留在 `TeleopControl`
-   keepalive / release 对空 lease 的 holder 语义过渡上。与此同时，桥接层当
-   前仍只是基于快照做本地预校验，还不是执行层主导的正式准入协议，后续仍缺
-   更正式的抢占策略和跨入口统一约束。
-4. 在 `execution_manager` 中继续补齐更完整的控制状态机、急停和超时保护。
+   明确哪些行为是正式入口，哪些仍是过渡态。当前 register / status_query /
+   execution_state 已暴露 requester 视角，task/teleop/motion 的最终准入也已
+   统一到执行层；现阶段兼容回退主要留在 `TeleopControl` keepalive/release
+   对空 lease 的 holder 语义上，高优先级人工 takeover 仍未定义。
+4. 在 `execution_manager` 中继续补齐正式任务 goal/result/cancel、驱动在途
+   停止确认与上层完成反馈；当前 task cancel 只撤销后续命令准入。
 
 完成标准：
 
@@ -322,6 +357,14 @@
 收，`docs/plan.md` Phase 3 从 `50%` 提升到 `75%`。Phase 3 尚未达到
 `100%`：`MotionCommand` 最终中性 schema 与 breaking 切换门禁仍未完成，
 `task_api_msgs`、`speech_msgs`、`perception_msgs` 也尚未随真实模块落地。
+
+基于当前 task-aware execution admission、跨入口优先级合同、ROS 接口生成与
+真实 pub/sub 验收，`docs/plan.md` Phase 4 从 `25%` 提升到 `50%`。全局原始
+均值由 `46.4%` 提升到 `50.0%`，实际增加约 `3.6` 个百分点，按最近 `5%`
+展示从 `45%` 提升到 `50%`。Phase 4 尚未达到 `75% / 100%`：当前仍没有
+`task_api_msgs`、`task_service_bridge`、`/task/execute`、motion goal/result
+接口与真实任务取消/完成反馈；`TaskExecutionControl.cancel` 只撤销后续命令
+准入，不表示驱动级在途动作已经停止。
 
 ### Phase D：拆分 `sensor_hardware`
 
@@ -527,7 +570,9 @@
      写入该镜像；公共字段已进入弃用迁移窗口并有自动化门禁。后续先冻结完整
      目标 schema、确认仓外依赖与切换策略，不在证据不足时直接破坏 ROS 接口。
 2. 继续稳定执行边界
-   - 后续再按独立阶段收紧 teleop lease、抢占、超时与跨入口统一准入语义。
+   - task/teleop/motion 已有第一版统一准入和优先级合同。后续先冻结 motion
+     goal/result/cancel 与真实停止语义，再由真实 `task_service_bridge` owner
+     接入，不以直接发布 `MotionCommand` 或立即返回成功的空桥冒充正式入口。
 3. `websocket_bridge` 剩余职责收紧
    - sim 收口与 BVH 可选扩展抽离已基本完成，下一步只继续压缩
      teleop/debug/status/IMU 上行的混合包边界。
@@ -556,5 +601,6 @@
 `robot_bringup`，仿真域本轮也已基本完成 package-level 收口；BVH 已收口为
 `record_load_action` 所有的显式 opt-in 扩展，默认 teleop/full-system 与
 WebSocket schema 均不再启用或广告该能力。下一步更应围绕执行边界、
-`motion_msgs` 语义和 `websocket_bridge` 剩余 teleop/debug/status/IMU 职责继续
-收紧，最后再做正式命名和远期模块落地。
+`motion_msgs` 最终命令 schema、正式任务 goal/result/cancel 语义和
+`websocket_bridge` 剩余 teleop/debug/status/IMU 职责继续收紧，最后再做正
+式命名和远期模块落地。

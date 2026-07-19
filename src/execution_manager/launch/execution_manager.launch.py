@@ -17,6 +17,16 @@ def generate_launch_description():
         default_value='/execution/teleop/control',
         description='teleop 控制权话题',
     )
+    task_command_topic_arg = DeclareLaunchArgument(
+        'task_command_topic',
+        default_value='/execution/task/command',
+        description='携带正式任务租约的执行请求话题',
+    )
+    task_control_topic_arg = DeclareLaunchArgument(
+        'task_control_topic',
+        default_value='/execution/task/control',
+        description='正式任务执行租约控制话题',
+    )
     motion_command_topic_arg = DeclareLaunchArgument(
         'motion_command_topic',
         default_value='/execution/motion/command',
@@ -42,6 +52,11 @@ def generate_launch_description():
         default_value='/execution/state',
         description='执行层状态话题',
     )
+    task_state_topic_arg = DeclareLaunchArgument(
+        'task_state_topic',
+        default_value='/execution/task/state',
+        description='正式任务执行租约状态话题',
+    )
     estop_topic_arg = DeclareLaunchArgument(
         'estop_topic',
         default_value='/execution/estop',
@@ -57,6 +72,11 @@ def generate_launch_description():
         default_value='0.5',
         description='motion 控制权超时(秒)',
     )
+    task_timeout_sec_arg = DeclareLaunchArgument(
+        'task_timeout_sec',
+        default_value='5.0',
+        description='正式任务执行租约超时(秒)',
+    )
     debug_arg = DeclareLaunchArgument(
         'debug',
         default_value='false',
@@ -71,14 +91,18 @@ def generate_launch_description():
         parameters=[
             {'teleop_command_topic': LaunchConfiguration('teleop_command_topic')},
             {'teleop_control_topic': LaunchConfiguration('teleop_control_topic')},
+            {'task_command_topic': LaunchConfiguration('task_command_topic')},
+            {'task_control_topic': LaunchConfiguration('task_control_topic')},
             {'motion_command_topic': LaunchConfiguration('motion_command_topic')},
             {'output_command_topic': LaunchConfiguration('output_command_topic')},
             {'driver_state_topic': LaunchConfiguration('driver_state_topic')},
             {'actuator_state_topic': LaunchConfiguration('actuator_state_topic')},
             {'state_topic': LaunchConfiguration('state_topic')},
+            {'task_state_topic': LaunchConfiguration('task_state_topic')},
             {'estop_topic': LaunchConfiguration('estop_topic')},
             {'teleop_timeout_sec': LaunchConfiguration('teleop_timeout_sec')},
             {'motion_timeout_sec': LaunchConfiguration('motion_timeout_sec')},
+            {'task_timeout_sec': LaunchConfiguration('task_timeout_sec')},
             {'debug': LaunchConfiguration('debug')},
         ],
     )
@@ -86,14 +110,18 @@ def generate_launch_description():
     return LaunchDescription([
         teleop_command_topic_arg,
         teleop_control_topic_arg,
+        task_command_topic_arg,
+        task_control_topic_arg,
         motion_command_topic_arg,
         output_command_topic_arg,
         driver_state_topic_arg,
         actuator_state_topic_arg,
         state_topic_arg,
+        task_state_topic_arg,
         estop_topic_arg,
         teleop_timeout_sec_arg,
         motion_timeout_sec_arg,
+        task_timeout_sec_arg,
         debug_arg,
         node,
     ])

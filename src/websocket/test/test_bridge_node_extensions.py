@@ -422,6 +422,17 @@ class TestBridgeNodeExtensions(unittest.TestCase):
         self.assertIsNone(pca_payload['angle'])
         self.assertIsNone(pca_payload['pulse'])
 
+    def test_execution_state_derives_task_activity_without_message_abi_change(self):
+        msg = self._execution_state_message()
+        msg.mode = 'task_active'
+        msg.active_source = 'task'
+
+        state = WebSocketROS2Bridge._execution_state_msg_to_dict(msg)
+
+        self.assertTrue(state['task_active'])
+        self.assertEqual('task_active', state['mode'])
+        self.assertEqual('task', state['active_source'])
+
     def test_shutdown_retries_extensions_before_websocket_cleanup(self):
         events = []
         retrying = _Extension(

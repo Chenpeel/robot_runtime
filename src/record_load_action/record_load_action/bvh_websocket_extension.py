@@ -72,7 +72,7 @@ class BvhWebSocketExtension:
             return self._playback.handle_play_payload(payload)
         except BvhWebSocketPlaybackError as exc:
             if exc.kind == BvhWebSocketPlaybackError.BLOCKED:
-                self._raise_teleop_blocked(exc.block_context)
+                self._raise_execution_blocked(exc.block_context)
 
             error_code = (
                 ErrorCode.INVALID_PARAMETER_VALUE
@@ -97,10 +97,16 @@ class BvhWebSocketExtension:
     def on_execution_state(self, state) -> bool:
         """根据 execution state 原子更新 BVH 播放准入门禁。"""
         snapshot = dict(state) if isinstance(state, dict) else {}
-        blocked = bool(
+        teleop_blocked = bool(
             snapshot.get('teleop_active')
             and snapshot.get('active_source') == 'teleop'
         )
+        task_blocked = bool(
+            snapshot.get('task_active')
+            or snapshot.get('mode') == 'task_active'
+            or snapshot.get('active_source') == 'task'
+        )
+        blocked = teleop_blocked or task_blocked
 
         try:
             return self._playback.set_blocked(
@@ -150,12 +156,22 @@ class BvhWebSocketExtension:
         return ''
 
     @staticmethod
-    def _raise_teleop_blocked(block_context) -> None:
+    def _raise_execution_blocked(block_context) -> None:
         state = block_context if isinstance(block_context, dict) else {}
+        task_active = bool(
+            state.get('task_active')
+            or state.get('mode') == 'task_active'
+            or state.get('active_source') == 'task'
+        )
+        reason = (
+            'bvh_blocked_by_active_task'
+            if task_active
+            else 'bvh_blocked_by_active_teleop'
+        )
         raise TeleopControlRejectedException(
-            message='bvh play rejected: bvh_blocked_by_active_teleop',
+            message=f'bvh play rejected: {reason}',
             details={
-                'reason': 'bvh_blocked_by_active_teleop',
+                'reason': reason,
                 'teleop_holder_id': str(
                     state.get('teleop_holder_id') or ''
                 ),
@@ -163,6 +179,7 @@ class BvhWebSocketExtension:
                     state.get('teleop_lease_id') or ''
                 ),
                 'teleop_active': bool(state.get('teleop_active')),
+                'task_active': task_active,
                 'active_source': str(state.get('active_source') or ''),
             },
         )

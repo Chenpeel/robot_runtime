@@ -82,6 +82,27 @@ class TestWebSocketHandlerExecutionState(unittest.TestCase):
             "execution_state",
         )
 
+    def test_task_active_is_reported_as_movement(self):
+        handler = WebSocketHandler(device_id='test_device', debug=False)
+        handler.update_execution_state({
+            "mode": "task_active",
+            "active_source": "task",
+            "teleop_active": False,
+            "motion_active": False,
+            "task_active": True,
+            "estop_active": False,
+        })
+
+        response = asyncio.run(
+            handler.handle_message(json.dumps({"type": "status_query"}))
+        )
+        current_status = json.loads(response)["current_status"]
+
+        self.assertTrue(current_status["movement_active"])
+        self.assertFalse(current_status["listening"])
+        self.assertEqual("task_active", current_status["action"])
+        self.assertEqual("green", current_status["led_state"])
+
 
 if __name__ == '__main__':
     unittest.main()

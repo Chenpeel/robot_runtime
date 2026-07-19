@@ -25,13 +25,12 @@ string value_encoding
 uint16 duration_ms
 
 # 请求方标识
-# teleop 链路可透传当前连接 requester，用于执行层做更严格的控制权校验
-# 为空时表示未提供身份，consumer 可按过渡兼容语义处理
+# teleop 链路透传连接 requester；正式 task 命令使用当前 task_id
+# 普通 motion/demo 可为空，但活跃 task/teleop 租约内必须匹配当前身份
 string requester_id
 
-# 当前已确认的 teleop lease 标识
-# teleop 链路可透传当前 lease，用于执行层做更严格的控制权校验
-# 为空时表示未提供 lease，consumer 可按过渡兼容语义处理
+# 当前已确认的 execution lease 标识
+# teleop 或 task 链路必须透传各自 lease；普通 motion/demo 可为空
 string lease_id
 
 # 时间戳

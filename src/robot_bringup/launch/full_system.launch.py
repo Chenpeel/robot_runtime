@@ -49,6 +49,16 @@ def generate_launch_description():
         default_value='/execution/teleop/control',
         description='teleop 控制权话题',
     )
+    execution_task_command_topic_arg = DeclareLaunchArgument(
+        'execution_task_command_topic',
+        default_value='/execution/task/command',
+        description='携带正式任务租约的执行请求话题',
+    )
+    execution_task_control_topic_arg = DeclareLaunchArgument(
+        'execution_task_control_topic',
+        default_value='/execution/task/control',
+        description='正式任务执行租约控制话题',
+    )
     execution_motion_command_topic_arg = DeclareLaunchArgument(
         'execution_motion_command_topic',
         default_value='/execution/motion/command',
@@ -58,6 +68,11 @@ def generate_launch_description():
         'execution_state_topic',
         default_value='/execution/state',
         description='执行层状态话题',
+    )
+    execution_task_state_topic_arg = DeclareLaunchArgument(
+        'execution_task_state_topic',
+        default_value='/execution/task/state',
+        description='正式任务执行租约状态话题',
     )
     execution_actuator_state_topic_arg = DeclareLaunchArgument(
         'execution_actuator_state_topic',
@@ -78,6 +93,11 @@ def generate_launch_description():
         'execution_motion_timeout_sec',
         default_value='0.5',
         description='motion 控制权超时(秒)',
+    )
+    execution_task_timeout_sec_arg = DeclareLaunchArgument(
+        'execution_task_timeout_sec',
+        default_value='5.0',
+        description='正式任务执行租约超时(秒)',
     )
     execution_debug_arg = DeclareLaunchArgument(
         'execution_debug',
@@ -246,14 +266,18 @@ def generate_launch_description():
             'enable_execution_manager': LaunchConfiguration('enable_execution_manager'),
             'execution_teleop_command_topic': LaunchConfiguration('execution_teleop_command_topic'),
             'execution_teleop_control_topic': LaunchConfiguration('execution_teleop_control_topic'),
+            'execution_task_command_topic': LaunchConfiguration('execution_task_command_topic'),
+            'execution_task_control_topic': LaunchConfiguration('execution_task_control_topic'),
             'execution_motion_command_topic': LaunchConfiguration('execution_motion_command_topic'),
             'execution_state_topic': LaunchConfiguration('execution_state_topic'),
+            'execution_task_state_topic': LaunchConfiguration('execution_task_state_topic'),
             'execution_actuator_state_topic': LaunchConfiguration(
                 'execution_actuator_state_topic'
             ),
             'execution_estop_topic': LaunchConfiguration('execution_estop_topic'),
             'execution_teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec'),
             'execution_motion_timeout_sec': LaunchConfiguration('execution_motion_timeout_sec'),
+            'execution_task_timeout_sec': LaunchConfiguration('execution_task_timeout_sec'),
             'execution_debug': LaunchConfiguration('execution_debug'),
             'bridge_debug': LaunchConfiguration('bridge_debug'),
             'imu_debug': LaunchConfiguration('imu_debug'),
@@ -333,6 +357,15 @@ def generate_launch_description():
             '  Teleop控制权: ',
             LaunchConfiguration('execution_teleop_control_topic'),
             '\n',
+            '  Task命令入口: ',
+            LaunchConfiguration('execution_task_command_topic'),
+            '\n',
+            '  Task租约控制: ',
+            LaunchConfiguration('execution_task_control_topic'),
+            '\n',
+            '  Task租约状态: ',
+            LaunchConfiguration('execution_task_state_topic'),
+            '\n',
             '  Motion入口: ',
             LaunchConfiguration('execution_motion_command_topic'),
             '\n',
@@ -357,12 +390,16 @@ def generate_launch_description():
         enable_execution_manager_arg,
         execution_teleop_command_topic_arg,
         execution_teleop_control_topic_arg,
+        execution_task_command_topic_arg,
+        execution_task_control_topic_arg,
         execution_motion_command_topic_arg,
         execution_state_topic_arg,
+        execution_task_state_topic_arg,
         execution_actuator_state_topic_arg,
         execution_estop_topic_arg,
         execution_teleop_timeout_sec_arg,
         execution_motion_timeout_sec_arg,
+        execution_task_timeout_sec_arg,
         execution_debug_arg,
         bridge_debug_arg,
         bus_servo_debug_arg,

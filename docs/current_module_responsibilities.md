@@ -69,6 +69,9 @@
     `execution_actuator_state_topic`，将执行层反馈同时接到
     `execution_manager` 与 `websocket_bridge`，不再让上层桥接直接订阅驱动
     状态话题。
+  - 两层 launch 当前也会统一透传 task command/control/state topic 与 task
+    lease timeout，只装配 `execution_manager` 的内部准入面；没有装配或宣称
+    尚不存在的 `task_service_bridge` 与 `/task/execute`。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
@@ -124,7 +127,9 @@
     层适配后的执行器状态转换为兼容的 WebSocket 状态字段；核心包已移除
     `servo_msgs` manifest 依赖和运行时导入。
   - 订阅 `/execution/state` 并向 WebSocket 客户端暴露执行层状态与
-    teleop 控制权反馈。
+    teleop 控制权反馈；当 `mode=task_active` 或 `active_source=task` 时，只派
+    生 task 活跃展示状态，并在 bridge fallback 与常规 status query 两条摘要
+    路径中一致标记 `movement_active=true`，不生产 task control/command。
   - 订阅 `/sensor/imu` 并向 WebSocket 客户端广播传感器数据。
   - 承接心跳续租、状态查询和调试日志聚合。
   - 通过通用字符串参数 `extension_factories` 按 `module:callable` 规格动态
@@ -153,6 +158,8 @@
   - WebSocket IMU 广播
 - 当前非职责
   - 不应该长期承担执行仲裁。
+  - 不作为正式任务入口，不发布 `TaskExecutionControl`，也不提供
+    `/task/execute`。
   - 不应该长期承担仿真责任域的主入口。
   - 不应该长期承载 demo/BVH 与系统级 launch 编排。
 - 当前问题
@@ -163,10 +170,10 @@
   - 当前 ack 语义虽然已经和执行层状态分离，但上层客户端仍需要继续从
     `execution_state` 角度完成更正式的控制权确认与超时处理。
   - 当前 requester 视角的确认语义虽然已覆盖 register / status_query /
-    `execution_state` 广播，但它仍属于 WebSocket 出站层派生逻辑，还不是更
-    正式的跨入口统一约束。当前 teleop `MotionCommand` 虽已收紧为必须带
-    requester，并在已有活跃 lease 时必须带 lease，但 keepalive / release
-    对空 lease 仍保留过渡兼容。
+    `execution_state` 广播，但它仍属于 WebSocket 出站层派生逻辑；task / teleop
+    / motion 的最终跨入口准入已经收回 `execution_manager`。teleop
+    `MotionCommand` 已收紧为必须带 requester，并在已有活跃 lease 时必须带
+    lease，但 keepalive / release 对空 lease 仍保留过渡兼容。
   - 当前 teleop 命令预校验依赖 `websocket_bridge` 持有的最新
     `execution_state` 快照，仍存在桥接层快照与执行层真实状态之间的短窗口。
   - 节点默认输出虽然已经切到执行边界，并已改用 `motion_msgs`，且默认 teleop
@@ -283,9 +290,24 @@
   - ROS 包名：`execution_manager`
 - 当前主要职责
   - 接收 `motion_msgs/TeleopControl`，处理 teleop 控制权的申请、续租与释放。
-  - 接收 teleop 与 motion 两路 `motion_msgs/MotionCommand` 执行请求。
-  - 维护最小控制状态机：`idle`、`motion_active`、`teleop_active`、
-    `estop`。
+  - 接收 `motion_msgs/TaskExecutionControl`，处理正式 task 的 start、续租、
+    finish 与 cancel 准入动作；控制消息必须携带完整
+    `task_id` / `trace_id` / `session_id`，start 成功后由执行层生成 task lease。
+  - 分别接收 task、teleop 与普通 motion 三路 `MotionCommand` 执行请求；task
+    命令使用独立 `/execution/task/command`，不能借普通 motion topic 绕过准
+    入。
+  - 维护控制状态机：`idle`、`motion_active`、`teleop_active`、
+    `task_active`、`estop`。
+  - 当前优先级固定为 estop、正式 task、普通 teleop、普通 motion/demo。
+    task 活跃时只接受 requester 等于当前 `task_id` 且 lease 匹配的 task
+    topic 命令，新的 teleop claim 与普通 motion 均被拒绝。
+  - 正式 task start 会撤销普通 teleop holder/lease，并清理被抢占的旧 motion
+    活跃窗口；finish、cancel、timeout 会撤销 task 准入。estop 会同时清空
+    task/teleop lease 和普通 motion 活跃时间，解除后旧 lease 不会自动恢
+    复，`blocked/estop` task 终态仍会保留。
+  - lease 撤销后仍保留最近一次成功准入的 task/trace/session 身份用于关联
+    finish/cancel/timeout/estop 终态；最近 256 个终态身份形成进程内
+    tombstone，拒绝延迟 start 重放。节点重启后的持久幂等不在当前职责内。
   - 只在 teleop 已显式获得控制权时接受 teleop 命令。
   - 在 teleop 控制权活跃窗口内阻止 motion 直接下发。
   - 按 `requester_id` 维护当前 teleop holder，并限制 keepalive / release
@@ -297,8 +319,9 @@
     lease 校验命令归属，减少“只要 teleop_active 就可发命令”的歧义。
   - 在执行层内部先将 `motion_msgs/MotionCommand` 适配为更中性的内部
     setpoint 语义，再继续仲裁并转发到驱动层。
-  - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间与 teleop
-    身份做仲裁，不再要求一层伪 `CommandFrame` 中间快照。
+  - 当前仲裁器也已进一步从命令载荷细节中解耦，只按来源、时间以及
+    task/teleop 身份与 lease 做仲裁，不再要求一层伪 `CommandFrame` 中间快
+    照。
   - 优先读取 `MotionCommand.value_encoding`，缺失时按 actuator type 补过渡
     默认编码；`duration_ms` 是 `MotionCommand` 唯一执行时长输入，公共
     `speed` 字段已弃用且执行层禁止读取。
@@ -311,7 +334,14 @@
   - 发布 `motion_msgs/ExecutionState` 到 `/execution/state`，其中包含最小
     teleop 控制权反馈，例如剩余租约时间、最近一次控制动作结果、控制动作计
     数、当前 holder 标识与当前 lease 标识。
+  - 发布 `motion_msgs/TaskExecutionState` 到 `/execution/task/state`，提供
+    当前 task 身份、lease、剩余时间、`status` / `reason` / `recoverable`、
+    最近控制动作、最近一条 task 命令的 requester/接受结果/reason，以及控
+    制/命令接受拒绝计数。既有 `ExecutionState` 仅通过 `mode=task_active` /
+    `active_source=task` 表达总状态，未修改字段布局。
 - 当前主要输入
+  - `/execution/task/control`
+  - `/execution/task/command`
   - `/execution/teleop/control`
   - `/execution/teleop/command`
   - `/execution/motion/command`
@@ -320,19 +350,25 @@
 - 当前主要输出
   - `/servo/command`
   - `/execution/state`
+  - `/execution/task/state`
   - `/execution/actuator_state`
 - 当前非职责
   - 不做任务语义理解。
   - 不做轨迹生成。
   - 不做驱动协议实现。
 - 当前问题
+  - task / teleop / motion 已具备第一版统一准入与优先级合同，但
+    `TaskExecutionControl` 仍只是内部 execution lease，不是外部任务 Action。
+    `cancel` 只撤销后续命令准入，尚无 motion goal/result、驱动在途停止确认
+    或任务完成反馈；当前不能把它描述成正式任务链已跑通。
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
-    release 接口。虽然 `ExecutionState` 已补上最小控制权反馈、holder 标
-    识与第一版 lease 标识，但还没有更正式的持有者抢占规则和多入口约束。
-  - teleop `MotionCommand` 虽已收紧为必须带 requester / lease（在已有活
-    跃 lease 时），但这套约束仍主要落在当前 teleop 入口与执行层组合上，尚
-    未演进成更正式的跨入口统一准入协议；另外 keepalive / release 对空
-    lease 仍保留过渡兼容。
+    release 接口。虽然 `ExecutionState` 已补上 holder 与第一版 lease 标识，
+    但高优先级人工 takeover 等更正式策略仍未定义；普通 teleop claim 在
+    task 活跃窗口会被拒绝。
+  - teleop `MotionCommand` 已收紧为必须带 requester / lease（在已有活跃
+    lease 时），task command 也必须从独立 topic 携带匹配 task_id/lease；跨
+    入口最终裁决已经统一到执行层。当前过渡兼容主要还留在 TeleopControl
+    keepalive / release 对空 lease 的 holder 回退语义。
   - 当前 `motion_msgs` 已经落地最小接口。虽然 `execution_manager` 内部已
     先补上一层中性 setpoint 适配，并已移除 consumer 侧旧 `speed` 时长回退，
     仓库内置 `MotionCommand` producer 也已停止写入该镜像，公共字段已标记弃
@@ -343,7 +379,8 @@
   - 已补出控制层与驱动层之间的双向最小正式边界：下行命令和上行执行器反
     馈均由 `execution_manager` 负责 motion/driver 接口适配。
   - 当前执行层状态与执行器反馈均已由 `websocket_bridge` 通过
-    `motion_msgs` 消费；后续仍需继续演进完整仲裁规则和最终中性命令 schema。
+    `motion_msgs` 消费；task-aware admission 已建立第一版跨入口规则，后续仍
+    需继续演进正式任务 goal/result/cancel 与最终中性命令 schema。
 
 ### 3.7 `simulation_bridge`
 
@@ -572,6 +609,9 @@
 - 当前主要职责
   - 以 `MotionCommand` 承接上层控制和 teleop 执行请求。
   - 以 `TeleopControl` 承接 teleop claim / keepalive / release。
+  - 以 `TaskExecutionControl` 承接正式 task 的内部执行租约，以
+    `TaskExecutionState` 承接可关联终态的完整身份、状态、错误语义、最近命
+    令准入结果和准入计数；这两个类型不代替外部 `task_api_msgs`。
   - 以 `ExecutionState` 承接仲裁状态、holder、lease、急停与计数反馈。
   - 以 `ActuatorState` 承接执行层向上发布的执行器状态，使用
     `actuator_type` / `actuator_id` / `position_raw` / `value_encoding`，并
@@ -615,7 +655,9 @@
     `extension_factories` 机制的 BVH 具体实现。
   - 该扩展独立持有指向 `/execution/motion/command` 的 `MotionCommand`
     publisher，并承担 `bvh_play` 注册、accepted ack、BVH 错误映射、
-    execution state 驱动的 teleop 播放联锁以及 adapter/runtime 关闭生命周期。
+    execution state 驱动的 teleop/task 播放联锁以及 adapter/runtime 关闭生
+    命周期；`task_active` 时会返回 `bvh_blocked_by_active_task`，执行层仍保
+    留最终拒绝普通 motion 的兜底。
   - 该扩展只把回调提供的执行时长写入显式 `duration_ms`，禁止写入迁移窗口
     内保留的已弃用 `MotionCommand.speed`；请求级 `speed_ms` 合同与播放器内
     部 timing 行为保持不变。
@@ -713,9 +755,11 @@
   - 当前只有混合职责的 `websocket_bridge`，还不能直接等同于正式
     `teleoperation_bridge`。
 - `task_service_bridge`
-  - 当前不存在独立实现。
+  - 当前不存在独立实现；内部 `/execution/task/*` 准入话题不能替代外部任务
+    桥。
 - `task_api_msgs`
-  - 当前不存在独立消息包。
+  - 当前不存在独立消息包；`motion_msgs/TaskExecutionControl` 与
+    `TaskExecutionState` 只表达 execution admission，不是 `/task/execute`。
 - `speech_interface`
   - 当前不存在独立实现。
 - `vision_perception`
@@ -739,8 +783,9 @@
   - 当前事实：已经输出到执行边界的控制原型
   - 长期去向：演进为 `motion_control`
 - `execution_manager`
-  - 当前事实：最小执行仲裁层已经落地，统一接 teleop 与 motion 两路命令，
-    并开始通过显式 teleop 控制话题处理 claim / keepalive / release
+  - 当前事实：执行仲裁层已统一接 task、teleop 与普通 motion 三路命令；除
+    teleop claim/keepalive/release 外，已增加正式 task 身份、lease、优先级、
+    状态和超时/estop 清理合同
   - 长期去向：演进为正式执行边界，并逐步替换上层对 `servo_msgs` 的直接依
     赖
 - `simulation_bridge`
@@ -765,6 +810,8 @@
 `execution_manager` 已补出最小执行边界，`simulation_bridge` 已承接 Isaac
 仿真桥且 sim 域 package-level 收口已基本完成，BVH 也已从默认
 `websocket_bridge` 核心抽离为 `record_load_action` 所有的显式可选扩展。
+task/teleop/motion 当前也已具备第一版执行准入、lease 与优先级合同，但这仍是
+内部 execution 边界，不代表 `task_service_bridge` 或 `/task/execute` 已经落地。
 但整体上仍需继续面对这些现实问题：`websocket_bridge` 仍混合
 teleop/debug/status/IMU 上行职责，`parallel_3dof_controller` 虽已输出
 `MotionCommand`，但接口仍保留 servo 风格过渡字段；其中 `speed` 已进入弃

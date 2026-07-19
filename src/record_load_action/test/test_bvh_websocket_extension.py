@@ -22,7 +22,19 @@ if 'motion_msgs.msg' not in sys.modules:
     class _MotionCommand:
         pass
 
+    class _ActuatorState:
+        pass
+
+    class _ExecutionState:
+        pass
+
+    class _TeleopControl:
+        pass
+
+    motion_msgs_msg_module.ActuatorState = _ActuatorState
+    motion_msgs_msg_module.ExecutionState = _ExecutionState
     motion_msgs_msg_module.MotionCommand = _MotionCommand
+    motion_msgs_msg_module.TeleopControl = _TeleopControl
     sys.modules['motion_msgs'] = motion_msgs_module
     sys.modules['motion_msgs.msg'] = motion_msgs_msg_module
 
@@ -304,7 +316,41 @@ class BvhWebSocketExtensionTest(unittest.TestCase):
                 'teleop_holder_id': 'client-a',
                 'teleop_lease_id': 'lease-1',
                 'teleop_active': True,
+                'task_active': False,
                 'active_source': 'teleop',
+            },
+        )
+
+    def test_task_interlock_rejects_bvh_before_motion_publish(self):
+        extension = self._extension()
+        state = {
+            'mode': 'task_active',
+            'task_active': True,
+            'active_source': 'task',
+        }
+
+        self.assertTrue(extension.on_execution_state(state))
+        extension.playback.exception = BvhWebSocketPlaybackError.blocked(
+            {'type': 'bvh_play', 'action': 'wave'},
+            RuntimeError('blocked'),
+            block_context=extension.playback.block_context,
+        )
+
+        with self.assertRaises(TeleopControlRejectedException) as ctx:
+            asyncio.run(extension.handle_play_payload({
+                'type': 'bvh_play',
+                'action': 'wave',
+            }))
+
+        self.assertEqual(
+            ctx.exception.details,
+            {
+                'reason': 'bvh_blocked_by_active_task',
+                'teleop_holder_id': '',
+                'teleop_lease_id': '',
+                'teleop_active': False,
+                'task_active': True,
+                'active_source': 'task',
             },
         )
 

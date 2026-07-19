@@ -627,6 +627,7 @@ class WebSocketHandler:
         movement_active = bool(
             self.execution_state.get("teleop_active")
             or self.execution_state.get("motion_active")
+            or self.execution_state.get("task_active")
         )
         listening = self.execution_state.get("active_source") == "teleop"
         action = str(self.execution_state.get("mode") or "idle")

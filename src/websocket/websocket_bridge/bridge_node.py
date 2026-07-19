@@ -658,6 +658,7 @@ class WebSocketROS2Bridge(Node):
         movement_active = bool(
             self.latest_execution_state.get('teleop_active')
             or self.latest_execution_state.get('motion_active')
+            or self.latest_execution_state.get('task_active')
         )
         listening = self.latest_execution_state.get('active_source') == 'teleop'
         action = str(self.latest_execution_state.get('mode') or 'idle')
@@ -856,14 +857,18 @@ class WebSocketROS2Bridge(Node):
     @staticmethod
     def _execution_state_msg_to_dict(msg: ExecutionState) -> dict:
         active_source = str(msg.active_source) or None
+        mode = str(msg.mode)
         return {
-            'mode': str(msg.mode),
+            'mode': mode,
             'active_source': active_source,
             'teleop_holder_id': str(msg.teleop_holder_id or ''),
             'teleop_lease_id': str(msg.teleop_lease_id or ''),
             'estop_active': bool(msg.estop_active),
             'teleop_active': bool(msg.teleop_active),
             'motion_active': bool(msg.motion_active),
+            'task_active': bool(
+                mode == 'task_active' or active_source == 'task'
+            ),
             'teleop_timeout_sec': float(msg.teleop_timeout_sec),
             'motion_timeout_sec': float(msg.motion_timeout_sec),
             'teleop_control_remaining_sec': float(

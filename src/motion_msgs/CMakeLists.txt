@@ -13,6 +13,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ActuatorState.msg"
   "msg/MotionCommand.msg"
   "msg/ExecutionState.msg"
+  "msg/TaskExecutionControl.msg"
+  "msg/TaskExecutionState.msg"
   "msg/TeleopControl.msg"
   DEPENDENCIES builtin_interfaces
 )
@@ -28,6 +30,12 @@ if(BUILD_TESTING)
 
   ament_add_pytest_test(test_phase3_execution_boundary
     "${CMAKE_CURRENT_SOURCE_DIR}/test/test_phase3_execution_boundary.py"
+    APPEND_ENV "PYTHONDONTWRITEBYTECODE=1"
+    TIMEOUT 60
+  )
+
+  ament_add_pytest_test(test_phase4_task_admission_boundary
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/test_phase4_task_admission_boundary.py"
     APPEND_ENV "PYTHONDONTWRITEBYTECODE=1"
     TIMEOUT 60
   )

@@ -241,11 +241,21 @@ ros2 run simulation_bridge sim_servo_bridge_node
 | ---------------- | -------------- | ------------ |
 | `/execution/teleop/control` | `TeleopControl` | teleop 控制权申请/释放/续租 |
 | `/execution/teleop/command` | `MotionCommand` | teleop 执行请求 |
+| `/execution/task/control` | `TaskExecutionControl` | 正式 task 的内部执行租约 |
+| `/execution/task/command` | `MotionCommand` | 携带 task 身份与 lease 的执行请求 |
+| `/execution/task/state` | `TaskExecutionState` | task 准入状态、原因与计数 |
 | `/execution/motion/command` | `MotionCommand` | motion 执行请求 |
 | `/execution/state` | `ExecutionState` | 执行层状态反馈 |
 | `/execution/actuator_state` | `ActuatorState` | 执行层适配后的执行器反馈 |
 | `/servo/command` | `ServoCommand` | 舵机控制命令 |
 | `/sim/servo_state` | `ServoState` | 仿真侧状态反馈 |
+
+`/execution/task/*` 当前是 `execution_manager` 的内部 task admission 合同，不
+是外部任务 API。仓库目前仍没有 `task_api_msgs`、`task_service_bridge` 或
+`/task/execute`；`TaskExecutionControl.cancel` 只撤销后续命令准入，不表示
+已经下发到驱动的在途动作完成停止。`TaskExecutionState` 会在终态撤销 lease
+但保留最近准入的 task/trace/session 身份，并单独报告最近 task 命令的准入
+结果；当前 start 重放保护是 execution_manager 进程内的有界记录。
 
 ### 订阅话题
 
@@ -265,6 +275,9 @@ ros2 topic echo /servo/command
 
 # 查看执行层状态
 ros2 topic echo /execution/state
+
+# 查看正式 task 的内部执行租约状态
+ros2 topic echo /execution/task/state
 
 # 查看执行层适配后的执行器反馈（上层推荐入口）
 ros2 topic echo /execution/actuator_state

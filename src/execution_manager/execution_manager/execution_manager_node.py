@@ -3,6 +3,8 @@
 from motion_msgs.msg import ActuatorState
 from motion_msgs.msg import ExecutionState
 from motion_msgs.msg import MotionCommand
+from motion_msgs.msg import TaskExecutionControl
+from motion_msgs.msg import TaskExecutionState
 from motion_msgs.msg import TeleopControl
 import rclpy
 from rclpy.node import Node
@@ -24,6 +26,8 @@ class ExecutionManagerNode(Node):
 
         self.declare_parameter('teleop_command_topic', '/execution/teleop/command')
         self.declare_parameter('teleop_control_topic', '/execution/teleop/control')
+        self.declare_parameter('task_command_topic', '/execution/task/command')
+        self.declare_parameter('task_control_topic', '/execution/task/control')
         self.declare_parameter('motion_command_topic', '/execution/motion/command')
         self.declare_parameter('output_command_topic', '/servo/command')
         self.declare_parameter('driver_state_topic', '/servo/state')
@@ -32,22 +36,28 @@ class ExecutionManagerNode(Node):
             '/execution/actuator_state',
         )
         self.declare_parameter('state_topic', '/execution/state')
+        self.declare_parameter('task_state_topic', '/execution/task/state')
         self.declare_parameter('estop_topic', '/execution/estop')
         self.declare_parameter('teleop_timeout_sec', 0.8)
         self.declare_parameter('motion_timeout_sec', 0.5)
+        self.declare_parameter('task_timeout_sec', 5.0)
         self.declare_parameter('publish_state_period_sec', 0.2)
         self.declare_parameter('debug', False)
 
         teleop_command_topic = self.get_parameter('teleop_command_topic').value
         teleop_control_topic = self.get_parameter('teleop_control_topic').value
+        task_command_topic = self.get_parameter('task_command_topic').value
+        task_control_topic = self.get_parameter('task_control_topic').value
         motion_command_topic = self.get_parameter('motion_command_topic').value
         output_command_topic = self.get_parameter('output_command_topic').value
         driver_state_topic = self.get_parameter('driver_state_topic').value
         actuator_state_topic = self.get_parameter('actuator_state_topic').value
         self.state_topic = self.get_parameter('state_topic').value
+        task_state_topic = self.get_parameter('task_state_topic').value
         estop_topic = self.get_parameter('estop_topic').value
         teleop_timeout_sec = float(self.get_parameter('teleop_timeout_sec').value)
         motion_timeout_sec = float(self.get_parameter('motion_timeout_sec').value)
+        task_timeout_sec = float(self.get_parameter('task_timeout_sec').value)
         publish_state_period_sec = float(
             self.get_parameter('publish_state_period_sec').value
         )
@@ -56,6 +66,7 @@ class ExecutionManagerNode(Node):
         self.arbitrator = CommandArbitrator(
             teleop_timeout_sec=teleop_timeout_sec,
             motion_timeout_sec=motion_timeout_sec,
+            task_timeout_sec=task_timeout_sec,
         )
 
         self.output_command_pub = self.create_publisher(
@@ -66,6 +77,11 @@ class ExecutionManagerNode(Node):
         self.state_pub = self.create_publisher(
             ExecutionState,
             self.state_topic,
+            10,
+        )
+        self.task_state_pub = self.create_publisher(
+            TaskExecutionState,
+            task_state_topic,
             10,
         )
         self.actuator_state_pub = self.create_publisher(
@@ -84,6 +100,18 @@ class ExecutionManagerNode(Node):
             TeleopControl,
             teleop_control_topic,
             self._handle_teleop_control,
+            20,
+        )
+        self.task_sub = self.create_subscription(
+            MotionCommand,
+            task_command_topic,
+            lambda msg: self._handle_command('task', msg),
+            50,
+        )
+        self.task_control_sub = self.create_subscription(
+            TaskExecutionControl,
+            task_control_topic,
+            self._handle_task_control,
             20,
         )
         self.motion_sub = self.create_subscription(
@@ -112,6 +140,9 @@ class ExecutionManagerNode(Node):
             'execution_manager 已启动: '
             f'teleop={teleop_command_topic}, '
             f'teleop_control={teleop_control_topic}, '
+            f'task={task_command_topic}, '
+            f'task_control={task_control_topic}, '
+            f'task_state={task_state_topic}, '
             f'motion={motion_command_topic}, '
             f'output={output_command_topic}, '
             f'driver_state={driver_state_topic}, '
@@ -171,6 +202,38 @@ class ExecutionManagerNode(Node):
         if not result.accepted:
             self.get_logger().warn(
                 f'拒绝 teleop 控制动作: action={action} reason={result.reason}'
+            )
+
+        self._publish_state(now_sec)
+
+    def _handle_task_control(self, msg: TaskExecutionControl) -> None:
+        now_sec = self._now_sec()
+        action = str(msg.action).strip().lower()
+        task_id = str(msg.task_id).strip()
+        trace_id = str(msg.trace_id).strip()
+        session_id = str(msg.session_id).strip()
+        lease_id = str(msg.lease_id).strip()
+        result = self.arbitrator.receive_task_control(
+            action,
+            now_sec,
+            task_id=task_id,
+            trace_id=trace_id,
+            session_id=session_id,
+            lease_id=lease_id,
+        )
+
+        if self.debug:
+            self.get_logger().info(
+                f'task 控制动作: action={action} task_id={task_id} '
+                f'trace_id={trace_id} session_id={session_id} '
+                f'lease_id={lease_id} accepted={result.accepted} '
+                f'mode={result.mode}'
+            )
+
+        if not result.accepted:
+            self.get_logger().warn(
+                f'拒绝 task 控制动作: action={action} task_id={task_id} '
+                f'reason={result.reason}'
             )
 
         self._publish_state(now_sec)
@@ -239,6 +302,50 @@ class ExecutionManagerNode(Node):
         state_msg.last_rejection_reason = str(snapshot['last_rejection_reason'])
         state_msg.stamp = self.get_clock().now().to_msg()
         self.state_pub.publish(state_msg)
+
+        task_state_msg = TaskExecutionState()
+        task_state_msg.active = bool(snapshot['task_active'])
+        task_state_msg.task_id = str(snapshot['task_id'])
+        task_state_msg.trace_id = str(snapshot['task_trace_id'])
+        task_state_msg.session_id = str(snapshot['task_session_id'])
+        task_state_msg.lease_id = str(snapshot['task_lease_id'])
+        task_state_msg.lease_timeout_sec = float(snapshot['task_timeout_sec'])
+        task_state_msg.lease_remaining_sec = float(
+            snapshot['task_control_remaining_sec']
+        )
+        task_state_msg.last_action = str(snapshot['last_task_control_action'])
+        task_state_msg.last_task_id = str(
+            snapshot['last_task_control_task_id']
+        )
+        task_state_msg.last_action_accepted = bool(
+            snapshot['last_task_control_accepted']
+        )
+        task_state_msg.status = str(snapshot['task_status'])
+        task_state_msg.reason = str(snapshot['task_state_reason'])
+        task_state_msg.recoverable = bool(snapshot['task_recoverable'])
+        task_state_msg.control_accepted_count = int(
+            snapshot['task_control_accepted_count']
+        )
+        task_state_msg.control_rejected_count = int(
+            snapshot['task_control_rejected_count']
+        )
+        task_state_msg.last_command_requester_id = str(
+            snapshot['last_task_command_requester_id']
+        )
+        task_state_msg.last_command_accepted = bool(
+            snapshot['last_task_command_accepted']
+        )
+        task_state_msg.last_command_reason = str(
+            snapshot['last_task_command_reason']
+        )
+        task_state_msg.command_accepted_count = int(
+            snapshot['accepted_counts']['task']
+        )
+        task_state_msg.command_rejected_count = int(
+            snapshot['rejected_counts']['task']
+        )
+        task_state_msg.stamp = state_msg.stamp
+        self.task_state_pub.publish(task_state_msg)
 
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds / 1_000_000_000.0
