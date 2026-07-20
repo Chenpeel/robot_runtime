@@ -79,6 +79,16 @@ def generate_launch_description():
         default_value='/execution/estop',
         description='执行层急停控制话题',
     )
+    driver_safety_topic_arg = DeclareLaunchArgument(
+        'driver_safety_topic',
+        default_value='/servo/driver_safety',
+        description='execution_manager 向驱动发布的权威安全锁存状态',
+    )
+    driver_safety_service_arg = DeclareLaunchArgument(
+        'driver_safety_service',
+        default_value='/servo/set_driver_safety',
+        description='execution_manager 等待驱动安全状态应用确认的服务',
+    )
     execution_teleop_timeout_sec_arg = DeclareLaunchArgument(
         'execution_teleop_timeout_sec',
         default_value='0.8',
@@ -168,6 +178,8 @@ def generate_launch_description():
             {'actuator_state_topic': execution_actuator_state_topic},
             {'state_topic': execution_state_topic},
             {'task_state_topic': execution_task_state_topic},
+            {'driver_safety_topic': LaunchConfiguration('driver_safety_topic')},
+            {'driver_safety_service': LaunchConfiguration('driver_safety_service')},
             {'estop_topic': execution_estop_topic},
             {'teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec')},
             {'motion_timeout_sec': LaunchConfiguration('execution_motion_timeout_sec')},
@@ -254,6 +266,8 @@ def generate_launch_description():
         execution_task_state_topic_arg,
         execution_actuator_state_topic_arg,
         execution_estop_topic_arg,
+        driver_safety_topic_arg,
+        driver_safety_service_arg,
         execution_teleop_timeout_sec_arg,
         execution_motion_timeout_sec_arg,
         execution_task_timeout_sec_arg,

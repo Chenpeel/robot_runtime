@@ -40,6 +40,7 @@ def _load_instances(context):
             raise RuntimeError(f"instance #{index} params must be a dict")
         params = dict(params)
         params.setdefault('command_topic', command_topic)
+        params['enable_motion_action_server'] = False
 
         nodes.append(
             Node(

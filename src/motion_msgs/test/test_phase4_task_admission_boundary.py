@@ -3,6 +3,7 @@
 import ast
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -46,6 +47,15 @@ def _ros_factory_message_types(relative_path: str, factory_name: str) -> set:
     return result
 
 
+def _runtime_dependencies(relative_path: str) -> set:
+    manifest = ElementTree.fromstring(_read(relative_path))
+    return {
+        str(element.text or '').strip()
+        for tag in ('depend', 'exec_depend')
+        for element in manifest.findall(tag)
+    }
+
+
 class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
     """固定正式 task、teleop、普通 motion 与驱动层之间的入口边界。"""
 
@@ -77,6 +87,9 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
             'string session_id',
             'string lease_id',
             'float32 lease_remaining_sec',
+            'string last_task_id',
+            'string last_trace_id',
+            'string last_session_id',
             'string status',
             'string reason',
             'bool recoverable',
@@ -160,6 +173,43 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
         self.assertIn("'task_control_replay'", arbitrator)
         self.assertIn('self.last_motion_time = None', arbitrator)
 
+    def test_execution_manager_owns_driver_level_service_adaptation(self):
+        node_path = (
+            'src/execution_manager/execution_manager/'
+            'execution_manager_node.py'
+        )
+        source = _read(node_path)
+        package_source = _read('src/execution_manager/package.xml')
+
+        self.assertIn('ReadActuatorPosition', source)
+        self.assertIn('StopActuators', source)
+        self.assertIn('ReadServoPosition', source)
+        self.assertIn('ExecuteBusCommand', source)
+        self.assertIn('SetDriverSafety', source)
+        self.assertIn('_request_driver_safety_release', source)
+        self.assertIn('validate_task_operation', source)
+        self.assertIn('ReentrantCallbackGroup', source)
+        self.assertIn('MultiThreadedExecutor', source)
+        self.assertIn('RLock', source)
+        self.assertIn('with self.arbitrator_lock:', source)
+        self.assertIn('<depend>servo_msgs</depend>', package_source)
+
+        for relative_path in (
+            'src/task_service_bridge/package.xml',
+            'src/task_service_bridge/task_service_bridge/bridge_node.py',
+            'src/parallel_3dof_controller/package.xml',
+            'src/parallel_3dof_controller/parallel_3dof_controller/'
+            'controller_node.py',
+        ):
+            with self.subTest(relative_path=relative_path):
+                if relative_path.endswith('package.xml'):
+                    self.assertNotIn(
+                        'servo_msgs',
+                        _runtime_dependencies(relative_path),
+                    )
+                else:
+                    self.assertNotIn('servo_msgs', _read(relative_path))
+
     def test_ros_pub_sub_smoke_is_colcon_discoverable(self):
         runner = _read(
             'src/execution_manager/test/task_admission_ros_smoke.py'
@@ -203,24 +253,59 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
         self.assertNotIn('/execution/task/command', bridge)
         self.assertNotIn('/execution/task/control', bridge)
 
-    def test_no_placeholder_external_task_entry_is_claimed(self):
-        self.assertFalse((REPOSITORY_ROOT / 'src/task_api_msgs').exists())
-        self.assertFalse((REPOSITORY_ROOT / 'src/task_service_bridge').exists())
+    def test_formal_task_entry_is_owned_by_task_service_bridge(self):
+        task_bridge_node = _read(
+            'src/task_service_bridge/task_service_bridge/bridge_node.py'
+        )
+        task_bridge_package = _read('src/task_service_bridge/package.xml')
+        motion_owner_node = _read(
+            'src/parallel_3dof_controller/parallel_3dof_controller/'
+            'controller_node.py'
+        )
+        motion_owner_package = _read(
+            'src/parallel_3dof_controller/package.xml'
+        )
 
-        runtime_literals = set()
+        self.assertEqual(1, task_bridge_node.count('ActionServer('))
+        self.assertEqual(1, task_bridge_node.count('ActionClient('))
+        self.assertIn("'/task/execute'", task_bridge_node)
+        self.assertIn("'/motion/execute'", task_bridge_node)
+        self.assertNotIn(
+            'servo_msgs',
+            _runtime_dependencies('src/task_service_bridge/package.xml'),
+        )
+        self.assertNotIn('servo_msgs', task_bridge_node)
+        self.assertNotIn('MotionCommand', task_bridge_node)
+        self.assertNotIn('ServoCommand', task_bridge_node)
+        self.assertIn('ExecuteMotion', motion_owner_node)
+        self.assertNotIn('servo_msgs', motion_owner_node)
+        self.assertIn('<depend>motion_msgs</depend>', motion_owner_package)
+        self.assertIn('<exec_depend>python3-numpy</exec_depend>', motion_owner_package)
+
+        task_entry_owners = []
+        motion_entry_owners = []
         for path in (REPOSITORY_ROOT / 'src').rglob('*.py'):
-            tree = ast.parse(
-                path.read_text(encoding='utf-8'),
-                filename=str(path.relative_to(REPOSITORY_ROOT)),
-            )
-            runtime_literals.update(
-                node.value
-                for node in ast.walk(tree)
-                if isinstance(node, ast.Constant)
-                and isinstance(node.value, str)
-            )
-        external_task_action = '/task/' + 'execute'
-        self.assertNotIn(external_task_action, runtime_literals)
+            relative_path = str(path.relative_to(REPOSITORY_ROOT))
+            if '/test/' in relative_path or '/launch/' in relative_path:
+                continue
+            source = path.read_text(encoding='utf-8')
+            if "'/task/execute'" in source or "\"/task/execute\"" in source:
+                task_entry_owners.append(relative_path)
+            if "'/motion/execute'" in source or "\"/motion/execute\"" in source:
+                motion_entry_owners.append(relative_path)
+
+        self.assertEqual(
+            ['src/task_service_bridge/task_service_bridge/bridge_node.py'],
+            task_entry_owners,
+        )
+        self.assertEqual(
+            [
+                'src/parallel_3dof_controller/parallel_3dof_controller/'
+                'controller_node.py',
+                'src/task_service_bridge/task_service_bridge/bridge_node.py',
+            ],
+            sorted(motion_entry_owners),
+        )
 
 
 if __name__ == '__main__':

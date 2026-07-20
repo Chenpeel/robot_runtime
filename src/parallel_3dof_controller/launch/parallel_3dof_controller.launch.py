@@ -9,8 +9,6 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from ament_index_python.packages import get_package_share_directory
-import os
 
 
 def generate_launch_description():
@@ -50,6 +48,76 @@ def generate_launch_description():
         default_value='/execution/motion/command',
         description='舵机命令输出话题，默认接入 execution_manager'
     )
+    task_command_topic_arg = DeclareLaunchArgument(
+        'task_command_topic',
+        default_value='/execution/task/command',
+        description='携带正式 task lease 的执行命令入口',
+    )
+    task_control_topic_arg = DeclareLaunchArgument(
+        'task_control_topic',
+        default_value='/execution/task/control',
+        description='正式 task 执行租约控制话题',
+    )
+    task_state_topic_arg = DeclareLaunchArgument(
+        'task_state_topic',
+        default_value='/execution/task/state',
+        description='正式 task 执行租约状态话题',
+    )
+    motion_action_name_arg = DeclareLaunchArgument(
+        'motion_action_name',
+        default_value='/motion/execute',
+        description='内部结构化运动执行 Action',
+    )
+    enable_motion_action_server_arg = DeclareLaunchArgument(
+        'enable_motion_action_server',
+        default_value='true',
+        description='是否持有正式 motion ActionServer',
+    )
+    read_actuator_position_service_arg = DeclareLaunchArgument(
+        'read_actuator_position_service',
+        default_value='/execution/read_actuator_position',
+        description='task lease 保护的实际位置读取服务',
+    )
+    stop_actuators_service_arg = DeclareLaunchArgument(
+        'stop_actuators_service',
+        default_value='/execution/stop_actuators',
+        description='task lease 保护的执行器停止请求服务',
+    )
+    task_lease_wait_timeout_sec_arg = DeclareLaunchArgument(
+        'task_lease_wait_timeout_sec',
+        default_value='2.0',
+        description='等待 execution_manager task lease 的最长秒数',
+    )
+    task_terminal_wait_timeout_sec_arg = DeclareLaunchArgument(
+        'task_terminal_wait_timeout_sec',
+        default_value='2.0',
+        description='等待 execution_manager task 终态的最长秒数',
+    )
+    task_keepalive_period_sec_arg = DeclareLaunchArgument(
+        'task_keepalive_period_sec',
+        default_value='1.0',
+        description='task lease 续租周期',
+    )
+    feedback_poll_period_sec_arg = DeclareLaunchArgument(
+        'feedback_poll_period_sec',
+        default_value='0.05',
+        description='实际位置采样周期',
+    )
+    service_call_timeout_sec_arg = DeclareLaunchArgument(
+        'service_call_timeout_sec',
+        default_value='1.0',
+        description='motion-level 服务调用超时',
+    )
+    stable_sample_count_arg = DeclareLaunchArgument(
+        'stable_sample_count',
+        default_value='3',
+        description='完成或停止确认所需连续稳定样本数',
+    )
+    stop_position_tolerance_arg = DeclareLaunchArgument(
+        'stop_position_tolerance',
+        default_value='1',
+        description='连续位置采样确认停止时允许的原始位置变化',
+    )
 
     # 3-DOF并联控制器节点
     parallel_3dof_controller_node = Node(
@@ -63,6 +131,38 @@ def generate_launch_description():
                 'ankle_side': LaunchConfiguration('ankle_side'),
                 'debug': LaunchConfiguration('debug'),
                 'command_topic': LaunchConfiguration('command_topic'),
+                'task_command_topic': LaunchConfiguration('task_command_topic'),
+                'task_control_topic': LaunchConfiguration('task_control_topic'),
+                'task_state_topic': LaunchConfiguration('task_state_topic'),
+                'motion_action_name': LaunchConfiguration('motion_action_name'),
+                'enable_motion_action_server': LaunchConfiguration(
+                    'enable_motion_action_server'
+                ),
+                'read_actuator_position_service': LaunchConfiguration(
+                    'read_actuator_position_service'
+                ),
+                'stop_actuators_service': LaunchConfiguration(
+                    'stop_actuators_service'
+                ),
+                'task_lease_wait_timeout_sec': LaunchConfiguration(
+                    'task_lease_wait_timeout_sec'
+                ),
+                'task_terminal_wait_timeout_sec': LaunchConfiguration(
+                    'task_terminal_wait_timeout_sec'
+                ),
+                'task_keepalive_period_sec': LaunchConfiguration(
+                    'task_keepalive_period_sec'
+                ),
+                'feedback_poll_period_sec': LaunchConfiguration(
+                    'feedback_poll_period_sec'
+                ),
+                'service_call_timeout_sec': LaunchConfiguration(
+                    'service_call_timeout_sec'
+                ),
+                'stable_sample_count': LaunchConfiguration('stable_sample_count'),
+                'stop_position_tolerance': LaunchConfiguration(
+                    'stop_position_tolerance'
+                ),
             }
         ],
         output='screen',
@@ -74,5 +174,19 @@ def generate_launch_description():
         debug_arg,
         config_file_arg,
         command_topic_arg,
+        task_command_topic_arg,
+        task_control_topic_arg,
+        task_state_topic_arg,
+        motion_action_name_arg,
+        enable_motion_action_server_arg,
+        read_actuator_position_service_arg,
+        stop_actuators_service_arg,
+        task_lease_wait_timeout_sec_arg,
+        task_terminal_wait_timeout_sec_arg,
+        task_keepalive_period_sec_arg,
+        feedback_poll_period_sec_arg,
+        service_call_timeout_sec_arg,
+        stable_sample_count_arg,
+        stop_position_tolerance_arg,
         parallel_3dof_controller_node,
     ])

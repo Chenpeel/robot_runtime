@@ -12,8 +12,10 @@ float32 lease_timeout_sec
 float32 lease_remaining_sec
 
 string last_action
-# 最近一次控制请求的 task_id；timeout / estop 等系统终态使用被撤销的 task_id
+# 最近一次控制请求的完整身份；timeout / estop 等系统终态使用被撤销的身份
 string last_task_id
+string last_trace_id
+string last_session_id
 bool last_action_accepted
 string status
 string reason

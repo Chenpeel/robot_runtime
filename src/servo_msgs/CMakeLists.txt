@@ -15,10 +15,12 @@ find_package(builtin_interfaces REQUIRED)
 # 生成消息接口
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ServoCommand.msg"
+  "msg/DriverSafetyState.msg"
   "msg/ServoState.msg"
   "msg/ServoStatus.msg"
   "srv/ReadServoPosition.srv"
   "srv/ExecuteBusCommand.srv"
+  "srv/SetDriverSafety.srv"
   DEPENDENCIES std_msgs builtin_interfaces
 )
 

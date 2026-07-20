@@ -428,7 +428,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
             demo_literals,
         )
 
-    def test_full_system_composes_three_domain_launches(self):
+    def test_full_system_composes_four_domain_launches(self):
         full_system_path = (
             'src/robot_bringup/launch/full_system.launch.py'
         )
@@ -436,6 +436,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
         expected_includes = {
             ('robot_bringup', 'hardware.launch.py'),
             ('robot_bringup', 'simulation.launch.py'),
+            ('robot_bringup', 'task.launch.py'),
             ('robot_bringup', 'teleop.launch.py'),
         }
 
@@ -473,6 +474,19 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
                 'forbidden': {
                     'sensor_hardware',
                     'servo_hardware',
+                    'websocket_bridge',
+                },
+            },
+            'task.launch.py': {
+                'required': {
+                    'execution_manager',
+                    'parallel_3dof_controller',
+                    'task_service_bridge',
+                },
+                'forbidden': {
+                    'sensor_hardware',
+                    'servo_hardware',
+                    'simulation_bridge',
                     'websocket_bridge',
                 },
             },

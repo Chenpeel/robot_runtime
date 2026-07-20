@@ -17,6 +17,8 @@
   <exec_depend>sensor_hardware</exec_depend>
   <exec_depend>servo_hardware</exec_depend>
   <exec_depend>simulation_bridge</exec_depend>
+  <exec_depend>task_api_msgs</exec_depend>
+  <exec_depend>task_service_bridge</exec_depend>
   <exec_depend>websocket_bridge</exec_depend>
 
   <test_depend>python3-pytest</test_depend>

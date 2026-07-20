@@ -61,15 +61,17 @@
 
 ## 3. 当前阶段判断
 
-截至 2026-07-17，当前重构已经完成的关键基础包括：
+截至 2026-07-20，当前重构已经完成的关键基础包括：
 
-- `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / simulation 三个子域。
+- `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / task /
+  simulation 四个子域。
 - `robot_bringup` 场景化 launch 当前也已开始复用 `launch_utils` 统一解析总线
   协议缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `robot_bringup` 当前已增加 `docs/plan.md` Phase 2 仓库级完成合同，以 AST、
   XML 和 JSON 结构化验证 WebSocket/simulation 包级分离、独立
   `sensor_hardware` 所有权、BVH 默认 opt-in 依赖方向，以及
-  `full_system` 对 hardware / teleop / simulation 三个子 launch 的真实组合；
+  `full_system` 对 hardware / teleop / task / simulation 四个子 launch 的真实
+  组合；
   Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，共
   38 项直接证据通过。
 - Phase 2 收尾同时修复了三个仓库级用户入口残留：`preprocess_bvh.py` 不再
@@ -181,13 +183,69 @@
   flake8/pep257 失败（同时为 132 passed、30 skipped），因此没有混入本轮
   72 项零失败集合；本轮直接受影响的 WebSocket task 映射与状态查询定向回
   归均已通过。上述 Humble ARM64 证据仍不能替代目标 Jazzy 发布回归。
-- 基于上述 task-aware execution admission、跨入口优先级与 ROS 验收，
+- Phase 4A 调分当时，基于上述 task-aware execution admission、跨入口优先级
+  与 ROS 验收，
   `docs/plan.md` Phase 4 已从 `25%` 提升到 `50%`。全局原始进度由 `46.4%`
   提升到 `50.0%`，实际推进约 `3.6` 个百分点；按最近 `5%` 展示由 `45%`
   提升到 `50%`，顶部进度条相应调整为 10/20 格。Phase 4 尚未达到
   `75% / 100%`，因为 `task_api_msgs`、`task_service_bridge`、
   `/task/execute`、motion goal/result 与真实任务取消/完成反馈仍未落地；当
   前 `cancel` 只撤销后续命令准入，不等同于驱动级在途停止。
+- Phase 4B 已落地 `task_api_msgs/ExecuteTask`、
+  `motion_msgs/ExecuteMotion`、实际位置读取和停止请求接口；
+  `task_service_bridge` 是唯一 `/task/execute` ActionServer，只映射到
+  `/motion/execute`，不依赖驱动消息，也不会把 goal accepted 冒充完成。
+- 当前 `parallel_3dof_controller` 作为 motion owner，完整执行 task lease
+  start/keepalive/finish/cancel，携带 lease 进入 `/execution/task/command`，
+  并只以 execution_manager 转发的驱动级实际位置新采样判断完成。三执行器必
+  须连续三个样本进入目标容差；取消必须经过 stop 请求、连续稳定位置确认、
+  task cancel 和终态 lease 清理后才返回结果。
+- `execution_manager` 新增受完整 task/trace/session/lease 保护的
+  `/execution/read_actuator_position` 与 `/execution/stop_actuators`，独占
+  motion-level 到 driver-level 适配；stop service 只报告命令写出，
+  `stop_confirmed` 仍由 motion owner 的后续采样确认。
+- `TaskExecutionState` 当前也会为最近一次控制请求报告完整
+  task/trace/session 身份；motion owner 只有在已收到 execution task state
+  且 task-control DDS 订阅已发现后才接受 goal。multi-instance 控制器固定关
+  闭正式 ActionServer，`/motion/execute` 仍只有一个 owner。
+- execution manager 为每个已接受的 stop 建立单调 operation token；token 未
+  完成时拒绝所有新执行命令和 task start，避免调用方超时后的旧 stop 干扰新
+  任务。estop 会直接对已接受命令或驱动状态中见过的 bus ID 写出协议 stop；
+  stop 未完整写出或驱动服务超过 manager 级超时会锁存
+  `driver_stop_failed` / `driver_stop_timeout`、保持 estop 和 stop token，不能
+  通过迟到响应或普通 estop release 自动恢复。
+- stop 批处理当前按执行器 best-effort：单个 ID 的协议读取或 stop 写出超时只
+  记入聚合故障，不会跳过其余 ID。`execution_manager` 同时以 transient-local
+  的 `/servo/driver_safety` 发布权威 `DriverSafetyState`；协议 router 与端口驱
+  动均在 stop 写出前建立本地 fence，急停期间拒绝新 move，解除后仍拒绝时间戳
+  早于 fence 的迟到 topic/service move。正常 release 必须经
+  `/servo/set_driver_safety` 聚合全部有效 port driver 的应用 ACK；ACK 返回前
+  持续保留 stop token 与 estop，release 失败或超时会保持二者并锁存故障；故
+  障锁存时普通 estop release 不会发布驱动级 release。
+- `robot_bringup/task.launch.py` 当前组合 execution manager、motion owner
+  和 task bridge，`full_system` 会关闭 teleop 子栈内的重复 execution owner。
+  Phase 4B/C 在 ARM64 ROS 2 Humble 的禁网、只读、`/tmp` 隔离容器完成 12 包
+  闭包构建；八个目标包的功能 xUnit 汇总 158 项零失败，另有未被包注册器发现
+  的 `parallel_3dof_controller` 定向测试 26 项通过。`DriverSafetyState`、
+  `SetDriverSafety`、带命令时间戳的 `ExecuteBusCommand` 及既有 task/motion 接
+  口均完成生成，task、hardware、full-system launch 参数解析及独立
+  Action/DDS smoke 均通过。smoke 的 fake driver 会渐进逼近目标，
+  成功链产生 11 条 feedback、连续三个目标样本后完成；取消链实际收到三个协
+  议 stop，并以连续四个冻结位置样本确认停止。扩展场景还确认延迟 stop 期间
+  新 task 无命令逸出且完成后恢复、estop 对三个执行器直接 stop、三条 stop 前
+  迟到 move 与 active 期间新 move 均被驱动 fence 拒绝、全部端口 release ACK
+  后恢复，
+  以及首个执行器 stop 超时后其余两个 ID 仍收到协议 stop，最终继续锁存故障并
+  阻断新 task。完整 smoke 用时 `8.5329s`。`servo_hardware` 功能测试为 31 项
+  通过；包级历史 flake8/pep257 基线未计入零失败集合。该证据不是物理硬件验
+  收，Humble 也不替代目标 Jazzy 发布回归。
+- 对照 `docs/plan.md` 的原始 Phase 4 完成标准，唯一正式桥、统一执行边界、差
+  异化默认优先级及上述安全闭环均已有实现和自动化证据，因此 Phase 4 从 `75%`
+  提升到 `100%`。全局原始进度由 `53.6%` 提升到 `57.1%`，实际推进约 `3.6`
+  个百分点；按最近 `5%` 展示仍为 `55%`，顶部进度条保持 11/20 格。当前只支
+  持 `ankle_pose`、正式 `motion_control` 包边界、完整 task context、部署 ACL、
+  跨进程持久幂等、目标硬件和 Jazzy 回归仍是发布加固或后续演进事项，但不再
+  扩张为 Phase 4 蓝本完成门禁。
 - BVH/demo capability 的动作输出已改走 `/execution/motion/command`，不再复
   用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
@@ -259,33 +317,32 @@
 
 下一优先级定义为：
 
-**Phase 4-Next：冻结真实任务 goal / result / cancel 与停止语义**
+**正式任务链发布加固与后续演进**
 
 原因：
 
-- 正式 task 的内部身份、lease、优先级和 task topic 准入已经落地，但当前还
-  没有能表达 motion goal、执行反馈、完成结果和真实取消的接口。
-- `TaskExecutionControl` 是执行准入租约，不是外部任务 Action；其 `cancel`
-  只阻止后续 task 命令，不能把已经发到驱动的命令伪装为已停止。
-- 现在直接创建 `task_service_bridge` 并发布 `MotionCommand` 会绕过长期蓝本中
-  的 `motion_control`；收到请求立即返回 success 又会把“已接收”伪装成“已
-  完成”。这两条路径都不应进入当前事实。
-- 下一步应先冻结 motion_control-facing 的 goal/feedback/result/cancel 与停
-  止确认语义，再由真实 owner 实现 `/task/execute`；`MotionCommand` 最终
-  schema 和 breaking 门禁仍保留为并行设计约束，但在仓外事实缺失时不直接
-  修改公共布局。
+- 正式 task/motion Action、反馈、取消和 stop 确认已经落地，但当前只实现
+  `ankle_pose`，还不能代表长期规划中的多任务 motion control。
+- `parallel_3dof_controller` 当前是经过验证的 motion owner，但包名和职责目录
+  尚未收口成正式 `motion_control`；迁移必须保持现有 Action 合同不变。
+- task bridge 的进程内单目标策略与 execution tombstone 已能覆盖当前运行时，
+  但部署级唯一入口、ROS ACL 和跨节点重启的持久幂等仍未完成。
+- fake driver 已证明控制图和停止状态机，不代表多协议真实硬件已经完成停止验
+  收；目标 Jazzy 发布回归也不能由 Humble 结果替代。
 
 
 ## 5. 下一阶段建议范围
 
 下一阶段建议范围控制在：
 
-- 明确 task goal 由 `motion_control` 接收何种结构化目标，以及如何把
-  `task_id` / `trace_id` / `session_id` 贯穿到 feedback 和 result。
-- 冻结任务取消与执行层停止的区别：准入 lease 撤销、运动控制取消、驱动在途
-  停止和最终 stopped 确认必须是可区分的状态，不能复用一个布尔值。
-- 在存在真实 motion owner 和可回传完成结果前，不创建空
-  `task_service_bridge`、假 `/task/execute` 或直接面向执行器的外部任务字段。
+- 在不修改现有 Action 身份与停止字段的前提下增加下一种真实任务类型，并为
+  每种类型提供实际 owner、完成反馈和取消清理证据。
+- 评估 `parallel_3dof_controller -> motion_control` 的包边界收口，避免为命名
+  迁移复制 ActionServer 或引入第二条正式执行路径。
+- 增加部署级唯一 `/task/execute` 约束、ROS ACL 与跨进程持久幂等设计；未落
+  地前继续明确其不属于当前完成证据。
+- 在目标硬件验证 LX/ZL stop、位置冻结和故障恢复，并补充目标 Jazzy clean
+  build、launch 与 Action 回归；不能复用 fake driver/Humble 结论。
 - `MotionCommand` 最终 schema 继续按
   `docs/motion_command_speed_migration.md` 盘点仓外 publisher/subscriber、旧
   rosbag、生成绑定与部署镜像；门禁全部通过前不删除或重排公共字段。

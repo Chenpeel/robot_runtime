@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文记录截至 2026-07-17 的仓库当前事实，用于补充说明现有模块到底已经承担了
+本文记录截至 2026-07-20 的仓库当前事实，用于补充说明现有模块到底已经承担了
 什么职责。
 
 它与长期规划文档的关系如下：
@@ -17,7 +17,7 @@
 
 ## 2. 当前模块总览
 
-当前仓库大体可以分成八个职责域：
+当前仓库大体可以分成九个职责域：
 
 - 系统集成与场景化启动
   - `robot_bringup`
@@ -30,7 +30,10 @@
   - `servo_hardware`
 - 传感器接入
   - `sensor_hardware`，已独立成 ROS 包
-- 控制原型
+- 正式任务入口
+  - `task_service_bridge`
+  - `task_api_msgs`
+- 控制原型与当前 motion owner
   - `parallel_3dof_controller`
 - 仿真桥接
   - `simulation_bridge`
@@ -54,7 +57,7 @@
   - ROS 包名：`robot_bringup`
 - 当前主要职责
   - 承接整机主入口 `full_system.launch.py`。
-  - 将整机编排拆为 hardware、teleop、simulation 三个子 launch。
+  - 将整机编排拆为 hardware、teleop、task、simulation 四个子 launch。
   - 组合 `execution_manager`、`websocket_bridge`、`servo_hardware`、
     `sensor_hardware` 与 `simulation_bridge` 等运行链路。
   - 已开始在 `full_system`、`parallel_3dof_multi_system` 等场景入口复用
@@ -64,20 +67,21 @@
     把 `/servo/command` / `/servo/state` 当成仿真入口的公共参数面。
   - 当前持有 `docs/plan.md` Phase 2 仓库级完成合同，以结构化源码检查统一验
     收 WebSocket/simulation 包级分离、sensor 独立所有权、BVH 默认 opt-in
-    和 full-system 三分域组合，防止已拆出的职责重新混回默认主链。
+    和 full-system 四分域组合，防止已拆出的职责重新混回默认主链。
   - `teleop.launch.py` 与 `full_system.launch.py` 已公开统一的
     `execution_actuator_state_topic`，将执行层反馈同时接到
     `execution_manager` 与 `websocket_bridge`，不再让上层桥接直接订阅驱动
     状态话题。
-  - 两层 launch 当前也会统一透传 task command/control/state topic 与 task
-    lease timeout，只装配 `execution_manager` 的内部准入面；没有装配或宣称
-    尚不存在的 `task_service_bridge` 与 `/task/execute`。
+  - `task.launch.py` 组合唯一 task bridge、当前 motion owner 与共享
+    execution manager；`full_system` 会关闭 teleop 子栈内的重复 execution
+    owner，并统一透传 `/task/execute`、`/motion/execute`、task lease 话题与
+    motion-level 读取/停止服务。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
 - 当前主要输出
   - 面向整机运行场景的 launch 入口
-  - 面向硬件、遥控、仿真的分域 launch 组合
+  - 面向硬件、遥控、任务、仿真的分域 launch 组合
 - 当前非职责
   - 不承接 WebSocket 消息解析。
   - 不承接执行仲裁本体。
@@ -200,8 +204,15 @@
   - 提供 PCA 舵机驱动。
   - 提供协议路由、协议探测和协议注册能力。
   - 承接驱动级服务，例如总线指令和角度读取。
+  - router 与每个 port driver 均维护驱动安全 latch/fence：协议 stop 先建立
+    fence，再写出硬件命令；active 期间拒绝 topic/service move，release 后继
+    续拒绝时间戳早于 fence 的迟到命令。
+  - 订阅 transient-local `/servo/driver_safety` 权威状态，并通过
+    `/servo/set_driver_safety` 聚合所有有效 port driver 的应用确认；router 只
+    在全部端口 ACK 后解除自身 latch。
 - 当前主要输入
   - `/servo/command`
+  - `/servo/driver_safety`
   - 读写服务请求
 - 当前主要输出
   - `/servo/state`
@@ -209,10 +220,11 @@
 - 当前非职责
   - 不负责任务语义理解。
   - 不负责执行仲裁。
+  - 不判断 task/teleop 来源或默认优先级；这里只执行最终驱动安全门禁。
   - 不负责轨迹规划。
 - 当前问题
-  - 仍需等待上层控制和 teleop 链路继续收敛到 `execution_manager`，减少
-    对驱动级接口的直接假设。
+  - fake driver 与纯逻辑测试已覆盖多 ID best-effort stop、迟到 move fence 和
+    release ACK；真实 LX/ZL 硬件、多端口故障与恢复流程仍需目标环境验收。
 - 与长期规划的关系
   - 长期应只保留执行器和协议相关能力。
   - 传感器节点已迁出为独立 `sensor_hardware` 包。
@@ -240,7 +252,8 @@
   - 不负责执行器协议。
 - 当前问题
   - Phase 2 合同已固定独立 package、entry point、旧源码清理和 bringup 装
-    配事实；后续仍需在具备 ROS 环境时补充独立 build/install/start 验收。
+    配事实；12 包 ROS 闭包已覆盖 build/install，后续仍需补充独立节点启动与
+    目标硬件场景验收。
 - 与长期规划的关系
   - 已达到“独立 `sensor_hardware` ROS 包”的阶段目标。
 
@@ -254,6 +267,18 @@
 - 当前主要职责
   - 订阅脚踝 RPY 姿态命令。
   - 进行 3-DOF 并联机构运动学求解。
+  - 作为当前 `/motion/execute` 唯一 ActionServer，接收结构化
+    `ankle_pose` goal，并贯穿 task/trace/session 身份。
+  - 只有在收到 execution task state 且 task-control DDS 订阅已发现后才接受
+    正式 goal；multi-instance launch 会强制关闭其 ActionServer，避免同名
+    motion owner。
+  - 为正式 goal 申请、续租和释放 task lease，携带 task lease 向
+    `/execution/task/command` 发布三执行器目标。
+  - 通过 `/execution/read_actuator_position` 读取驱动实际位置，要求三执行
+    器连续三个新样本进入容差后才返回成功，不把 accepted 或目标回显当完成。
+  - cancel/timeout/driver error 会请求 `/execution/stop_actuators`；取消只有
+    在 stop 写出、连续稳定位置采样、task cancel 和终态 lease 清理后才返回，
+    `stop_command_sent` 与 `stop_confirmed` 独立报告。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
     `value_encoding` 作为主语义，不再镜像写入已弃用的 `speed` 字段。
@@ -263,19 +288,25 @@
   - 发布 theta 反馈用于调试。
 - 当前主要输入
   - `~/ankle_rpy`
+  - `/motion/execute`
+  - `/execution/task/state`
+  - `/execution/read_actuator_position`
+  - `/execution/stop_actuators`
 - 当前主要输出
   - 通过参数 `command_topic` 默认输出
     `motion_msgs/MotionCommand` 到
     `/execution/motion/command`
+  - `/execution/task/control`
+  - `/execution/task/command`
   - `~/ankle_theta`
 - 当前非职责
   - 不负责执行仲裁。
-  - 不负责任务级调度。
+  - 不负责外部任务协议适配。
   - 不负责驱动协议本身。
 - 当前问题
-  - 已不再直接依赖 `servo_msgs`。当前 `MotionCommand` 也已开始补充更明确的
-    时长与编码语义，controller 内部也已先按新语义表达；但外部接口仍保留驱动
-    风格字段作为过渡接口。
+  - 已不再直接依赖 `servo_msgs`，但当前正式 Action 只支持 `ankle_pose`，包
+    名和目录也还没有收口成长期蓝本中的 `motion_control`。普通 RPY topic 与
+    `MotionCommand` 仍保留驱动风格过渡字段。
 - 与长期规划的关系
   - 长期更接近 `motion_control` 的前身。
   - 当前已先输出到执行边界，后续还需继续把过渡消息演进为更稳定的控制语
@@ -326,7 +357,23 @@
     默认编码；`duration_ms` 是 `MotionCommand` 唯一执行时长输入，公共
     `speed` 字段已弃用且执行层禁止读取。
   - 将被接受的命令转换为 `servo_msgs/ServoCommand` 并转发到
-    `/servo/command`。
+    `/servo/command`；输出命令由 execution manager 以本地严格递增时间语义重
+    打 stamp，供驱动 fence 区分 stop 前旧命令。
+  - 提供受完整 task/trace/session/lease 保护的
+    `/execution/read_actuator_position` 与 `/execution/stop_actuators`，作为唯
+    一 motion-level 到 driver-level 服务适配 owner。位置读取来自驱动服务；
+    stop 会按实际协议映射 LX `move_stop` / ZL `stop_motion`，且服务本身不声
+    明物理停止确认。
+  - 为已接受的 stop 建立单调 operation token；driver 调用未完成时拒绝所有新
+    执行命令和 task start，防止迟到 stop 跨任务生效。单个执行器协议读取或
+    stop 写出超时后仍继续尝试其余 ID，最后聚合故障。
+  - 通过 `/servo/driver_safety` 发布 transient-local `DriverSafetyState`；正常
+    stop/estop release 会调用 `/servo/set_driver_safety`，只有 router 与全部有
+    效 port driver ACK 后才清除 operation token 和发布权威 false。release 失
+    败或超时会保持 token/estop 并锁存不可恢复故障。
+  - estop 会绕过已撤销 task lease，直接对已知 bus 执行器写协议 stop；driver
+    stop 失败或超时会锁存 `driver_stop_failed` / `driver_stop_timeout`、estop
+    与 token，只能通过节点重启恢复，不能由迟到响应或普通 release 自动解锁。
   - 订阅驱动级 `servo_msgs/ServoState` 的 `/servo/state`，先转换为内部
     `ActuatorFeedback`，再通过 `motion_msgs/ActuatorState` 发布到
     `/execution/actuator_state`；该消息使用 actuator 命名、显式
@@ -336,8 +383,9 @@
     数、当前 holder 标识与当前 lease 标识。
   - 发布 `motion_msgs/TaskExecutionState` 到 `/execution/task/state`，提供
     当前 task 身份、lease、剩余时间、`status` / `reason` / `recoverable`、
-    最近控制动作、最近一条 task 命令的 requester/接受结果/reason，以及控
-    制/命令接受拒绝计数。既有 `ExecutionState` 仅通过 `mode=task_active` /
+    最近控制请求的完整 task/trace/session 身份、最近一条 task 命令的
+    requester/接受结果/reason，以及控制/命令接受拒绝计数。既有
+    `ExecutionState` 仅通过 `mode=task_active` /
     `active_source=task` 表达总状态，未修改字段布局。
 - 当前主要输入
   - `/execution/task/control`
@@ -347,20 +395,27 @@
   - `/execution/motion/command`
   - `/execution/estop`
   - `/servo/state`
+  - `/servo/read_position`
+  - `/servo/execute_command`
+  - `/servo/set_driver_safety`
 - 当前主要输出
   - `/servo/command`
+  - `/servo/driver_safety`
   - `/execution/state`
   - `/execution/task/state`
   - `/execution/actuator_state`
+  - `/execution/read_actuator_position`
+  - `/execution/stop_actuators`
 - 当前非职责
   - 不做任务语义理解。
   - 不做轨迹生成。
   - 不做驱动协议实现。
 - 当前问题
-  - task / teleop / motion 已具备第一版统一准入与优先级合同，但
-    `TaskExecutionControl` 仍只是内部 execution lease，不是外部任务 Action。
-    `cancel` 只撤销后续命令准入，尚无 motion goal/result、驱动在途停止确认
-    或任务完成反馈；当前不能把它描述成正式任务链已跑通。
+  - task / teleop / motion 已具备第一版统一准入与优先级合同，正式 task
+    Action 也已通过当前 motion owner 接入；但 `TaskExecutionControl` 仍只表
+    达内部 lease，物理停止确认由 motion owner 的实际位置采样形成。fake
+    driver 多 ID best-effort、迟到 move fence 和 release ACK 已验收；物理多驱
+    动 stop、故障锁存后的运维恢复流程、目标硬件和 Jazzy 回归仍未完成。
   - `motion_msgs/TeleopControl` 目前仍只是最小 claim / keepalive /
     release 接口。虽然 `ExecutionState` 已补上 holder 与第一版 lease 标识，
     但高优先级人工 takeover 等更正式策略仍未定义；普通 teleop claim 在
@@ -379,8 +434,9 @@
   - 已补出控制层与驱动层之间的双向最小正式边界：下行命令和上行执行器反
     馈均由 `execution_manager` 负责 motion/driver 接口适配。
   - 当前执行层状态与执行器反馈均已由 `websocket_bridge` 通过
-    `motion_msgs` 消费；task-aware admission 已建立第一版跨入口规则，后续仍
-    需继续演进正式任务 goal/result/cancel 与最终中性命令 schema。
+    `motion_msgs` 消费；task-aware admission 已接入第一版正式任务
+    goal/result/cancel，后续仍需扩展任务类型、收口 `motion_control` 包边界
+    并完成最终中性命令 schema。
 
 ### 3.7 `simulation_bridge`
 
@@ -612,6 +668,8 @@
   - 以 `TaskExecutionControl` 承接正式 task 的内部执行租约，以
     `TaskExecutionState` 承接可关联终态的完整身份、状态、错误语义、最近命
     令准入结果和准入计数；这两个类型不代替外部 `task_api_msgs`。
+  - 以 `ExecuteMotion` 承接结构化 motion goal/feedback/result/cancel，并用
+    `ReadActuatorPosition` / `StopActuators` 隔离 motion owner 与驱动服务。
   - 以 `ExecutionState` 承接仲裁状态、holder、lease、急停与计数反馈。
   - 以 `ActuatorState` 承接执行层向上发布的执行器状态，使用
     `actuator_type` / `actuator_id` / `position_raw` / `value_encoding`，并
@@ -623,13 +681,52 @@
 - 当前问题
   - `MotionCommand` 仍保留 `servo_type`、`servo_id`、`position` 以及已弃用
     `speed` 等过渡字段；breaking 切换门禁未通过前不会直接删除公共字段。
-  - `task_api_msgs`、`speech_msgs`、`perception_msgs` 仍需随真实模块按后续阶
-    段落地，不以空接口包冒充完成度。
+  - `speech_msgs`、`perception_msgs` 仍需随真实模块按后续阶段落地，不以空
+    接口包冒充完成度。
 - 与长期规划的关系
   - 已成为当前上层模块与 `execution_manager` 之间的双向接口边界。
   - 最终仍需冻结驱动无关的正式运动请求 schema。
 
-### 3.11 `record_load_action`
+### 3.11 `task_api_msgs`
+
+- 状态
+  - 已落地第一版正式任务接口。
+- 当前承接位置
+  - 目录：`src/task_api_msgs`
+  - ROS 包名：`task_api_msgs`
+- 当前主要职责
+  - 定义 `ExecuteTask` Action，使用结构化 `ankle_pose` goal。
+  - 在 goal/feedback/result 中贯穿 task/trace/session 身份。
+  - 明确 success、target reached、admission released、stop requested、stop
+    command sent 与 stop confirmed 等可区分语义。
+- 当前非职责
+  - 不表达驱动命令、协议或 execution lease。
+  - 不实现任务执行与仲裁。
+- 当前问题
+  - 当前只冻结了 `ankle_pose`，尚未覆盖长期规划中的多任务、对话和感知上下
+    文。
+
+### 3.12 `task_service_bridge`
+
+- 状态
+  - 已落地第一版唯一正式任务 Action 入口。
+- 当前承接位置
+  - 目录：`src/task_service_bridge`
+  - ROS 包名：`task_service_bridge`
+- 当前主要职责
+  - 提供唯一 `/task/execute` ActionServer，并以唯一 `/motion/execute`
+    ActionClient 将 task goal 显式映射给当前 motion owner。
+  - 逐字段转发 feedback/result，传播 cancel，并始终等待 motion 最终结果；
+    goal accepted 不等于 task success。
+  - 以线程安全单目标槽位拒绝第二个并发正式任务。
+- 当前非职责
+  - 不发布 `MotionCommand`、`ServoCommand` 或 `TaskExecutionControl`。
+  - 不依赖 `servo_msgs`，不做运动学、执行仲裁或驱动协议适配。
+- 当前问题
+  - 当前只支持 `ankle_pose` 映射，单目标策略和幂等状态也仅覆盖当前进程；部
+    署级唯一入口、ROS ACL 和跨进程持久幂等仍未完成。
+
+### 3.13 `record_load_action`
 
 - 状态
   - 已实现，当前作为显式 opt-in 的工具/演示包。
@@ -703,7 +800,7 @@
 - 与长期规划的关系
   - 长期应保留为可选工具/演示资源，而不是正式主链路核心。
 
-### 3.12 `robot_description`
+### 3.14 `robot_description`
 
 - 状态
   - 已实现，职责边界相对清晰。
@@ -723,7 +820,7 @@
 - 与长期规划的关系
   - 长期继续作为描述资源域存在即可。
 
-### 3.13 `mjc_viewer`
+### 3.15 `mjc_viewer`
 
 - 状态
   - 已实现，属于展示与仿真辅助模块。
@@ -754,12 +851,6 @@
 - `teleoperation_bridge`
   - 当前只有混合职责的 `websocket_bridge`，还不能直接等同于正式
     `teleoperation_bridge`。
-- `task_service_bridge`
-  - 当前不存在独立实现；内部 `/execution/task/*` 准入话题不能替代外部任务
-    桥。
-- `task_api_msgs`
-  - 当前不存在独立消息包；`motion_msgs/TaskExecutionControl` 与
-    `TaskExecutionState` 只表达 execution admission，不是 `/task/execute`。
 - `speech_interface`
   - 当前不存在独立实现。
 - `vision_perception`
@@ -780,8 +871,16 @@
     默认不启用
   - 长期去向：继续作为可选工具/演示资源，不进入正式主链路
 - `parallel_3dof_controller`
-  - 当前事实：已经输出到执行边界的控制原型
+  - 当前事实：已经输出到执行边界，并作为 `/motion/execute` 当前唯一 owner
   - 长期去向：演进为 `motion_control`
+- `task_service_bridge`
+  - 当前事实：唯一 `/task/execute` owner，映射到 `/motion/execute` 并转发生
+    命周期结果
+  - 长期去向：扩展外部任务协议和 task context，但继续禁止绕过 motion /
+    execution 边界
+- `task_api_msgs`
+  - 当前事实：已定义第一版结构化 `ExecuteTask` Action
+  - 长期去向：在真实 owner 落地时增量扩展多任务、对话与感知语义
 - `execution_manager`
   - 当前事实：执行仲裁层已统一接 task、teleop 与普通 motion 三路命令；除
     teleop claim/keepalive/release 外，已增加正式 task 身份、lease、优先级、
@@ -810,9 +909,12 @@
 `execution_manager` 已补出最小执行边界，`simulation_bridge` 已承接 Isaac
 仿真桥且 sim 域 package-level 收口已基本完成，BVH 也已从默认
 `websocket_bridge` 核心抽离为 `record_load_action` 所有的显式可选扩展。
-task/teleop/motion 当前也已具备第一版执行准入、lease 与优先级合同，但这仍是
-内部 execution 边界，不代表 `task_service_bridge` 或 `/task/execute` 已经落地。
-但整体上仍需继续面对这些现实问题：`websocket_bridge` 仍混合
+task/teleop/motion 当前也已具备第一版执行准入、lease 与优先级合同；
+`task_api_msgs`、`task_service_bridge`、`/task/execute` 和当前
+`/motion/execute` owner 已形成一条经过 Action/DDS 验收的正式任务链。执行安
+全边界也已增加多 ID best-effort stop、驱动 latch/fence 和 release ACK，
+stop 前迟到命令不会在 stop 后重新驱动执行器，ACK 前也不会恢复新任务准入。
+仓库仍需继续面对这些现实问题：`websocket_bridge` 仍混合
 teleop/debug/status/IMU 上行职责，`parallel_3dof_controller` 虽已输出
 `MotionCommand`，但接口仍保留 servo 风格过渡字段；其中 `speed` 已进入弃
 用迁移窗口，尚待外部依赖和 breaking 切换门禁确认。C++ 仿真桥仍待最终包边

@@ -37,7 +37,27 @@ def generate_launch_description():
     enable_execution_manager_arg = DeclareLaunchArgument(
         'enable_execution_manager',
         default_value='true',
-        description='是否启动执行仲裁节点',
+        description='是否由 task 子栈启动共享执行仲裁节点',
+    )
+    task_action_name_arg = DeclareLaunchArgument(
+        'task_action_name',
+        default_value='/task/execute',
+        description='对外唯一正式任务 Action 名称',
+    )
+    motion_action_name_arg = DeclareLaunchArgument(
+        'motion_action_name',
+        default_value='/motion/execute',
+        description='内部唯一运动执行 Action 名称',
+    )
+    execution_read_actuator_position_service_arg = DeclareLaunchArgument(
+        'execution_read_actuator_position_service',
+        default_value='/execution/read_actuator_position',
+        description='受 task lease 保护的实际位置读取服务',
+    )
+    execution_stop_actuators_service_arg = DeclareLaunchArgument(
+        'execution_stop_actuators_service',
+        default_value='/execution/stop_actuators',
+        description='受 task lease 保护的执行器停止请求服务',
     )
     execution_teleop_command_topic_arg = DeclareLaunchArgument(
         'execution_teleop_command_topic',
@@ -84,6 +104,16 @@ def generate_launch_description():
         default_value='/execution/estop',
         description='执行层急停控制话题',
     )
+    driver_safety_topic_arg = DeclareLaunchArgument(
+        'driver_safety_topic',
+        default_value='/servo/driver_safety',
+        description='execution_manager 向驱动发布的权威安全锁存状态',
+    )
+    driver_safety_service_arg = DeclareLaunchArgument(
+        'driver_safety_service',
+        default_value='/servo/set_driver_safety',
+        description='execution_manager 等待全部驱动应用安全状态的确认服务',
+    )
     execution_teleop_timeout_sec_arg = DeclareLaunchArgument(
         'execution_teleop_timeout_sec',
         default_value='0.8',
@@ -98,6 +128,11 @@ def generate_launch_description():
         'execution_task_timeout_sec',
         default_value='5.0',
         description='正式任务执行租约超时(秒)',
+    )
+    execution_driver_service_timeout_sec_arg = DeclareLaunchArgument(
+        'execution_driver_service_timeout_sec',
+        default_value='2.0',
+        description='执行层等待驱动级服务响应的最长秒数',
     )
     execution_debug_arg = DeclareLaunchArgument(
         'execution_debug',
@@ -263,7 +298,7 @@ def generate_launch_description():
             'ws_host': LaunchConfiguration('ws_host'),
             'ws_port': LaunchConfiguration('ws_port'),
             'device_id': LaunchConfiguration('device_id'),
-            'enable_execution_manager': LaunchConfiguration('enable_execution_manager'),
+            'enable_execution_manager': 'false',
             'execution_teleop_command_topic': LaunchConfiguration('execution_teleop_command_topic'),
             'execution_teleop_control_topic': LaunchConfiguration('execution_teleop_control_topic'),
             'execution_task_command_topic': LaunchConfiguration('execution_task_command_topic'),
@@ -275,6 +310,8 @@ def generate_launch_description():
                 'execution_actuator_state_topic'
             ),
             'execution_estop_topic': LaunchConfiguration('execution_estop_topic'),
+            'driver_safety_topic': LaunchConfiguration('driver_safety_topic'),
+            'driver_safety_service': LaunchConfiguration('driver_safety_service'),
             'execution_teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec'),
             'execution_motion_timeout_sec': LaunchConfiguration('execution_motion_timeout_sec'),
             'execution_task_timeout_sec': LaunchConfiguration('execution_task_timeout_sec'),
@@ -289,6 +326,47 @@ def generate_launch_description():
         }.items(),
     )
 
+    task_stack = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('robot_bringup'),
+                'launch',
+                'task.launch.py',
+            ])
+        ),
+        launch_arguments={
+            'enable_execution_manager': LaunchConfiguration('enable_execution_manager'),
+            'debug': LaunchConfiguration('execution_debug'),
+            'task_action_name': LaunchConfiguration('task_action_name'),
+            'motion_action_name': LaunchConfiguration('motion_action_name'),
+            'teleop_command_topic': LaunchConfiguration('execution_teleop_command_topic'),
+            'teleop_control_topic': LaunchConfiguration('execution_teleop_control_topic'),
+            'task_command_topic': LaunchConfiguration('execution_task_command_topic'),
+            'task_control_topic': LaunchConfiguration('execution_task_control_topic'),
+            'task_state_topic': LaunchConfiguration('execution_task_state_topic'),
+            'motion_command_topic': LaunchConfiguration('execution_motion_command_topic'),
+            'state_topic': LaunchConfiguration('execution_state_topic'),
+            'actuator_state_topic': LaunchConfiguration(
+                'execution_actuator_state_topic'
+            ),
+            'read_actuator_position_service': LaunchConfiguration(
+                'execution_read_actuator_position_service'
+            ),
+            'stop_actuators_service': LaunchConfiguration(
+                'execution_stop_actuators_service'
+            ),
+            'estop_topic': LaunchConfiguration('execution_estop_topic'),
+            'driver_safety_topic': LaunchConfiguration('driver_safety_topic'),
+            'driver_safety_service': LaunchConfiguration('driver_safety_service'),
+            'teleop_timeout_sec': LaunchConfiguration('execution_teleop_timeout_sec'),
+            'motion_timeout_sec': LaunchConfiguration('execution_motion_timeout_sec'),
+            'task_timeout_sec': LaunchConfiguration('execution_task_timeout_sec'),
+            'driver_service_timeout_sec': LaunchConfiguration(
+                'execution_driver_service_timeout_sec'
+            ),
+        }.items(),
+    )
+
     hardware_stack = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -300,6 +378,8 @@ def generate_launch_description():
         launch_arguments={
             'debug': LaunchConfiguration('debug'),
             'bus_servo_debug': LaunchConfiguration('bus_servo_debug'),
+            'driver_safety_topic': LaunchConfiguration('driver_safety_topic'),
+            'driver_safety_service': LaunchConfiguration('driver_safety_service'),
             'protocol_cache_file': LaunchConfiguration('protocol_cache_file'),
             'manual_protocol_map_file': LaunchConfiguration('manual_protocol_map_file'),
             'lx_id_ranges': LaunchConfiguration('lx_id_ranges'),
@@ -344,6 +424,7 @@ def generate_launch_description():
             '========================================\n',
             '  子链路:\n',
             '    - teleop.launch.py\n',
+            '    - task.launch.py\n',
             '    - hardware.launch.py\n',
             '    - simulation.launch.py\n',
             '  WebSocket: ws://',
@@ -359,6 +440,12 @@ def generate_launch_description():
             '\n',
             '  Task命令入口: ',
             LaunchConfiguration('execution_task_command_topic'),
+            '\n',
+            '  Task Action: ',
+            LaunchConfiguration('task_action_name'),
+            '\n',
+            '  Motion Action: ',
+            LaunchConfiguration('motion_action_name'),
             '\n',
             '  Task租约控制: ',
             LaunchConfiguration('execution_task_control_topic'),
@@ -388,6 +475,10 @@ def generate_launch_description():
         device_id_arg,
         debug_arg,
         enable_execution_manager_arg,
+        task_action_name_arg,
+        motion_action_name_arg,
+        execution_read_actuator_position_service_arg,
+        execution_stop_actuators_service_arg,
         execution_teleop_command_topic_arg,
         execution_teleop_control_topic_arg,
         execution_task_command_topic_arg,
@@ -397,9 +488,12 @@ def generate_launch_description():
         execution_task_state_topic_arg,
         execution_actuator_state_topic_arg,
         execution_estop_topic_arg,
+        driver_safety_topic_arg,
+        driver_safety_service_arg,
         execution_teleop_timeout_sec_arg,
         execution_motion_timeout_sec_arg,
         execution_task_timeout_sec_arg,
+        execution_driver_service_timeout_sec_arg,
         execution_debug_arg,
         bridge_debug_arg,
         bus_servo_debug_arg,
@@ -432,6 +526,7 @@ def generate_launch_description():
         pca_debug_arg,
         log_info,
         teleop_stack,
+        task_stack,
         hardware_stack,
         simulation_stack,
     ])

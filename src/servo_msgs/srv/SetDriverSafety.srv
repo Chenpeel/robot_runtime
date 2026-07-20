@@ -1,0 +1,9 @@
+# execution_manager 下发的权威驱动安全状态。
+bool estop_active
+string reason
+builtin_interfaces/Time stamp
+---
+# router 仅在自身和全部 port driver 应用状态后返回成功。
+bool success
+string reason
+builtin_interfaces/Time stamp

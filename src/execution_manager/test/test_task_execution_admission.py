@@ -61,6 +61,66 @@ class TestTaskExecutionAdmission(unittest.TestCase):
         self.assertEqual('active', state['task_status'])
         self.assertFalse(state['task_recoverable'])
 
+    def test_external_task_rejection_preserves_full_request_identity(self):
+        arbitrator = self._arbitrator()
+
+        result = arbitrator.reject_task_control(
+            'start',
+            0.0,
+            'task-1',
+            'trace-1',
+            'session-1',
+            'task_stop_pending',
+        )
+        state = arbitrator.snapshot(0.0)
+
+        self.assertFalse(result.accepted)
+        self.assertEqual('task_stop_pending', result.reason)
+        self.assertEqual('task-1', state['last_task_control_task_id'])
+        self.assertEqual('trace-1', state['last_task_control_trace_id'])
+        self.assertEqual('session-1', state['last_task_control_session_id'])
+        self.assertTrue(state['task_recoverable'])
+
+    def test_new_start_identity_survives_expiring_old_lease_refresh(self):
+        lease_ids = iter(('old-lease', 'new-lease'))
+        arbitrator = CommandArbitrator(
+            task_timeout_sec=1.0,
+            task_lease_id_factory=lambda: next(lease_ids),
+        )
+        self._start(arbitrator)
+
+        result = self._start(
+            arbitrator,
+            now_sec=1.1,
+            task_id='task-2',
+            trace_id='trace-2',
+            session_id='session-2',
+        )
+        state = arbitrator.snapshot(1.1)
+
+        self.assertTrue(result.accepted)
+        self.assertEqual('task-2', state['task_id'])
+        self.assertEqual('trace-2', state['task_trace_id'])
+        self.assertEqual('session-2', state['task_session_id'])
+        self.assertEqual('task-2', state['last_task_control_task_id'])
+        self.assertEqual('trace-2', state['last_task_control_trace_id'])
+        self.assertEqual('session-2', state['last_task_control_session_id'])
+        self.assertEqual('new-lease', state['task_lease_id'])
+
+    def test_external_stop_gate_rejects_all_execution_sources(self):
+        arbitrator = self._arbitrator()
+
+        for source in ('task', 'teleop', 'motion'):
+            with self.subTest(source=source):
+                result = arbitrator.reject_command(
+                    source,
+                    0.0,
+                    'requester-1',
+                    'stop_operation_pending',
+                )
+                self.assertFalse(result.accepted)
+                self.assertEqual('stop_operation_pending', result.reason)
+
     def test_task_start_preempts_ordinary_teleop_lease(self):
         arbitrator = self._arbitrator(lease_id_factory=lambda: 'teleop-lease')
         arbitrator.receive_teleop_control(
@@ -269,6 +329,22 @@ class TestTaskExecutionAdmission(unittest.TestCase):
         self.assertEqual('estop', blocked.reason)
         self.assertEqual('task_control_not_granted', stale.reason)
 
+    def test_driver_stop_timeout_estop_is_nonrecoverable(self):
+        arbitrator = self._arbitrator()
+        self._start(arbitrator)
+
+        state = arbitrator.set_estop(
+            True,
+            0.1,
+            reason='driver_stop_timeout',
+        )
+
+        self.assertTrue(state['estop_active'])
+        self.assertEqual('driver_stop_timeout', state['estop_reason'])
+        self.assertEqual('driver_stop_timeout', state['task_state_reason'])
+        self.assertEqual('blocked', state['task_status'])
+        self.assertFalse(state['task_recoverable'])
+
     def test_terminal_task_identity_rejects_delayed_start_replay(self):
         arbitrator = self._arbitrator()
         self._start(arbitrator)
@@ -311,6 +387,34 @@ class TestTaskExecutionAdmission(unittest.TestCase):
         state = arbitrator.snapshot(0.2)
         self.assertEqual('idle', state['mode'])
         self.assertFalse(state['motion_active'])
+
+    def test_task_operation_requires_full_identity_and_lease(self):
+        arbitrator = self._arbitrator()
+        self._start(arbitrator)
+
+        cases = (
+            ({'task_id': ''}, 'task_id_required'),
+            ({'trace_id': ''}, 'task_trace_id_required'),
+            ({'session_id': ''}, 'task_session_id_required'),
+            ({'lease_id': ''}, 'task_lease_required'),
+            ({'lease_id': 'wrong'}, 'task_lease_mismatch'),
+        )
+        base = {
+            'task_id': 'task-1',
+            'trace_id': 'trace-1',
+            'session_id': 'session-1',
+            'lease_id': 'task-lease-1',
+        }
+        for overrides, reason in cases:
+            fields = dict(base)
+            fields.update(overrides)
+            result = arbitrator.validate_task_operation(0.1, **fields)
+            self.assertFalse(result.accepted)
+            self.assertEqual(reason, result.reason)
+
+        accepted = arbitrator.validate_task_operation(0.1, **base)
+        self.assertTrue(accepted.accepted)
+        self.assertEqual('accepted', accepted.reason)
 
 
 if __name__ == '__main__':

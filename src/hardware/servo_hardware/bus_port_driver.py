@@ -16,10 +16,17 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 import rclpy
 import serial
 from rclpy.node import Node
-from servo_msgs.msg import ServoCommand, ServoState
-from servo_msgs.srv import ExecuteBusCommand, ReadServoPosition
+from servo_msgs.msg import DriverSafetyState, ServoCommand, ServoState
+from servo_msgs.srv import ExecuteBusCommand, ReadServoPosition, SetDriverSafety
 
 from .protocols import BusServoProtocol, LXBusServoProtocol, ZLBusServoProtocol
+from .safety_latch import (
+    DriverSafetyLatch,
+    is_motion_command,
+    is_stop_command,
+    ros_time_to_ns,
+)
+from .safety_qos import driver_safety_qos_profile
 
 
 class BusPortDriver(Node):
@@ -37,6 +44,7 @@ class BusPortDriver(Node):
         self.declare_parameter("log_id", True)
         self.declare_parameter("zl_servo_ids", [0])
         self.declare_parameter("lx_servo_ids", [0])
+        self.declare_parameter("driver_safety_topic", "/servo/driver_safety")
 
         self.port = str(self.get_parameter("port").value)
         self.baudrate = int(self.get_parameter("baudrate").value)
@@ -45,6 +53,11 @@ class BusPortDriver(Node):
         self.default_speed = int(self.get_parameter("default_speed").value)
         self.debug = bool(self.get_parameter("debug").value)
         self.log_id = bool(self.get_parameter("log_id").value)
+        self.driver_safety_topic = str(
+            self.get_parameter("driver_safety_topic").value
+        ).strip()
+        self.safety_latch = DriverSafetyLatch()
+        self.safety_command_lock = threading.Lock()
 
         zl_ids = self.get_parameter("zl_servo_ids").value
         lx_ids = self.get_parameter("lx_servo_ids").value
@@ -75,6 +88,17 @@ class BusPortDriver(Node):
             "~/command_lx",
             self._on_lx_command,
             10,
+        )
+        self.driver_safety_sub = self.create_subscription(
+            DriverSafetyState,
+            self.driver_safety_topic,
+            self._on_driver_safety,
+            driver_safety_qos_profile(),
+        )
+        self.driver_safety_srv = self.create_service(
+            SetDriverSafety,
+            "~/set_driver_safety",
+            self._handle_driver_safety,
         )
         self.read_position_srv = self.create_service(
             ReadServoPosition,
@@ -266,6 +290,46 @@ class BusPortDriver(Node):
         servo_type = str(msg.servo_type or "").strip().lower()
         return servo_type in ("", "bus", "bus_servo", "bus_zl", "bus_lx", "zl", "lx")
 
+    def _now_ns(self) -> int:
+        return int(self.get_clock().now().nanoseconds)
+
+    def _on_driver_safety(self, msg: DriverSafetyState):
+        was_latched = self.safety_latch.latched
+        with self.safety_command_lock:
+            self.safety_latch.observe_authority(
+                active=bool(msg.estop_active),
+                stamp_ns=ros_time_to_ns(msg.stamp),
+                now_ns=self._now_ns(),
+            )
+        if self.safety_latch.latched and not was_latched:
+            self.get_logger().warn(
+                f"端口驱动安全锁存已启用: reason={str(msg.reason or 'estop')}"
+            )
+        elif was_latched and not self.safety_latch.latched:
+            self.get_logger().info("端口驱动安全锁存已由 execution_manager 解除")
+
+    def _handle_driver_safety(self, request, response):
+        with self.safety_command_lock:
+            self.safety_latch.observe_authority(
+                active=bool(request.estop_active),
+                stamp_ns=ros_time_to_ns(request.stamp),
+                now_ns=self._now_ns(),
+            )
+            response.success = (
+                self.safety_latch.latched == bool(request.estop_active)
+            )
+        response.reason = '' if response.success else 'stale_safety_state'
+        response.stamp = self.get_clock().now().to_msg()
+        return response
+
+    def _admit_move(self, msg: ServoCommand) -> bool:
+        accepted = self.safety_latch.admit(ros_time_to_ns(msg.stamp))
+        if not accepted:
+            self.get_logger().warn(
+                f"端口驱动安全 fence 拒绝命令: id={int(msg.servo_id)}"
+            )
+        return accepted
+
     def _is_allowed_id(self, protocol: str, servo_id: int) -> bool:
         if protocol == "zl":
             return (not self.zl_servo_ids) or (servo_id in self.zl_servo_ids)
@@ -406,13 +470,16 @@ class BusPortDriver(Node):
         try:
             if not self._is_bus_command(msg):
                 return
-            speed = msg.speed if msg.speed > 0 else self.default_speed
-            self._execute_move(
-                protocol="zl",
-                servo_id=int(msg.servo_id),
-                position=int(msg.position),
-                speed=int(speed),
-            )
+            with self.safety_command_lock:
+                if not self._admit_move(msg):
+                    return
+                speed = msg.speed if msg.speed > 0 else self.default_speed
+                self._execute_move(
+                    protocol="zl",
+                    servo_id=int(msg.servo_id),
+                    position=int(msg.position),
+                    speed=int(speed),
+                )
         except Exception as exc:
             self.get_logger().error(f"处理众灵命令失败: {exc}")
 
@@ -420,13 +487,16 @@ class BusPortDriver(Node):
         try:
             if not self._is_bus_command(msg):
                 return
-            speed = msg.speed if msg.speed > 0 else self.default_speed
-            self._execute_move(
-                protocol="lx",
-                servo_id=int(msg.servo_id),
-                position=int(msg.position),
-                speed=int(speed),
-            )
+            with self.safety_command_lock:
+                if not self._admit_move(msg):
+                    return
+                speed = msg.speed if msg.speed > 0 else self.default_speed
+                self._execute_move(
+                    protocol="lx",
+                    servo_id=int(msg.servo_id),
+                    position=int(msg.position),
+                    speed=int(speed),
+                )
         except Exception as exc:
             self.get_logger().error(f"处理幻尔命令失败: {exc}")
 
@@ -662,6 +732,30 @@ class BusPortDriver(Node):
         request: ExecuteBusCommand.Request,
         response: ExecuteBusCommand.Response,
     ):
+        if (
+            self._is_stop_command(request.command)
+            or self._is_motion_command(request.command)
+        ):
+            with self.safety_command_lock:
+                if not self.safety_latch.admit_protocol_command(
+                    request.command,
+                    now_ns=self._now_ns(),
+                    stamp_ns=ros_time_to_ns(request.stamp),
+                ):
+                    return self._set_execute_error(
+                        response,
+                        str(request.protocol or "").strip().lower(),
+                        11,
+                        "driver safety latched or stale command",
+                    )
+                return self._handle_execute_command_unlocked(request, response)
+        return self._handle_execute_command_unlocked(request, response)
+
+    def _handle_execute_command_unlocked(
+        self,
+        request: ExecuteBusCommand.Request,
+        response: ExecuteBusCommand.Response,
+    ):
         servo_id = int(request.servo_id)
         protocol = str(request.protocol or "").strip().lower()
         command = str(request.command or "").strip()
@@ -729,6 +823,14 @@ class BusPortDriver(Node):
                 f"[Exec/{protocol}] ID={servo_id} CMD={spec.get('name')} PARAMS={params}"
             )
         return response
+
+    @classmethod
+    def _is_stop_command(cls, command: str) -> bool:
+        return is_stop_command(command)
+
+    @classmethod
+    def _is_motion_command(cls, command: str) -> bool:
+        return is_motion_command(command)
 
     def destroy_node(self):
         if self.ser and self.ser.is_open:

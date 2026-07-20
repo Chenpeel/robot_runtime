@@ -2,6 +2,7 @@ uint16 servo_id
 string protocol
 string command
 int32[] params
+builtin_interfaces/Time stamp
 ---
 bool success
 string protocol

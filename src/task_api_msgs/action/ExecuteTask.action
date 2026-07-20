@@ -1,0 +1,43 @@
+# task_type 当前仅支持 ankle_pose。
+# target_group 当前仅支持 right_ankle 或 left_ankle。
+string task_id
+string trace_id
+string session_id
+string task_type
+string target_group
+float64 roll_deg
+float64 pitch_deg
+float64 yaw_deg
+uint16 duration_ms
+uint16 position_tolerance
+float32 execution_timeout_sec
+---
+# status 稳定取值：succeeded / cancelled / timed_out / failed / rejected。
+# 完成必须来自 execution_manager 实际位置读取的新采样，不能把请求已接收视为完成。
+# stop_requested 与 stop_confirmed 必须分离；当前没有驱动 stop ack 时，
+# stop_confirmed 不得置为 true。
+bool success
+string task_id
+string trace_id
+string session_id
+string status
+string reason
+bool recoverable
+bool target_reached
+bool admission_released
+bool stop_requested
+bool stop_command_sent
+bool stop_confirmed
+---
+# status 使用与 Result 相同的稳定取值。
+string task_id
+string trace_id
+string session_id
+string status
+string reason
+float32 progress
+uint32 reached_actuator_count
+uint32 target_actuator_count
+bool cancel_requested
+bool stop_command_sent
+bool stop_confirmed

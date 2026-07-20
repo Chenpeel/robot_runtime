@@ -43,6 +43,7 @@ class CommandArbitrator:
         self.mode = 'idle'
         self.active_source: Optional[str] = None
         self.estop_active = False
+        self.estop_reason = ''
 
         self.teleop_holder_id = ''
         self.teleop_lease_id = ''
@@ -66,6 +67,8 @@ class CommandArbitrator:
 
         self.last_task_control_action = ''
         self.last_task_control_task_id = ''
+        self.last_task_control_trace_id = ''
+        self.last_task_control_session_id = ''
         self.last_task_control_accepted = False
         self.last_task_control_reason = ''
         self.task_control_accepted_count = 0
@@ -168,9 +171,11 @@ class CommandArbitrator:
         normalized_trace_id = str(trace_id).strip()
         normalized_session_id = str(session_id).strip()
         normalized_lease_id = str(lease_id).strip()
+        self._refresh_mode(now_sec)
         self.last_task_control_action = normalized_action
         self.last_task_control_task_id = normalized_task_id
-        self._refresh_mode(now_sec)
+        self.last_task_control_trace_id = normalized_trace_id
+        self.last_task_control_session_id = normalized_session_id
 
         if normalized_action not in self.TASK_CONTROL_ACTIONS:
             return self._reject_task_control(
@@ -301,6 +306,89 @@ class CommandArbitrator:
             now_sec,
         )
 
+    def reject_command(
+        self,
+        source: str,
+        now_sec: float,
+        requester_id: str,
+        reason: str,
+    ) -> ArbitrationResult:
+        """记录 execution_manager 外层安全门禁拒绝的执行命令。"""
+        self._validate_source(source)
+        self._refresh_mode(now_sec)
+        return self._reject(
+            source,
+            str(reason).strip(),
+            requester_id=str(requester_id).strip(),
+        )
+
+    def reject_task_control(
+        self,
+        action: str,
+        now_sec: float,
+        task_id: str,
+        trace_id: str,
+        session_id: str,
+        reason: str,
+    ) -> ArbitrationResult:
+        """记录 execution_manager 外层安全门禁拒绝的 task 控制请求。"""
+        self._refresh_mode(now_sec)
+        self.last_task_control_action = str(action).strip().lower()
+        self.last_task_control_task_id = str(task_id).strip()
+        self.last_task_control_trace_id = str(trace_id).strip()
+        self.last_task_control_session_id = str(session_id).strip()
+        return self._reject_task_control(
+            self.last_task_control_action,
+            self.last_task_control_task_id,
+            str(reason).strip(),
+        )
+
+    def validate_task_operation(
+        self,
+        now_sec: float,
+        task_id: str,
+        trace_id: str,
+        session_id: str,
+        lease_id: str,
+    ) -> ArbitrationResult:
+        """只校验 task 身份与租约，不改变命令或控制事件计数。"""
+        self._refresh_mode(now_sec)
+        normalized_task_id = str(task_id).strip()
+        normalized_trace_id = str(trace_id).strip()
+        normalized_session_id = str(session_id).strip()
+        normalized_lease_id = str(lease_id).strip()
+
+        if self.estop_active:
+            reason = 'estop'
+        elif not self._is_task_control_active(now_sec):
+            reason = 'task_control_not_granted'
+        elif not normalized_task_id:
+            reason = 'task_id_required'
+        elif not normalized_trace_id:
+            reason = 'task_trace_id_required'
+        elif not normalized_session_id:
+            reason = 'task_session_id_required'
+        else:
+            reason = self._task_identity_mismatch_reason(
+                normalized_task_id,
+                normalized_trace_id,
+                normalized_session_id,
+            )
+            if not reason and not normalized_lease_id:
+                reason = 'task_lease_required'
+            if (
+                not reason
+                and not self._is_task_lease_holder(normalized_lease_id)
+            ):
+                reason = 'task_lease_mismatch'
+
+        return ArbitrationResult(
+            accepted=not bool(reason),
+            mode=self.mode,
+            reason=reason or 'accepted',
+            active_source=self.active_source,
+        )
+
     def receive_teleop_control(
         self,
         action: str,
@@ -399,16 +487,25 @@ class CommandArbitrator:
             lease_id='',
         )
 
-    def set_estop(self, active: bool, now_sec: float) -> dict:
+    def set_estop(
+        self,
+        active: bool,
+        now_sec: float,
+        reason: str = 'estop',
+    ) -> dict:
         """设置急停状态。"""
         self._clear_expired_task_control(now_sec)
         task_was_active = self._is_task_control_active(now_sec)
         self.estop_active = bool(active)
         if self.estop_active:
+            self.estop_reason = str(reason).strip() or 'estop'
+        if self.estop_active:
             if task_was_active:
                 self._remember_task_identity()
                 self.last_task_control_action = 'estop'
                 self.last_task_control_task_id = self.task_id
+                self.last_task_control_trace_id = self.task_trace_id
+                self.last_task_control_session_id = self.task_session_id
                 self.last_task_control_accepted = False
                 self.last_task_control_reason = 'estop'
             self._clear_task_control()
@@ -435,6 +532,7 @@ class CommandArbitrator:
             'task_session_id': self.task_session_id,
             'task_lease_id': self.task_lease_id,
             'estop_active': self.estop_active,
+            'estop_reason': self.estop_reason,
             'teleop_active': self._is_source_active('teleop', now_sec),
             'motion_active': self._is_source_active('motion', now_sec),
             'task_active': self._is_task_control_active(now_sec),
@@ -454,11 +552,15 @@ class CommandArbitrator:
             'teleop_control_rejected_count': self.teleop_control_rejected_count,
             'last_task_control_action': self.last_task_control_action,
             'last_task_control_task_id': self.last_task_control_task_id,
+            'last_task_control_trace_id': self.last_task_control_trace_id,
+            'last_task_control_session_id': self.last_task_control_session_id,
             'last_task_control_accepted': self.last_task_control_accepted,
             'last_task_control_reason': self.last_task_control_reason,
             'task_status': self._task_status(now_sec),
             'task_state_reason': (
-                'estop' if self.estop_active else self.last_task_control_reason
+                self.estop_reason
+                if self.estop_active
+                else self.last_task_control_reason
             ),
             'task_recoverable': self._task_recoverable(),
             'task_control_accepted_count': self.task_control_accepted_count,
@@ -656,10 +758,14 @@ class CommandArbitrator:
         if (now_sec - self.last_task_control_time) <= self.task_timeout_sec:
             return
         expired_task_id = self.task_id
+        expired_trace_id = self.task_trace_id
+        expired_session_id = self.task_session_id
         self._remember_task_identity()
         self._clear_task_control()
         self.last_task_control_action = 'timeout'
         self.last_task_control_task_id = expired_task_id
+        self.last_task_control_trace_id = expired_trace_id
+        self.last_task_control_session_id = expired_session_id
         self.last_task_control_accepted = False
         self.last_task_control_reason = 'task_lease_expired'
 
@@ -737,7 +843,7 @@ class CommandArbitrator:
 
     def _task_recoverable(self) -> bool:
         if self.estop_active:
-            return True
+            return self.estop_reason == 'estop'
         if self.last_task_control_accepted:
             return False
         return self.last_task_control_reason in {
@@ -754,6 +860,7 @@ class CommandArbitrator:
             'task_lease_mismatch',
             'task_lease_expired',
             'task_control_replay',
+            'task_stop_pending',
         }
 
     @staticmethod

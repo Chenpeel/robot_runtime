@@ -20,13 +20,20 @@ import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from servo_msgs.msg import ServoCommand, ServoState
-from servo_msgs.srv import ExecuteBusCommand, ReadServoPosition
+from servo_msgs.msg import DriverSafetyState, ServoCommand, ServoState
+from servo_msgs.srv import ExecuteBusCommand, ReadServoPosition, SetDriverSafety
 
 from .bus_protocol_registry import (
     ProtocolRegistry,
     load_manual_protocol_map,
 )
+from .safety_latch import (
+    DriverSafetyLatch,
+    is_motion_command,
+    is_stop_command,
+    ros_time_to_ns,
+)
+from .safety_qos import driver_safety_qos_profile
 
 
 def _to_bool(value) -> bool:
@@ -56,6 +63,12 @@ class BusProtocolRouter(Node):
         self.declare_parameter("read_service_timeout_sec", 0.35)
         self.declare_parameter("probe_wait_service_sec", 6.0)
         self.declare_parameter("runtime_probe_interval_sec", 0.05)
+        self.declare_parameter("driver_safety_topic", "/servo/driver_safety")
+        self.declare_parameter(
+            "driver_safety_service",
+            "/servo/set_driver_safety",
+        )
+        self.declare_parameter("driver_safety_timeout_sec", 1.0)
         self.declare_parameter("debug", False)
 
         self.bus_map_file = str(self.get_parameter("bus_map_file").value).strip()
@@ -81,6 +94,18 @@ class BusProtocolRouter(Node):
             self.get_parameter("runtime_probe_interval_sec").value
         )
         self.debug = _to_bool(self.get_parameter("debug").value)
+        self.driver_safety_topic = str(
+            self.get_parameter("driver_safety_topic").value
+        ).strip()
+        self.driver_safety_service = str(
+            self.get_parameter("driver_safety_service").value
+        ).strip()
+        self.driver_safety_timeout_sec = max(
+            0.1,
+            float(self.get_parameter("driver_safety_timeout_sec").value),
+        )
+        self.safety_latch = DriverSafetyLatch()
+        self.safety_command_lock = threading.Lock()
         self.last_probe_attempt: Dict[int, float] = {}
         self.registry_lock = threading.Lock()
         self.probe_lock = threading.Lock()
@@ -116,6 +141,13 @@ class BusProtocolRouter(Node):
             10,
             callback_group=self.inbound_cb_group,
         )
+        self.driver_safety_sub = self.create_subscription(
+            DriverSafetyState,
+            self.driver_safety_topic,
+            self._on_driver_safety,
+            driver_safety_qos_profile(),
+            callback_group=self.inbound_cb_group,
+        )
         self.read_position_srv = self.create_service(
             ReadServoPosition,
             "/servo/read_position",
@@ -128,6 +160,12 @@ class BusProtocolRouter(Node):
             self._handle_execute_command,
             callback_group=self.inbound_cb_group,
         )
+        self.driver_safety_srv = self.create_service(
+            SetDriverSafety,
+            self.driver_safety_service,
+            self._handle_driver_safety,
+            callback_group=self.inbound_cb_group,
+        )
         self.state_pub = self.create_publisher(
             ServoState,
             "/servo/state",
@@ -138,6 +176,7 @@ class BusProtocolRouter(Node):
         self.route_publishers: Dict[Tuple[str, str], object] = {}
         self.read_clients: Dict[str, object] = {}
         self.execute_clients: Dict[str, object] = {}
+        self.safety_clients: Dict[str, object] = {}
 
         for port, _ in self.port_items:
             node_name = self.port_to_node_name[port]
@@ -146,6 +185,7 @@ class BusProtocolRouter(Node):
             state_topic = f"/{node_name}/state"
             read_service_name = f"/{node_name}/read_position"
             execute_service_name = f"/{node_name}/execute_command"
+            safety_service_name = f"/{node_name}/set_driver_safety"
 
             self.route_publishers[(port, "zl")] = self.create_publisher(
                 ServoCommand,
@@ -172,6 +212,11 @@ class BusProtocolRouter(Node):
             self.execute_clients[port] = self.create_client(
                 ExecuteBusCommand,
                 execute_service_name,
+                callback_group=self.client_cb_group,
+            )
+            self.safety_clients[port] = self.create_client(
+                SetDriverSafety,
+                safety_service_name,
                 callback_group=self.client_cb_group,
             )
 
@@ -216,6 +261,24 @@ class BusProtocolRouter(Node):
         # 驱动层状态统一汇聚到全局话题
         self.state_pub.publish(msg)
 
+    def _now_ns(self) -> int:
+        return int(self.get_clock().now().nanoseconds)
+
+    def _on_driver_safety(self, msg: DriverSafetyState):
+        was_latched = self.safety_latch.latched
+        with self.safety_command_lock:
+            self.safety_latch.observe_authority(
+                active=bool(msg.estop_active),
+                stamp_ns=ros_time_to_ns(msg.stamp),
+                now_ns=self._now_ns(),
+            )
+        if self.safety_latch.latched and not was_latched:
+            self.get_logger().warn(
+                f"驱动安全锁存已启用: reason={str(msg.reason or 'estop')}"
+            )
+        elif was_latched and not self.safety_latch.latched:
+            self.get_logger().info("驱动安全锁存已由 execution_manager 解除")
+
     @staticmethod
     def _is_bus_command(msg: ServoCommand) -> bool:
         servo_type = str(msg.servo_type or "").strip().lower()
@@ -238,8 +301,14 @@ class BusProtocolRouter(Node):
             self.get_logger().warn(f"ID={servo_id}协议未知，命令未转发")
             return
 
-        if not self._publish_to_route(port=port, protocol=protocol, msg=msg):
-            return
+        with self.safety_command_lock:
+            if not self.safety_latch.admit(ros_time_to_ns(msg.stamp)):
+                self.get_logger().warn(
+                    f"驱动安全 fence 拒绝命令: id={int(msg.servo_id)}"
+                )
+                return
+            if not self._publish_to_route(port=port, protocol=protocol, msg=msg):
+                return
         if self.debug:
             self.get_logger().info(
                 f"[route] id={servo_id} -> port={port} protocol={protocol} source={source}"
@@ -419,6 +488,7 @@ class BusProtocolRouter(Node):
         command: str,
         params: List[int],
         timeout_sec: float,
+        stamp=None,
         use_spin: bool = False,
     ) -> Optional[ExecuteBusCommand.Response]:
         client = self.execute_clients.get(port)
@@ -433,6 +503,8 @@ class BusProtocolRouter(Node):
         req.protocol = str(protocol)
         req.command = str(command)
         req.params = [int(x) for x in list(params or [])]
+        if stamp is not None:
+            req.stamp = stamp
         future = client.call_async(req)
         wait_timeout = max(0.05, float(timeout_sec))
 
@@ -460,6 +532,35 @@ class BusProtocolRouter(Node):
                 f"端口{port}执行失败(id={servo_id}, protocol={protocol}, command={command}): {exc}"
             )
             return None
+
+    def _call_driver_safety(
+        self,
+        port: str,
+        active: bool,
+        reason: str,
+        stamp,
+    ) -> bool:
+        client = self.safety_clients.get(port)
+        if client is None or not client.wait_for_service(
+            timeout_sec=self.driver_safety_timeout_sec
+        ):
+            return False
+
+        request = SetDriverSafety.Request()
+        request.estop_active = bool(active)
+        request.reason = str(reason or '')
+        request.stamp = stamp
+        future = client.call_async(request)
+        done_event = threading.Event()
+        future.add_done_callback(lambda unused_future: done_event.set())
+        done_event.wait(timeout=self.driver_safety_timeout_sec)
+        if not future.done():
+            return False
+        try:
+            response = future.result()
+        except Exception:
+            return False
+        return response is not None and bool(response.success)
 
     def _resolve_protocol_order(self, requested: str, servo_id: int) -> List[str]:
         requested = str(requested or "").strip().lower()
@@ -542,7 +643,73 @@ class BusProtocolRouter(Node):
         response.stamp = self.get_clock().now().to_msg()
         return response
 
+    def _handle_driver_safety(
+        self,
+        request: SetDriverSafety.Request,
+        response: SetDriverSafety.Response,
+    ):
+        requested_active = bool(request.estop_active)
+        stamp_ns = ros_time_to_ns(request.stamp)
+        with self.safety_command_lock:
+            if requested_active:
+                self.safety_latch.observe_authority(
+                    active=True,
+                    stamp_ns=stamp_ns,
+                    now_ns=self._now_ns(),
+                )
+
+            applied_results = [
+                self._call_driver_safety(
+                    port,
+                    requested_active,
+                    request.reason,
+                    request.stamp,
+                )
+                for port, unused_ids in self.port_items
+                if unused_ids
+            ]
+            all_applied = all(applied_results)
+            if all_applied and not requested_active:
+                self.safety_latch.observe_authority(
+                    active=False,
+                    stamp_ns=stamp_ns,
+                    now_ns=self._now_ns(),
+                )
+            response.success = (
+                all_applied
+                and self.safety_latch.latched == requested_active
+            )
+
+        response.reason = '' if response.success else 'driver_safety_not_applied'
+        response.stamp = self.get_clock().now().to_msg()
+        return response
+
     def _handle_execute_command(
+        self,
+        request: ExecuteBusCommand.Request,
+        response: ExecuteBusCommand.Response,
+    ):
+        if (
+            self._is_stop_command(request.command)
+            or self._is_motion_command(request.command)
+        ):
+            with self.safety_command_lock:
+                if not self.safety_latch.admit_protocol_command(
+                    request.command,
+                    now_ns=self._now_ns(),
+                    stamp_ns=ros_time_to_ns(request.stamp),
+                ):
+                    return self._build_execute_error(
+                        response=response,
+                        protocol=str(request.protocol or "").strip().lower(),
+                        code=11,
+                        message="driver safety latched or stale command",
+                        stamp_msg=self.get_clock().now().to_msg(),
+                    )
+                return self._handle_execute_command_unlocked(request, response)
+        return self._handle_execute_command_unlocked(request, response)
+
+    def _handle_execute_command_unlocked(
         self,
         request: ExecuteBusCommand.Request,
         response: ExecuteBusCommand.Response,
@@ -583,6 +750,7 @@ class BusProtocolRouter(Node):
                 command=command,
                 params=params,
                 timeout_sec=self.read_service_timeout_sec,
+                stamp=request.stamp,
                 use_spin=False,
             )
             if resp is None:
@@ -611,6 +779,14 @@ class BusProtocolRouter(Node):
             message=last_message or "execute failed",
             stamp_msg=self.get_clock().now().to_msg(),
         )
+
+    @staticmethod
+    def _is_stop_command(command: str) -> bool:
+        return is_stop_command(command)
+
+    @staticmethod
+    def _is_motion_command(command: str) -> bool:
+        return is_motion_command(command)
 
 
 def main(args=None):

@@ -13,6 +13,7 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from servo_msgs.msg import ServoCommand
+from servo_msgs.srv import ExecuteBusCommand, ReadServoPosition, SetDriverSafety
 from std_msgs.msg import Bool
 
 from execution_manager.execution_manager_node import ExecutionManagerNode
@@ -68,6 +69,48 @@ class _Probe(Node):
             self.servo_commands.append,
             10,
         )
+        self.create_service(
+            ReadServoPosition,
+            '/servo/read_position',
+            self._read_servo_position,
+        )
+        self.create_service(
+            ExecuteBusCommand,
+            '/servo/execute_command',
+            self._execute_bus_command,
+        )
+        self.create_service(
+            SetDriverSafety,
+            '/servo/set_driver_safety',
+            self._set_driver_safety,
+        )
+
+    def _read_servo_position(self, request, response):
+        response.success = True
+        response.position = 1600
+        response.protocol = 'lx' if int(request.servo_id) % 2 else 'zl'
+        response.error_code = 0
+        response.message = ''
+        response.stamp = self.get_clock().now().to_msg()
+        return response
+
+    def _execute_bus_command(self, request, response):
+        response.success = True
+        response.protocol = str(request.protocol)
+        response.error_code = 0
+        response.message = ''
+        response.value = 0
+        response.values = []
+        response.raw_hex = ''
+        response.result_json = ''
+        response.stamp = self.get_clock().now().to_msg()
+        return response
+
+    def _set_driver_safety(self, request, response):
+        response.success = True
+        response.reason = ''
+        response.stamp = self.get_clock().now().to_msg()
+        return response
 
 
 def _wait_for(predicate, timeout_sec: float, description: str):
@@ -111,7 +154,7 @@ def run_scenario() -> dict:
     rclpy.init()
     manager = ExecutionManagerNode()
     probe = _Probe()
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(manager)
     executor.add_node(probe)
     spin_thread = threading.Thread(target=executor.spin, daemon=True)

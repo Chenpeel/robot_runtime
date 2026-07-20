@@ -10,6 +10,8 @@
 - ✅ **协议自动识别**: 支持众灵/幻尔总线舵机，未知ID按需探测并缓存
 - ✅ **双舵机类型**: 支持总线舵机和PCA9685 PWM舵机
 - ✅ **执行边界**: 通过 `execution_manager` 将 teleop/motion 请求收敛到 `/servo/command`
+- ✅ **正式任务链**: `/task/execute` 经 motion Action、执行仲裁和实际位置反馈完成闭环
+- ✅ **驱动安全门**: 多 ID best-effort stop、迟到命令 fence 与 release ACK 阻止急停后复动
 - ✅ **话题统一**: 驱动层统一入口 `/servo/command` 与出口 `/servo/state`
 - ✅ **仿真集成桥接**: 支持 `/sim/servo_command` 与 `/sim/servo_state` 双向转发
 - ✅ **Docker部署**: 支持开发/生产/手动调试三种模式
@@ -24,7 +26,8 @@ Web客户端 → WebSocket(9105) → bridge_node
                 ↓
         execution_manager
                 ↓
-           /servo/command
+    ├────── /servo/command
+    └────── /servo/driver_safety
                 ↓
 bus_protocol_router（协议识别 + ID路由）
     ├─ bus_port_driver_0 → ttyAMA0
@@ -33,6 +36,14 @@ bus_protocol_router（协议识别 + ID路由）
     └─ bus_port_driver_3 → ttyAMA3
                 ↓
          多个总线舵机硬件
+```
+
+正式任务链路：
+
+```text
+/task/execute → task_service_bridge → /motion/execute
+              → parallel_3dof_controller → execution_manager
+              → servo_hardware
 ```
 
 **性能指标**:
@@ -248,14 +259,22 @@ ros2 run simulation_bridge sim_servo_bridge_node
 | `/execution/state` | `ExecutionState` | 执行层状态反馈 |
 | `/execution/actuator_state` | `ActuatorState` | 执行层适配后的执行器反馈 |
 | `/servo/command` | `ServoCommand` | 舵机控制命令 |
+| `/servo/driver_safety` | `DriverSafetyState` | 驱动级权威 latch/release 状态 |
 | `/sim/servo_state` | `ServoState` | 仿真侧状态反馈 |
 
-`/execution/task/*` 当前是 `execution_manager` 的内部 task admission 合同，不
-是外部任务 API。仓库目前仍没有 `task_api_msgs`、`task_service_bridge` 或
-`/task/execute`；`TaskExecutionControl.cancel` 只撤销后续命令准入，不表示
-已经下发到驱动的在途动作完成停止。`TaskExecutionState` 会在终态撤销 lease
-但保留最近准入的 task/trace/session 身份，并单独报告最近 task 命令的准入
-结果；当前 start 重放保护是 execution_manager 进程内的有界记录。
+正式任务 API 是 `task_api_msgs/ExecuteTask` 的 `/task/execute`，当前只支持
+结构化 `ankle_pose`。`task_service_bridge` 将其映射到
+`motion_msgs/ExecuteMotion` 的 `/motion/execute`；当前 motion owner 会申请
+task lease、读取驱动实际位置，并在连续稳定样本后返回完成。取消结果会区分
+stop 请求、stop 命令写出和后续位置稳定确认。`/execution/task/*` 仍是
+`execution_manager` 的内部 admission 合同，不应由外部客户端直接替代正式
+Action。当前进程内重放保护、fake driver 验收和 Humble 回归不等同于部署级
+持久幂等、物理硬件或目标 Jazzy 发布验收。执行层会在 stop 未完成时阻断新
+命令，并在单个 ID 超时后继续 best-effort stop 其余执行器；estop 直接停止已
+知 bus 执行器。router 与 port driver 会建立本地 latch/fence，拒绝 active 期
+间新 move 和 stop 前迟到 move。正常恢复必须经 `/servo/set_driver_safety`
+获得全部有效 port driver ACK 后才清除 stop token/estop 并发布权威 false；
+driver stop 或 release 失败/超时会保持二者、锁存故障且不会自动恢复准入。
 
 ### 订阅话题
 
@@ -281,6 +300,12 @@ ros2 topic echo /execution/task/state
 
 # 查看执行层适配后的执行器反馈（上层推荐入口）
 ros2 topic echo /execution/actuator_state
+
+# 查看正式任务 Action 合同
+ros2 interface show task_api_msgs/action/ExecuteTask
+
+# 查看内部 motion Action 合同
+ros2 interface show motion_msgs/action/ExecuteMotion
 
 # 查看舵机状态
 ros2 topic echo /servo/state
@@ -515,9 +540,12 @@ ros/
 │   │   │   ├── parallel_3dof_multi_system.launch.py
 │   │   │   ├── full_system.launch.py
 │   │   │   ├── hardware.launch.py
+│   │   │   ├── task.launch.py
 │   │   │   ├── teleop.launch.py
 │   │   │   └── simulation.launch.py
 │   │   └── package.xml
+│   ├── task_api_msgs/           # 正式任务 Action 接口
+│   ├── task_service_bridge/     # /task/execute 唯一任务桥
 │   └── websocket_bridge/        # WebSocket桥接
 │       ├── bridge_node.py       # ROS2桥接节点
 │       ├── ws_server.py         # WebSocket服务器

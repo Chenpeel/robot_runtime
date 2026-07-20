@@ -20,6 +20,16 @@ def generate_launch_description():
         default_value='false',
         description='是否启用调试模式',
     )
+    driver_safety_topic_arg = DeclareLaunchArgument(
+        'driver_safety_topic',
+        default_value='/servo/driver_safety',
+        description='execution_manager 向驱动发布的权威安全锁存状态',
+    )
+    driver_safety_service_arg = DeclareLaunchArgument(
+        'driver_safety_service',
+        default_value='/servo/set_driver_safety',
+        description='router 聚合全部端口驱动安全状态确认的服务',
+    )
     bus_servo_debug_arg = DeclareLaunchArgument(
         'bus_servo_debug',
         default_value='true',
@@ -151,6 +161,7 @@ def generate_launch_description():
                     {'default_speed': 100},
                     {'zl_servo_ids': servo_ids},
                     {'lx_servo_ids': servo_ids},
+                    {'driver_safety_topic': LaunchConfiguration('driver_safety_topic')},
                     {'debug': LaunchConfiguration('bus_servo_debug')},
                     {'log_id': True},
                 ],
@@ -177,6 +188,8 @@ def generate_launch_description():
             {'runtime_probe_interval_sec': LaunchConfiguration('runtime_probe_interval_sec')},
             {'read_service_timeout_sec': LaunchConfiguration('read_service_timeout_sec')},
             {'probe_wait_service_sec': 6.0},
+            {'driver_safety_topic': LaunchConfiguration('driver_safety_topic')},
+            {'driver_safety_service': LaunchConfiguration('driver_safety_service')},
             {'debug': LaunchConfiguration('bus_servo_debug')},
         ],
     )
@@ -226,6 +239,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         debug_arg,
+        driver_safety_topic_arg,
+        driver_safety_service_arg,
         bus_servo_debug_arg,
         protocol_cache_file_arg,
         manual_protocol_map_file_arg,

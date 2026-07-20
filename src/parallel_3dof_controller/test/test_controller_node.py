@@ -83,8 +83,9 @@ class TestNodeInitialization(unittest.TestCase):
             )
         ).read_text(encoding='utf-8')
 
-        self.assertIn("motion_msg.requester_id = ''", source)
-        self.assertIn("motion_msg.lease_id = ''", source)
+        self.assertIn("return self._build_execution_command(cmd, '', '')", source)
+        self.assertIn('motion_msg.requester_id = str(requester_id)', source)
+        self.assertIn('motion_msg.lease_id = str(lease_id)', source)
 
     def test_motion_command_uses_explicit_duration_without_speed_fallback(self):
         """motion 控制输出只读取显式 duration_ms，不再依赖旧 speed 字段"""

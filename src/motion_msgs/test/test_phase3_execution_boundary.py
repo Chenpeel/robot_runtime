@@ -195,7 +195,10 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
             {'ActuatorState', 'ExecutionState', 'MotionCommand'}
             .issubset(motion_imports)
         )
-        self.assertEqual({'ServoCommand', 'ServoState'}, servo_imports)
+        self.assertEqual(
+            {'DriverSafetyState', 'ServoCommand', 'ServoState'},
+            servo_imports,
+        )
         self.assertTrue(
             {'ActuatorState', 'ExecutionState', 'ServoCommand'}
             .issubset(publishers)

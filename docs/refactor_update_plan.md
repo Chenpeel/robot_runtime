@@ -1,20 +1,20 @@
-> **基于 `docs/plan.md` 的全局重构进度：50%**
+> **基于 `docs/plan.md` 的全局重构进度：55%**
 >
-> `[██████████░░░░░░░░░░]`
+> `[███████████░░░░░░░░░]`
 >
 > 阶段快照：Phase 0 `100%` / Phase 1 `25%` / Phase 2 `100%` /
-> Phase 3 `75%` / Phase 4 `50%` / Phase 5 `0%` / Phase 6 `0%`
+> Phase 3 `75%` / Phase 4 `100%` / Phase 5 `0%` / Phase 6 `0%`
 >
-> 评估日期：2026-07-17。Phase 0–6 等权，单阶段只取
+> 评估日期：2026-07-20。Phase 0–6 等权，单阶段只取
 > `0% / 25% / 50% / 75% / 100%` 五档；算术平均后取最近的 `5%`。
-> 当前原始均值为 `50.0%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
+> 当前原始均值为 `57.1%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
 > 测试覆盖率或外部迁移完成度。
 
 # 重构更新计划
 
 ## 1. 文档定位
 
-本文是截至 2026-07-17 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-07-20 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -47,8 +47,9 @@
 4. `sensor_hardware` 已经独立成 ROS 包，主 launch 也已切到新包。
 5. `simulation_bridge` 已经独立承接 Isaac 仿真桥，但 `sim_joint_bridge_cpp`
    仍是单独的 C++ 仿真桥，仿真域还没有完全收口。
-6. `execution_manager` 已经落地最小可运行实现，并切到 `motion_msgs`，但
-   还没有 `task_service_bridge`、`task_api_msgs` 等更正式的上层入口。
+6. `task_api_msgs`、`task_service_bridge` 与 `/task/execute` 已落地，当前
+   `parallel_3dof_controller` 作为 motion owner，经 `execution_manager`
+   接到驱动边界；包名和多任务类型仍未最终收口。
 
 这意味着当前阶段的关键不是补齐所有远期模块，而是先把已有链路的边界理顺。
 
@@ -96,7 +97,7 @@
 当前状态：
 
 - `robot_bringup` 包已创建，并承接整机主入口 `full_system.launch.py`。
-- 整机入口已拆为 hardware、teleop、simulation 三个子 launch 再组合。
+- 整机入口已拆为 hardware、teleop、task、simulation 四个子 launch 再组合。
 - 场景化 launch 当前也已开始复用 `robot_bringup.launch_utils` 统一解析总线协议
   缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `websocket_bridge` 不再默认承接系统级编排。
@@ -105,7 +106,7 @@
 - `robot_bringup` 已增加 `docs/plan.md` Phase 2 仓库级完成合同，通过结构化
   AST、XML 与 JSON 检查固定四项拆包结果：WebSocket 与 simulation 包级分
   离、IMU 只由独立 `sensor_hardware` 导出、BVH 只由可选 demo 反向装配，
-  以及 `full_system` 实际返回 hardware / teleop / simulation 三个子域
+  以及 `full_system` 实际返回 hardware / teleop / task / simulation 四个子域
   include。Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，
   共 38 项直接证据通过，已形成可重复的 source-level 验收。
 - Phase 2 收尾也已清除用户入口中的旧边界引用：BVH 预处理脚本默认配置与相
@@ -232,6 +233,52 @@
   结果为 132 passed、30 skipped、2 failed，未计入本轮 72 项零失败集合；本
   轮直接受影响的 WebSocket 定向回归已通过。Humble 结果不替代仓库目标
   Jazzy 的发布前回归。
+- Phase 4B 已新增正式 `task_api_msgs/ExecuteTask` 和
+  `motion_msgs/ExecuteMotion` Action，以及受 task lease 保护的实际位置读取
+  与停止请求服务。`task_service_bridge` 是唯一 `/task/execute` server，只
+  将结构化 goal 映射到 `/motion/execute`，不依赖 `servo_msgs`，也不直接发
+  布 `MotionCommand` 或 `ServoCommand`。
+- 当前 `parallel_3dof_controller` 作为 motion owner：申请 task lease 后才向
+  `/execution/task/command` 发布三执行器目标；完成必须来自
+  `execution_manager` 转发的驱动级实际位置新采样并连续三次进入容差。取消
+  会先请求协议级 stop，再用独立停止阈值连续采样确认位置稳定，最后撤销 task
+  lease 并等待可关联终态；stop 写出与物理停止确认始终分离。
+- `execution_manager` 当前独占 motion-level 到 driver-level 的读取与停止适
+  配，校验完整 task/trace/session/lease；LX 使用 `move_stop`，ZL 使用
+  `stop_motion`。`robot_bringup/task.launch.py` 组合 execution、motion owner
+  和 task bridge，`full_system` 只保留一个 execution manager owner。
+- `TaskExecutionState` 对最近控制请求补齐 task/trace/session 完整身份；motion
+  owner 只在收到 execution task state 且 DDS 控制订阅已发现后接受 goal。
+  multi-instance controller 强制关闭正式 ActionServer，避免形成第二个
+  `/motion/execute` owner。
+- stop 当前使用单调 operation token；driver 调用未完成时统一阻断 task、
+  teleop 与普通 motion 新命令和 task start。estop 会直接停止已知 bus ID；
+  driver stop 失败或超时会锁存 `driver_stop_failed` /
+  `driver_stop_timeout`、estop 与 token，迟到响应和普通 release 都不能静默恢
+  复准入。
+- stop 批处理当前按执行器 best-effort：单个 ID 的协议读取或 stop 写出超时只
+  标记聚合故障，仍继续尝试其余 ID。`execution_manager` 通过 transient-local
+  `/servo/driver_safety` 发布权威 `DriverSafetyState`；router 与 port driver
+  在协议 stop 前建立本地 fence，active 期间拒绝 move，release 后也拒绝时间戳
+  早于 fence 的迟到 topic/service move。正常 release 通过
+  `/servo/set_driver_safety` 聚合全部有效 port driver 的 ACK；ACK 返回前保持
+  stop token 与 estop，release 失败或超时继续锁存故障。
+- Phase 4B/C 在禁网、仓库只读、`/tmp` 隔离的 ARM64 ROS 2 Humble 容器完成
+  12 包依赖闭包构建；八个目标包的功能 xUnit 汇总 158 项零失败，另有
+  `parallel_3dof_controller` 定向测试 26 项通过。四个 task/motion
+  Action/Service、`DriverSafetyState`、`SetDriverSafety` 和带命令时间戳的
+  `ExecuteBusCommand` 均完成接口生成，task/hardware/full-system launch 参数
+  解析通过。独立 Action/DDS smoke 在同一真实 ROS 图中启动五个
+  节点，确认成功链 11 条 feedback、目标外不会提前完成、连续三个目标样本后
+  成功、并发任务拒绝和 task 窗口仲裁；取消链确认三个协议 stop 实际写出、
+  连续四个冻结位置样本后 `stop_confirmed=true`，且 task lease 最终清空。新增
+  smoke 还确认延迟 stop 期间新 task 被 `task_stop_pending` 阻断且无命令逸出、
+  stop 完成后恢复，estop 对三个执行器直接 stop，三条迟到 move 和 active 期
+  间新 move 均被拒绝、全部端口 release ACK 后恢复，以及首个 stop 超时后其余
+  两个 ID
+  仍收到协议 stop，最终故障锁存且新 task 持续阻断。完整 smoke 用时约
+  `8.5329s`。`servo_hardware` 包级历史 flake8/pep257 基线未计入零失败集合。
+  fake driver 不是物理硬件，Humble 结果也不替代目标 Jazzy 发布回归。
 - `execution_manager` 已开始通过独立控制话题处理 teleop claim / release /
   keepalive，并拒绝未持有 teleop 控制权的 teleop 命令。
 - `ExecutionState` 已开始提供第一版 teleop 控制权反馈，包括剩余租约时间、
@@ -344,8 +391,8 @@
    execution_state 已暴露 requester 视角，task/teleop/motion 的最终准入也已
    统一到执行层；现阶段兼容回退主要留在 `TeleopControl` keepalive/release
    对空 lease 的 holder 语义上，高优先级人工 takeover 仍未定义。
-4. 在 `execution_manager` 中继续补齐正式任务 goal/result/cancel、驱动在途
-   停止确认与上层完成反馈；当前 task cancel 只撤销后续命令准入。
+4. 继续扩展当前只支持 `ankle_pose` 的正式任务类型，并收口 task context、
+   部署级唯一入口、持久幂等、多驱动 stop、物理硬件和 Jazzy 发布回归。
 
 完成标准：
 
@@ -356,15 +403,16 @@
 基于当前命令与反馈双向边界、仓库级依赖合同和 ROS 构建/pub-sub/launch 验
 收，`docs/plan.md` Phase 3 从 `50%` 提升到 `75%`。Phase 3 尚未达到
 `100%`：`MotionCommand` 最终中性 schema 与 breaking 切换门禁仍未完成，
-`task_api_msgs`、`speech_msgs`、`perception_msgs` 也尚未随真实模块落地。
+`speech_msgs`、`perception_msgs` 也尚未随真实模块落地；本轮新增的
+`task_api_msgs` 不改变 Phase 3 的最终命令 schema 阻塞。
 
-基于当前 task-aware execution admission、跨入口优先级合同、ROS 接口生成与
-真实 pub/sub 验收，`docs/plan.md` Phase 4 从 `25%` 提升到 `50%`。全局原始
-均值由 `46.4%` 提升到 `50.0%`，实际增加约 `3.6` 个百分点，按最近 `5%`
-展示从 `45%` 提升到 `50%`。Phase 4 尚未达到 `75% / 100%`：当前仍没有
-`task_api_msgs`、`task_service_bridge`、`/task/execute`、motion goal/result
-接口与真实任务取消/完成反馈；`TaskExecutionControl.cancel` 只撤销后续命令
-准入，不表示驱动级在途动作已经停止。
+基于唯一正式任务桥、task/teleop 共用执行边界且默认优先级不同、实际位置完成
+反馈、best-effort stop、驱动安全 fence、系统接线和 ROS Action/DDS 验收，
+`docs/plan.md` Phase 4 从 `75%` 提升到 `100%`。全局原始均值由 `53.6%` 提升
+到 `57.1%`，实际增加约 `3.6` 个百分点；按最近 `5%` 展示仍为 `55%`，因此顶
+部进度条保持 11/20 格。当前只支持 `ankle_pose`、正式 `motion_control` 包边
+界、task context、部署访问控制、跨进程持久幂等、目标硬件与 Jazzy 回归仍是
+发布加固或后续演进事项，不再扩张为 Phase 4 蓝本完成门禁。
 
 ### Phase D：拆分 `sensor_hardware`
 
@@ -552,8 +600,8 @@
 2. 评估 `websocket_bridge -> teleoperation_bridge` 的迁移。
 3. 继续收紧已落地的 `motion_msgs` 语义，逐步淘汰上层模块中保留的
    servo 风格过渡字段。
-4. 更远期再评估 `task_service_bridge`、`task_api_msgs`、`speech_interface`、
-   `vision_perception` 的落地顺序。
+4. 继续扩展已落地的 `task_service_bridge`、`task_api_msgs`，更远期再评估
+   `speech_interface`、`vision_perception` 的落地顺序。
 
 完成标准：
 
@@ -569,10 +617,10 @@
    - consumer 侧已不再依赖旧 `speed` 时长回退，仓库内置 producer 也已停止
      写入该镜像；公共字段已进入弃用迁移窗口并有自动化门禁。后续先冻结完整
      目标 schema、确认仓外依赖与切换策略，不在证据不足时直接破坏 ROS 接口。
-2. 继续稳定执行边界
-   - task/teleop/motion 已有第一版统一准入和优先级合同。后续先冻结 motion
-     goal/result/cancel 与真实停止语义，再由真实 `task_service_bridge` owner
-     接入，不以直接发布 `MotionCommand` 或立即返回成功的空桥冒充正式入口。
+2. 继续稳定正式任务链
+   - `/task/execute -> /motion/execute -> execution_manager -> driver` 已跑通，
+     后续重点是多任务类型、正式 `motion_control` 包边界、持久幂等、部署访问
+     控制、目标硬件和 Jazzy 回归，不能把 fake driver 验收写成硬件完成。
 3. `websocket_bridge` 剩余职责收紧
    - sim 收口与 BVH 可选扩展抽离已基本完成，下一步只继续压缩
      teleop/debug/status/IMU 上行的混合包边界。
@@ -601,6 +649,6 @@
 `robot_bringup`，仿真域本轮也已基本完成 package-level 收口；BVH 已收口为
 `record_load_action` 所有的显式 opt-in 扩展，默认 teleop/full-system 与
 WebSocket schema 均不再启用或广告该能力。下一步更应围绕执行边界、
-`motion_msgs` 最终命令 schema、正式任务 goal/result/cancel 语义和
+`motion_msgs` 最终命令 schema、正式任务链剩余部署/硬件语义和
 `websocket_bridge` 剩余 teleop/debug/status/IMU 职责继续收紧，最后再做正
 式命名和远期模块落地。
