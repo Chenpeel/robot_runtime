@@ -1,0 +1,10 @@
+# 单个感知目标的结构化几何与分类结果。
+string object_id
+string label
+float32 confidence
+float32 x
+float32 y
+float32 z
+float32 size_x
+float32 size_y
+float32 size_z

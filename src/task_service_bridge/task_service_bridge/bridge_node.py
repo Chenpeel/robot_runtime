@@ -5,12 +5,21 @@ from typing import Any, Optional
 
 from action_msgs.msg import GoalStatus
 from motion_msgs.action import ExecuteMotion
+from perception_msgs.msg import SceneState
 import rclpy
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+from speech_msgs.msg import SpeechIntent
 from task_api_msgs.action import ExecuteTask
+from task_api_msgs.msg import TaskContextSignal
+
+from .context_adapter import (
+    perception_context_fields,
+    speech_context_fields,
+)
 
 from .task_contract import (
     SingleGoalAdmission,
@@ -30,9 +39,22 @@ class TaskServiceBridgeNode(Node):
         self.declare_parameter('task_action_name', '/task/execute')
         self.declare_parameter('motion_action_name', '/motion/execute')
         self.declare_parameter('motion_server_wait_timeout_sec', 5.0)
+        self.declare_parameter('enable_context', True)
+        self.declare_parameter('speech_intent_topic', '/speech/intent')
+        self.declare_parameter(
+            'perception_scene_topic',
+            '/perception/scene_state',
+        )
+        self.declare_parameter('task_context_topic', '/task/context_signal')
 
         task_action_name = self.get_parameter('task_action_name').value
         motion_action_name = self.get_parameter('motion_action_name').value
+        enable_context = bool(self.get_parameter('enable_context').value)
+        speech_intent_topic = self.get_parameter('speech_intent_topic').value
+        perception_scene_topic = self.get_parameter(
+            'perception_scene_topic'
+        ).value
+        task_context_topic = self.get_parameter('task_context_topic').value
         self._motion_server_wait_timeout_sec = float(
             self.get_parameter('motion_server_wait_timeout_sec').value
         )
@@ -42,6 +64,34 @@ class TaskServiceBridgeNode(Node):
         self._state_lock = Lock()
         self._external_goal_handle: Optional[Any] = None
         self._motion_goal_handle: Optional[Any] = None
+
+        self._context_publisher = None
+        self._speech_subscription = None
+        self._perception_subscription = None
+        if enable_context:
+            context_qos = QoSProfile(
+                depth=20,
+                reliability=ReliabilityPolicy.RELIABLE,
+            )
+            self._context_publisher = self.create_publisher(
+                TaskContextSignal,
+                task_context_topic,
+                context_qos,
+            )
+            self._speech_subscription = self.create_subscription(
+                SpeechIntent,
+                speech_intent_topic,
+                self._handle_speech_intent,
+                context_qos,
+                callback_group=self._callback_group,
+            )
+            self._perception_subscription = self.create_subscription(
+                SceneState,
+                perception_scene_topic,
+                self._handle_perception_scene,
+                context_qos,
+                callback_group=self._callback_group,
+            )
 
         self._motion_client = ActionClient(
             self,
@@ -65,6 +115,33 @@ class TaskServiceBridgeNode(Node):
                 motion_action_name,
             )
         )
+
+    def _handle_speech_intent(self, message: SpeechIntent) -> None:
+        self._publish_context(
+            speech_context_fields(message),
+            message.stamp,
+        )
+
+    def _handle_perception_scene(self, message: SceneState) -> None:
+        self._publish_context(
+            perception_context_fields(message),
+            message.stamp,
+        )
+
+    def _publish_context(self, fields, stamp) -> None:
+        if self._context_publisher is None:
+            return
+        context = TaskContextSignal()
+        context.stamp = stamp
+        context.source = fields.source
+        context.event_id = fields.event_id
+        context.session_id = fields.session_id
+        context.status = fields.status
+        context.reason = fields.reason
+        context.recoverable = fields.recoverable
+        context.summary = fields.summary
+        context.labels = list(fields.labels)
+        self._context_publisher.publish(context)
 
     def _goal_callback(self, goal_request: ExecuteTask.Goal) -> GoalResponse:
         validation = validate_task_goal(goal_request)

@@ -22,6 +22,26 @@ def generate_launch_description():
         default_value='5.0',
         description='等待内部运动 Action Server 的最长秒数',
     )
+    enable_context_arg = DeclareLaunchArgument(
+        'enable_context',
+        default_value='true',
+        description='是否启用结构化语音/感知上下文订阅与发布',
+    )
+    speech_intent_topic_arg = DeclareLaunchArgument(
+        'speech_intent_topic',
+        default_value='/speech/intent',
+        description='结构化语音意图输入话题',
+    )
+    perception_scene_topic_arg = DeclareLaunchArgument(
+        'perception_scene_topic',
+        default_value='/perception/scene_state',
+        description='结构化感知场景输入话题',
+    )
+    task_context_topic_arg = DeclareLaunchArgument(
+        'task_context_topic',
+        default_value='/task/context_signal',
+        description='面向外部任务服务的上下文事件话题',
+    )
 
     node = Node(
         package='task_service_bridge',
@@ -36,6 +56,14 @@ def generate_launch_description():
                     'motion_server_wait_timeout_sec'
                 )
             },
+            {'enable_context': LaunchConfiguration('enable_context')},
+            {'speech_intent_topic': LaunchConfiguration('speech_intent_topic')},
+            {
+                'perception_scene_topic': LaunchConfiguration(
+                    'perception_scene_topic'
+                )
+            },
+            {'task_context_topic': LaunchConfiguration('task_context_topic')},
         ],
     )
 
@@ -43,5 +71,9 @@ def generate_launch_description():
         task_action_name_arg,
         motion_action_name_arg,
         motion_server_wait_timeout_sec_arg,
+        enable_context_arg,
+        speech_intent_topic_arg,
+        perception_scene_topic_arg,
+        task_context_topic_arg,
         node,
     ])

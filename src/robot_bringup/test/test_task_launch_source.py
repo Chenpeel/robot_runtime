@@ -152,6 +152,13 @@ class TestTaskLaunchSource(unittest.TestCase):
 
         self.assertEqual('/task/execute', defaults.get('task_action_name'))
         self.assertEqual('/motion/execute', defaults.get('motion_action_name'))
+        self.assertEqual('true', defaults.get('enable_context'))
+        self.assertEqual('/speech/intent', defaults.get('speech_intent_topic'))
+        self.assertEqual(
+            '/perception/scene_state',
+            defaults.get('perception_scene_topic'),
+        )
+        self.assertEqual('/task/context_signal', defaults.get('task_context_topic'))
         self.assertEqual(
             '/execution/task/command',
             defaults.get('task_command_topic'),
@@ -199,6 +206,13 @@ class TestTaskLaunchSource(unittest.TestCase):
             'motion_action_name',
             bridge_arguments['motion_action_name'],
         )
+        for interface_name in (
+            'enable_context',
+            'speech_intent_topic',
+            'perception_scene_topic',
+            'task_context_topic',
+        ):
+            self.assertEqual(interface_name, bridge_arguments[interface_name])
         self.assertEqual(
             'motion_action_name',
             motion_arguments['motion_action_name'],
@@ -253,6 +267,10 @@ class TestTaskLaunchSource(unittest.TestCase):
         )
         self.assertIn(
             "'driver_safety_topic': LaunchConfiguration('driver_safety_topic')",
+            source,
+        )
+        self.assertIn(
+            "'enable_context': LaunchConfiguration('enable_context')",
             source,
         )
 

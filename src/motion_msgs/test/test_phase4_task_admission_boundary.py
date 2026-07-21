@@ -47,6 +47,19 @@ def _ros_factory_message_types(relative_path: str, factory_name: str) -> set:
     return result
 
 
+def _constructor_message_types(relative_path: str, factory_name: str) -> set:
+    tree = ast.parse(_read(relative_path), filename=relative_path)
+    return {
+        node.args[1].id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == factory_name
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Name)
+    }
+
+
 def _runtime_dependencies(relative_path: str) -> set:
     manifest = ElementTree.fromstring(_read(relative_path))
     return {
@@ -289,7 +302,10 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
             if '/test/' in relative_path or '/launch/' in relative_path:
                 continue
             source = path.read_text(encoding='utf-8')
-            if "'/task/execute'" in source or "\"/task/execute\"" in source:
+            if 'ExecuteTask' in _constructor_message_types(
+                    relative_path,
+                    'ActionServer',
+            ):
                 task_entry_owners.append(relative_path)
             if "'/motion/execute'" in source or "\"/motion/execute\"" in source:
                 motion_entry_owners.append(relative_path)

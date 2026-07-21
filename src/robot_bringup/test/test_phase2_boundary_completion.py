@@ -428,7 +428,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
             demo_literals,
         )
 
-    def test_full_system_composes_four_domain_launches(self):
+    def test_full_system_composes_runtime_domain_launches(self):
         full_system_path = (
             'src/robot_bringup/launch/full_system.launch.py'
         )
@@ -438,6 +438,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
             ('robot_bringup', 'simulation.launch.py'),
             ('robot_bringup', 'task.launch.py'),
             ('robot_bringup', 'teleop.launch.py'),
+            ('robot_bringup', 'context.launch.py'),
         }
 
         self.assertEqual(expected_includes, returned_includes)
@@ -452,6 +453,8 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
                 'sensor_hardware',
                 'servo_hardware',
                 'simulation_bridge',
+                'speech_interface',
+                'vision_perception',
                 'websocket_bridge',
             }.issubset(bringup_dependencies)
         )

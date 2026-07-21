@@ -1,20 +1,20 @@
-> **基于 `docs/plan.md` 的全局重构进度：55%**
+> **基于 `docs/plan.md` 的全局重构进度：65%**
 >
-> `[███████████░░░░░░░░░]`
+> `[█████████████░░░░░░░]`
 >
 > 阶段快照：Phase 0 `100%` / Phase 1 `25%` / Phase 2 `100%` /
-> Phase 3 `75%` / Phase 4 `100%` / Phase 5 `0%` / Phase 6 `0%`
+> Phase 3 `75%` / Phase 4 `100%` / Phase 5 `50%` / Phase 6 `0%`
 >
-> 评估日期：2026-07-20。Phase 0–6 等权，单阶段只取
+> 评估日期：2026-07-21。Phase 0–6 等权，单阶段只取
 > `0% / 25% / 50% / 75% / 100%` 五档；算术平均后取最近的 `5%`。
-> 当前原始均值为 `57.1%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
+> 当前原始均值为 `64.3%`。该比例衡量长期蓝本落地程度，不代表发布就绪度、
 > 测试覆盖率或外部迁移完成度。
 
 # 重构更新计划
 
 ## 1. 文档定位
 
-本文是截至 2026-07-20 的重构更新计划，用来连接“当前仓库事实”和“长期规
+本文是截至 2026-07-21 的重构更新计划，用来连接“当前仓库事实”和“长期规
 划目标”。
 
 它与现有文档的关系如下：
@@ -97,7 +97,8 @@
 当前状态：
 
 - `robot_bringup` 包已创建，并承接整机主入口 `full_system.launch.py`。
-- 整机入口已拆为 hardware、teleop、task、simulation 四个子 launch 再组合。
+- 整机入口当前已拆为 hardware、teleop、task、simulation、context 五个子
+  launch 再组合；context 是 Phase 5 新增的可选运行域。
 - 场景化 launch 当前也已开始复用 `robot_bringup.launch_utils` 统一解析总线协议
   缓存默认路径，不再在子场景入口里硬编码旧的 `websocket` 源码树绝对路径。
 - `websocket_bridge` 不再默认承接系统级编排。
@@ -107,7 +108,9 @@
   AST、XML 与 JSON 检查固定四项拆包结果：WebSocket 与 simulation 包级分
   离、IMU 只由独立 `sensor_hardware` 导出、BVH 只由可选 demo 反向装配，
   以及 `full_system` 实际返回 hardware / teleop / task / simulation 四个子域
-  include。Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，
+  include。该 Phase 2 原始基线继续有效；当前 source contract 另要求
+  full-system 组合 context 第五域，但新增上下文能力计入 Phase 5，不倒计到
+  Phase 2。Phase 2 聚合合同 5 项、BVH 预处理回归 6 项、既有相关边界 27 项，
   共 38 项直接证据通过，已形成可重复的 source-level 验收。
 - Phase 2 收尾也已清除用户入口中的旧边界引用：BVH 预处理脚本默认配置与相
   对资源目录均从 `record_load_action` 解析，并与正式播放器的嵌套 target、
@@ -402,17 +405,52 @@
 
 基于当前命令与反馈双向边界、仓库级依赖合同和 ROS 构建/pub-sub/launch 验
 收，`docs/plan.md` Phase 3 从 `50%` 提升到 `75%`。Phase 3 尚未达到
-`100%`：`MotionCommand` 最终中性 schema 与 breaking 切换门禁仍未完成，
-`speech_msgs`、`perception_msgs` 也尚未随真实模块落地；本轮新增的
-`task_api_msgs` 不改变 Phase 3 的最终命令 schema 阻塞。
+`100%`：`speech_msgs` 与 `perception_msgs` 已随真实 owner 落地，但
+`MotionCommand` 最终中性 schema 与 breaking 切换门禁仍未完成；新增上下文
+接口不改变 Phase 3 的最终命令 schema 阻塞。
 
 基于唯一正式任务桥、task/teleop 共用执行边界且默认优先级不同、实际位置完成
 反馈、best-effort stop、驱动安全 fence、系统接线和 ROS Action/DDS 验收，
 `docs/plan.md` Phase 4 从 `75%` 提升到 `100%`。全局原始均值由 `53.6%` 提升
 到 `57.1%`，实际增加约 `3.6` 个百分点；按最近 `5%` 展示仍为 `55%`，因此顶
 部进度条保持 11/20 格。当前只支持 `ankle_pose`、正式 `motion_control` 包边
-界、task context、部署访问控制、跨进程持久幂等、目标硬件与 Jazzy 回归仍是
-发布加固或后续演进事项，不再扩张为 Phase 4 蓝本完成门禁。
+界、motion owner 可消费的完整 scene/task context、部署访问控制、跨进程持
+久幂等、目标硬件与 Jazzy 回归仍是发布加固或后续演进事项，不再扩张为
+Phase 4 蓝本完成门禁。
+
+Phase 5 当前已落地两个非空垂直切片：
+
+- `speech_msgs/SpeechIntent` 与 `speech_interface` 将严格校验后的边缘 JSON
+  意图发布为结构化消息，并只通过唯一 `/task/execute` ActionClient 发起正式
+  任务；低置信、非法字段、Action unavailable/rejected 和最终结果均形成稳定
+  `status/reason/recoverable` 更新。
+- `perception_msgs/DetectedObject` / `SceneState` 与 `vision_perception` 将边
+  缘检测 JSON 校验为结构化场景；重复 ID、未知字段、非有限坐标、越界置信度
+  与负尺寸会形成可恢复的 rejected 场景状态。
+- `task_service_bridge` 订阅 `/speech/intent` 与
+  `/perception/scene_state`，经纯逻辑 adapter 发布
+  `task_api_msgs/TaskContextSignal`；上下文桥不会发布 motion/driver 命令，也
+  不改变 `/task/execute -> /motion/execute` 的唯一 ActionServer 所有权。
+- `robot_bringup/context.launch.py` 独立装配两个 owner，full-system 以
+  `enable_context` 显式组合第五个运行域，并把两类结构化 topic 透传到 task
+  bridge。
+- 禁网、源码只读的 ARM64 ROS 2 Humble 容器完成 16 包依赖闭包构建；八个直
+  接相关包汇总 `119` 项测试零失败。三类新消息完成接口生成，context、task、
+  full-system launch 参数解析通过；独立真实 Action/DDS smoke 在 `0.5387s`
+  内完成语音意图到 fake motion result、感知场景到 task context，并同时覆盖
+  低置信语音和重复对象 ID 的结构化拒绝链。
+- 该隔离验收覆盖核心垂直切片；随后补齐拒绝链身份保留、感知 `float32` 范围
+  与 JSON 资源上限，以及 `enable_context=false` 同时关闭 task bridge 上下文
+  I/O 的边界，相关宿主回归已通过。本轮末尾 Docker 守护进程不可用，最终加固
+  源码待其恢复后必须重跑 Humble 构建与 smoke；不将该待补验证计为额外进度，
+  也不把既有 Humble 结果外推为 Jazzy 或设备验收。
+
+基于两个接口包、两个真实 producer owner、task bridge consumer、独立 bringup
+与 Action/DDS 证据，`docs/plan.md` Phase 5 从 `0%` 提升到 `50%`。全局原始均
+值由 `57.1%` 提升到 `64.3%`，实际增加约 `7.1` 个百分点；按最近 `5%` 展示由
+`55%` 提升到 `65%`，顶部进度条为 13/20 格。当前边缘输入仍依赖上游 NLU/检
+测 JSON，真实 ASR/TTS、相机模型、motion_control 对场景的消费、目标 Jazzy
+和部署环境验收尚未完成，因此不计为 `75% / 100%`。
 
 ### Phase D：拆分 `sensor_hardware`
 
@@ -600,8 +638,9 @@
 2. 评估 `websocket_bridge -> teleoperation_bridge` 的迁移。
 3. 继续收紧已落地的 `motion_msgs` 语义，逐步淘汰上层模块中保留的
    servo 风格过渡字段。
-4. 继续扩展已落地的 `task_service_bridge`、`task_api_msgs`，更远期再评估
-   `speech_interface`、`vision_perception` 的落地顺序。
+4. 继续扩展已落地的 `task_service_bridge`、`task_api_msgs`，并为当前
+   `speech_interface`、`vision_perception` 接入真实 backend 与 motion owner
+   场景消费。
 
 完成标准：
 
@@ -621,10 +660,14 @@
    - `/task/execute -> /motion/execute -> execution_manager -> driver` 已跑通，
      后续重点是多任务类型、正式 `motion_control` 包边界、持久幂等、部署访问
      控制、目标硬件和 Jazzy 回归，不能把 fake driver 验收写成硬件完成。
-3. `websocket_bridge` 剩余职责收紧
+3. 结构化上下文后端加固
+   - `speech_interface` 和 `vision_perception` 已完成边缘 adapter、内部消息、
+     task context 与 bringup 闭环；后续接入真实 ASR/TTS、相机/检测模型和
+     motion_control 场景消费，不能把 JSON smoke 写成设备验收。
+4. `websocket_bridge` 剩余职责收紧
    - sim 收口与 BVH 可选扩展抽离已基本完成，下一步只继续压缩
      teleop/debug/status/IMU 上行的混合包边界。
-4. 正式命名收敛
+5. 正式命名收敛
    - 只有在前面边界稳定后才值得做。
 
 

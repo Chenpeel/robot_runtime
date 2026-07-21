@@ -40,6 +40,26 @@ def generate_launch_description():
         default_value='5.0',
         description='task bridge 等待 motion Action Server 的最长秒数',
     )
+    enable_context_arg = DeclareLaunchArgument(
+        'enable_context',
+        default_value='true',
+        description='是否启用 task bridge 的结构化上下文边界',
+    )
+    speech_intent_topic_arg = DeclareLaunchArgument(
+        'speech_intent_topic',
+        default_value='/speech/intent',
+        description='task bridge 消费的结构化语音意图话题',
+    )
+    perception_scene_topic_arg = DeclareLaunchArgument(
+        'perception_scene_topic',
+        default_value='/perception/scene_state',
+        description='task bridge 消费的结构化感知场景话题',
+    )
+    task_context_topic_arg = DeclareLaunchArgument(
+        'task_context_topic',
+        default_value='/task/context_signal',
+        description='task bridge 对外发布的结构化上下文话题',
+    )
     teleop_command_topic_arg = DeclareLaunchArgument(
         'teleop_command_topic',
         default_value='/execution/teleop/command',
@@ -218,6 +238,12 @@ def generate_launch_description():
             'motion_server_wait_timeout_sec': LaunchConfiguration(
                 'motion_server_wait_timeout_sec'
             ),
+            'enable_context': LaunchConfiguration('enable_context'),
+            'speech_intent_topic': LaunchConfiguration('speech_intent_topic'),
+            'perception_scene_topic': LaunchConfiguration(
+                'perception_scene_topic'
+            ),
+            'task_context_topic': LaunchConfiguration('task_context_topic'),
         }.items(),
     )
 
@@ -255,6 +281,10 @@ def generate_launch_description():
         task_action_name_arg,
         motion_action_name_arg,
         motion_server_wait_timeout_sec_arg,
+        enable_context_arg,
+        speech_intent_topic_arg,
+        perception_scene_topic_arg,
+        task_context_topic_arg,
         teleop_command_topic_arg,
         teleop_control_topic_arg,
         task_command_topic_arg,

@@ -48,13 +48,28 @@ class TaskBridgeSourceBoundaryTest(unittest.TestCase):
         package_and_node = runtime_dependencies + NODE_SOURCE
         for forbidden in (
                 'servo_msgs', 'MotionCommand', 'ServoCommand',
-                'TaskExecutionControl', 'create_publisher'):
+                'TaskExecutionControl', "'/servo/"):
             self.assertNotIn(forbidden, package_and_node)
+
+        self.assertEqual(NODE_SOURCE.count('create_publisher('), 1)
+        self.assertIn('TaskContextSignal', NODE_SOURCE)
+        self.assertIn('SpeechIntent', NODE_SOURCE)
+        self.assertIn('SceneState', NODE_SOURCE)
 
     def test_launch_and_entry_point_expose_bridge(self):
         self.assertIn('task_service_bridge_node = ', SETUP_SOURCE)
         self.assertIn("default_value='/task/execute'", LAUNCH_SOURCE)
         self.assertIn("default_value='/motion/execute'", LAUNCH_SOURCE)
+        self.assertIn("default_value='true'", LAUNCH_SOURCE)
+        self.assertIn("'enable_context'", LAUNCH_SOURCE)
+        self.assertIn("default_value='/speech/intent'", LAUNCH_SOURCE)
+        self.assertIn("default_value='/perception/scene_state'", LAUNCH_SOURCE)
+        self.assertIn("default_value='/task/context_signal'", LAUNCH_SOURCE)
+
+    def test_context_pub_sub_are_conditionally_enabled(self):
+        self.assertIn("declare_parameter('enable_context', True)", NODE_SOURCE)
+        self.assertIn('if enable_context:', NODE_SOURCE)
+        self.assertIn('if self._context_publisher is None:', NODE_SOURCE)
 
 
 if __name__ == '__main__':

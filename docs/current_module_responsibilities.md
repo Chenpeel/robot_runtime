@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文记录截至 2026-07-20 的仓库当前事实，用于补充说明现有模块到底已经承担了
+本文记录截至 2026-07-21 的仓库当前事实，用于补充说明现有模块到底已经承担了
 什么职责。
 
 它与长期规划文档的关系如下：
@@ -17,7 +17,7 @@
 
 ## 2. 当前模块总览
 
-当前仓库大体可以分成九个职责域：
+当前仓库大体可以分成十个职责域：
 
 - 系统集成与场景化启动
   - `robot_bringup`
@@ -33,6 +33,11 @@
 - 正式任务入口
   - `task_service_bridge`
   - `task_api_msgs`
+- 结构化语音与感知上下文
+  - `speech_msgs`
+  - `speech_interface`
+  - `perception_msgs`
+  - `vision_perception`
 - 控制原型与当前 motion owner
   - `parallel_3dof_controller`
 - 仿真桥接
@@ -57,9 +62,11 @@
   - ROS 包名：`robot_bringup`
 - 当前主要职责
   - 承接整机主入口 `full_system.launch.py`。
-  - 将整机编排拆为 hardware、teleop、task、simulation 四个子 launch。
+  - 将整机编排拆为 hardware、teleop、task、simulation、context 五个子
+    launch。
   - 组合 `execution_manager`、`websocket_bridge`、`servo_hardware`、
-    `sensor_hardware` 与 `simulation_bridge` 等运行链路。
+    `sensor_hardware`、`simulation_bridge`、`speech_interface` 与
+    `vision_perception` 等运行链路。
   - 已开始在 `full_system`、`parallel_3dof_multi_system` 等场景入口复用
     `launch_utils` 统一解析总线协议缓存默认路径，避免场景 launch 硬编码旧的
     `websocket` 源码树绝对路径。
@@ -67,7 +74,7 @@
     把 `/servo/command` / `/servo/state` 当成仿真入口的公共参数面。
   - 当前持有 `docs/plan.md` Phase 2 仓库级完成合同，以结构化源码检查统一验
     收 WebSocket/simulation 包级分离、sensor 独立所有权、BVH 默认 opt-in
-    和 full-system 四分域组合，防止已拆出的职责重新混回默认主链。
+    和 full-system 五分域组合，防止已拆出的职责重新混回默认主链。
   - `teleop.launch.py` 与 `full_system.launch.py` 已公开统一的
     `execution_actuator_state_topic`，将执行层反馈同时接到
     `execution_manager` 与 `websocket_bridge`，不再让上层桥接直接订阅驱动
@@ -76,12 +83,16 @@
     execution manager；`full_system` 会关闭 teleop 子栈内的重复 execution
     owner，并统一透传 `/task/execute`、`/motion/execute`、task lease 话题与
     motion-level 读取/停止服务。
+  - `context.launch.py` 独立装配 speech 与 perception owner，两者可分别启
+    停；`full_system` 通过 `enable_context` 显式组合该第五域，并将
+    `/speech/intent`、`/perception/scene_state` 和 `/task/context_signal`
+    接线透传给 task 域。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
 - 当前主要输出
   - 面向整机运行场景的 launch 入口
-  - 面向硬件、遥控、任务、仿真的分域 launch 组合
+  - 面向硬件、遥控、任务、仿真、上下文的分域 launch 组合
 - 当前非职责
   - 不承接 WebSocket 消息解析。
   - 不承接执行仲裁本体。
@@ -681,8 +692,6 @@
 - 当前问题
   - `MotionCommand` 仍保留 `servo_type`、`servo_id`、`position` 以及已弃用
     `speed` 等过渡字段；breaking 切换门禁未通过前不会直接删除公共字段。
-  - `speech_msgs`、`perception_msgs` 仍需随真实模块按后续阶段落地，不以空
-    接口包冒充完成度。
 - 与长期规划的关系
   - 已成为当前上层模块与 `execution_manager` 之间的双向接口边界。
   - 最终仍需冻结驱动无关的正式运动请求 schema。
@@ -699,12 +708,16 @@
   - 在 goal/feedback/result 中贯穿 task/trace/session 身份。
   - 明确 success、target reached、admission released、stop requested、stop
     command sent 与 stop confirmed 等可区分语义。
+  - 定义 `TaskContextSignal`，统一表达 speech/perception 上下文来源、事件、
+    task/trace/session 身份、`status/reason/recoverable`、摘要与标签。
 - 当前非职责
   - 不表达驱动命令、协议或 execution lease。
+  - `TaskContextSignal` 不承载边缘原始 JSON 或完整对象几何；结构化场景仍由
+    `perception_msgs/SceneState` 持有。
   - 不实现任务执行与仲裁。
 - 当前问题
-  - 当前只冻结了 `ankle_pose`，尚未覆盖长期规划中的多任务、对话和感知上下
-    文。
+  - 当前只冻结了 `ankle_pose`；上下文信号已经落地，但尚未覆盖长期规划中的
+    多任务执行、完整对话状态或 motion owner 场景消费。
 
 ### 3.12 `task_service_bridge`
 
@@ -719,14 +732,89 @@
   - 逐字段转发 feedback/result，传播 cancel，并始终等待 motion 最终结果；
     goal accepted 不等于 task success。
   - 以线程安全单目标槽位拒绝第二个并发正式任务。
+  - 订阅 `/speech/intent` 与 `/perception/scene_state`，经独立纯逻辑 adapter
+    映射后只向 `/task/context_signal` 发布 `TaskContextSignal`。
 - 当前非职责
   - 不发布 `MotionCommand`、`ServoCommand` 或 `TaskExecutionControl`。
+  - 不解析 speech/perception 边缘 JSON，不做场景规划。
   - 不依赖 `servo_msgs`，不做运动学、执行仲裁或驱动协议适配。
 - 当前问题
   - 当前只支持 `ankle_pose` 映射，单目标策略和幂等状态也仅覆盖当前进程；部
     署级唯一入口、ROS ACL 和跨进程持久幂等仍未完成。
 
-### 3.13 `record_load_action`
+### 3.13 `speech_msgs`
+
+- 状态
+  - 已落地第一版结构化语音意图消息。
+- 当前承接位置
+  - 目录：`src/speech_msgs`
+  - ROS 包名：`speech_msgs`
+- 当前主要职责
+  - 以 `SpeechIntent` 表达 intent/task/trace/session 身份、当前
+    `ankle_pose` 参数、confidence 和 `status/reason/recoverable`。
+- 当前非职责
+  - 不实现 ASR、NLU、TTS、任务执行或驱动控制。
+- 当前问题
+  - 当前 schema 只覆盖已验证的 `ankle_pose` 垂直切片，尚不是完整对话协议。
+
+### 3.14 `perception_msgs`
+
+- 状态
+  - 已落地第一版结构化场景消息。
+- 当前承接位置
+  - 目录：`src/perception_msgs`
+  - ROS 包名：`perception_msgs`
+- 当前主要职责
+  - 以 `DetectedObject` 表达对象身份、标签、置信度、三维位置与尺寸。
+  - 以 `SceneState` 表达 observation/session/frame 身份、对象集合和
+    `status/reason/recoverable`。
+- 当前非职责
+  - 不实现相机采集、检测模型、任务规划或 motion/driver 命令。
+- 当前问题
+  - 当前 scene schema 已形成边界，但尚无真实相机/检测模型或 motion owner
+    消费验收。
+
+### 3.15 `speech_interface`
+
+- 状态
+  - 已落地第一版语音意图边缘 adapter 和正式任务客户端。
+- 当前承接位置
+  - 目录：`src/speech_interface`
+  - ROS 包名：`speech_interface`
+- 当前主要职责
+  - 订阅 `/speech/intent_input` 的边缘 JSON，严格拒绝重复、未知、缺失或越
+    界字段，并发布 `/speech/intent` 的结构化 `SpeechIntent`。
+  - 对满足最低置信度的当前 `ankle_pose` 意图，只通过 `/task/execute`
+    ActionClient 发起正式任务，并把 accepted/executing/最终状态回写到同一
+    intent 身份。
+- 当前非职责
+  - 不发布 `MotionCommand` 或 `ServoCommand`，不直连 motion owner、执行层
+    或驱动层。
+  - 不实现真实 ASR、NLU 或 TTS backend。
+- 当前问题
+  - JSON 输入是当前可测试的 backend 边界，不等同于麦克风、语音模型或真实
+    对话场景验收。
+
+### 3.16 `vision_perception`
+
+- 状态
+  - 已落地第一版检测结果边缘 adapter。
+- 当前承接位置
+  - 目录：`src/vision_perception`
+  - ROS 包名：`vision_perception`
+- 当前主要职责
+  - 订阅 `/perception/detections_input` 的边缘 JSON，严格校验对象唯一 ID、
+    有限坐标、置信度、非负尺寸和字段集合。
+  - 对合法输入发布 `/perception/scene_state`；非法输入也发布带稳定 reason 的
+    recoverable rejected `SceneState`。
+- 当前非职责
+  - 不发布 task/motion/servo 命令，不负责执行仲裁或驱动协议。
+  - 不实现真实相机采集或检测模型。
+- 当前问题
+  - 当前 JSON adapter 与结构化输出已经过 DDS smoke，但不等同于真实视觉设
+    备、模型精度或闭环场景消费验收。
+
+### 3.17 `record_load_action`
 
 - 状态
   - 已实现，当前作为显式 opt-in 的工具/演示包。
@@ -800,7 +888,7 @@
 - 与长期规划的关系
   - 长期应保留为可选工具/演示资源，而不是正式主链路核心。
 
-### 3.14 `robot_description`
+### 3.18 `robot_description`
 
 - 状态
   - 已实现，职责边界相对清晰。
@@ -820,7 +908,7 @@
 - 与长期规划的关系
   - 长期继续作为描述资源域存在即可。
 
-### 3.15 `mjc_viewer`
+### 3.19 `mjc_viewer`
 
 - 状态
   - 已实现，属于展示与仿真辅助模块。
@@ -851,10 +939,6 @@
 - `teleoperation_bridge`
   - 当前只有混合职责的 `websocket_bridge`，还不能直接等同于正式
     `teleoperation_bridge`。
-- `speech_interface`
-  - 当前不存在独立实现。
-- `vision_perception`
-  - 当前不存在独立实现。
 
 
 ## 5. 当前事实到长期规划的映射
@@ -875,12 +959,21 @@
   - 长期去向：演进为 `motion_control`
 - `task_service_bridge`
   - 当前事实：唯一 `/task/execute` owner，映射到 `/motion/execute` 并转发生
-    命周期结果
-  - 长期去向：扩展外部任务协议和 task context，但继续禁止绕过 motion /
-    execution 边界
+    命周期结果；同时汇聚 speech/perception 摘要到 `/task/context_signal`
+  - 长期去向：扩展外部任务协议、持久上下文与查询能力，但继续禁止绕过
+    motion / execution 边界
 - `task_api_msgs`
-  - 当前事实：已定义第一版结构化 `ExecuteTask` Action
-  - 长期去向：在真实 owner 落地时增量扩展多任务、对话与感知语义
+  - 当前事实：已定义第一版结构化 `ExecuteTask` Action 与统一
+    `TaskContextSignal`
+  - 长期去向：在真实 owner 落地时增量扩展多任务与上下文语义
+- `speech_interface` / `speech_msgs`
+  - 当前事实：已形成严格 JSON 边缘 adapter、结构化意图和唯一正式 task
+    ActionClient，不直连 motion/driver
+  - 长期去向：接入真实 ASR/NLU/TTS，并扩展完整对话任务上下文
+- `vision_perception` / `perception_msgs`
+  - 当前事实：已形成严格 JSON 边缘 adapter 与结构化场景，不发布任何执行命
+    令
+  - 长期去向：接入真实相机/检测模型，并由正式 task/motion owner 消费场景
 - `execution_manager`
   - 当前事实：执行仲裁层已统一接 task、teleop 与普通 motion 三路命令；除
     teleop claim/keepalive/release 外，已增加正式 task 身份、lease、优先级、
@@ -914,6 +1007,10 @@ task/teleop/motion 当前也已具备第一版执行准入、lease 与优先级�
 `/motion/execute` owner 已形成一条经过 Action/DDS 验收的正式任务链。执行安
 全边界也已增加多 ID best-effort stop、驱动 latch/fence 和 release ACK，
 stop 前迟到命令不会在 stop 后重新驱动执行器，ACK 前也不会恢复新任务准入。
+`speech_msgs` / `speech_interface` 与 `perception_msgs` /
+`vision_perception` 已形成两个结构化上下文垂直切片，统一经
+`task_service_bridge` 发布 `TaskContextSignal`，并由 `robot_bringup` 的独立
+context 域装配；当前边缘 JSON 合同不等同于真实语音、相机或模型完成。
 仓库仍需继续面对这些现实问题：`websocket_bridge` 仍混合
 teleop/debug/status/IMU 上行职责，`parallel_3dof_controller` 虽已输出
 `MotionCommand`，但接口仍保留 servo 风格过渡字段；其中 `speed` 已进入弃

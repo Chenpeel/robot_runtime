@@ -1,6 +1,7 @@
-# ROS 2 舵机控制系统
+# ROS 2 机器人运行时
 
-基于ROS 2 Jazzy的WebSocket舵机控制系统，支持多串口并发控制、总线舵机和PCA9685舵机。
+基于 ROS 2 Jazzy 的机器人运行时，包含 WebSocket teleop、正式任务 Action、
+执行与驱动安全、仿真、多串口舵机控制和结构化 speech/perception 上下文。
 
 ## 系统特性
 
@@ -11,6 +12,7 @@
 - ✅ **双舵机类型**: 支持总线舵机和PCA9685 PWM舵机
 - ✅ **执行边界**: 通过 `execution_manager` 将 teleop/motion 请求收敛到 `/servo/command`
 - ✅ **正式任务链**: `/task/execute` 经 motion Action、执行仲裁和实际位置反馈完成闭环
+- ✅ **结构化上下文**: 语音意图与感知场景经独立接口汇入 `/task/context_signal`
 - ✅ **驱动安全门**: 多 ID best-effort stop、迟到命令 fence 与 release ACK 阻止急停后复动
 - ✅ **话题统一**: 驱动层统一入口 `/servo/command` 与出口 `/servo/state`
 - ✅ **仿真集成桥接**: 支持 `/sim/servo_command` 与 `/sim/servo_state` 双向转发
@@ -45,6 +47,28 @@ bus_protocol_router（协议识别 + ID路由）
               → parallel_3dof_controller → execution_manager
               → servo_hardware
 ```
+
+语音任务上下文链路：
+
+```text
+/speech/intent_input → speech_interface → /speech/intent
+                      ├→ /task/execute → task_service_bridge → motion 链
+                      └→ task_service_bridge → /task/context_signal
+```
+
+感知场景上下文链路：
+
+```text
+/perception/detections_input → vision_perception
+                             → /perception/scene_state
+                             → task_service_bridge
+                             → /task/context_signal
+```
+
+`speech_interface` 只通过正式 `/task/execute` Action 发起执行，不直连 motion、
+execution 或 driver。`vision_perception` 只发布结构化场景，不发布执行命令。
+当前两个输入 topic 都是可测试的边缘 JSON backend 合同，不代表真实 ASR/TTS、
+相机或检测模型已经完成。
 
 **性能指标**:
 
@@ -203,8 +227,19 @@ ros2 launch robot_bringup full_system.launch.py \
   ws_port:=9105 \
   device_id:=robot \
   enable_simulation:=true \
+  enable_context:=true \
   debug:=true \
   baudrate:=115200
+```
+
+`full_system.launch.py` 默认组合 hardware、teleop、task、simulation、context
+五个运行域；context 域可用 `enable_context:=false` 整体关闭。也可独立启动并分
+别控制两个 owner：
+
+```bash
+ros2 launch robot_bringup context.launch.py \
+  enable_speech_interface:=true \
+  enable_vision_perception:=true
 ```
 
 ### 方式二: 使用初始化脚本
@@ -258,6 +293,9 @@ ros2 run simulation_bridge sim_servo_bridge_node
 | `/execution/motion/command` | `MotionCommand` | motion 执行请求 |
 | `/execution/state` | `ExecutionState` | 执行层状态反馈 |
 | `/execution/actuator_state` | `ActuatorState` | 执行层适配后的执行器反馈 |
+| `/speech/intent` | `SpeechIntent` | 结构化语音意图与任务结果状态 |
+| `/perception/scene_state` | `SceneState` | 结构化场景或可恢复拒绝状态 |
+| `/task/context_signal` | `TaskContextSignal` | 汇总后的 task 上下文信号 |
 | `/servo/command` | `ServoCommand` | 舵机控制命令 |
 | `/servo/driver_safety` | `DriverSafetyState` | 驱动级权威 latch/release 状态 |
 | `/sim/servo_state` | `ServoState` | 仿真侧状态反馈 |
@@ -276,10 +314,17 @@ Action。当前进程内重放保护、fake driver 验收和 Humble 回归不等
 获得全部有效 port driver ACK 后才清除 stop token/estop 并发布权威 false；
 driver stop 或 release 失败/超时会保持二者、锁存故障且不会自动恢复准入。
 
+结构化上下文当前由 `speech_msgs/SpeechIntent`、
+`perception_msgs/SceneState` 和 `task_api_msgs/TaskContextSignal` 承接。
+`task_service_bridge` 仍是唯一 `/task/execute` ActionServer；新增 context
+publisher 不会形成第二条 task、motion 或 driver 执行入口。
+
 ### 订阅话题
 
 | 话题           | 消息类型     | 说明         |
 | -------------- | ------------ | ------------ |
+| `/speech/intent_input` | `std_msgs/String` | 语音/NLU 边缘 JSON 输入 |
+| `/perception/detections_input` | `std_msgs/String` | 检测结果边缘 JSON 输入 |
 | `/servo/state` | `ServoState` | 舵机状态反馈 |
 | `/sim/servo_command` | `ServoCommand` | 仿真侧控制命令 |
 
@@ -303,6 +348,11 @@ ros2 topic echo /execution/actuator_state
 
 # 查看正式任务 Action 合同
 ros2 interface show task_api_msgs/action/ExecuteTask
+
+# 查看结构化上下文合同
+ros2 interface show speech_msgs/msg/SpeechIntent
+ros2 interface show perception_msgs/msg/SceneState
+ros2 interface show task_api_msgs/msg/TaskContextSignal
 
 # 查看内部 motion Action 合同
 ros2 interface show motion_msgs/action/ExecuteMotion
@@ -537,6 +587,7 @@ ros/
 │   │
 │   ├── robot_bringup/           # 系统集成与整机启动
 │   │   ├── launch/
+│   │   │   ├── context.launch.py
 │   │   │   ├── parallel_3dof_multi_system.launch.py
 │   │   │   ├── full_system.launch.py
 │   │   │   ├── hardware.launch.py
@@ -544,8 +595,12 @@ ros/
 │   │   │   ├── teleop.launch.py
 │   │   │   └── simulation.launch.py
 │   │   └── package.xml
-│   ├── task_api_msgs/           # 正式任务 Action 接口
-│   ├── task_service_bridge/     # /task/execute 唯一任务桥
+│   ├── task_api_msgs/           # ExecuteTask 与 TaskContextSignal 接口
+│   ├── task_service_bridge/     # 唯一 task Action 桥与上下文汇聚
+│   ├── speech_msgs/             # 结构化 SpeechIntent 接口
+│   ├── speech_interface/        # 语音意图边缘适配与 task client
+│   ├── perception_msgs/         # DetectedObject 与 SceneState 接口
+│   ├── vision_perception/       # 检测结果边缘适配
 │   └── websocket_bridge/        # WebSocket桥接
 │       ├── bridge_node.py       # ROS2桥接节点
 │       ├── ws_server.py         # WebSocket服务器

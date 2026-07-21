@@ -2,6 +2,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
@@ -229,6 +230,36 @@ def generate_launch_description():
         default_value='true',
         description='是否启动simulation域桥接链路',
     )
+    enable_context_arg = DeclareLaunchArgument(
+        'enable_context',
+        default_value='true',
+        description='是否启动结构化语音与感知上下文域',
+    )
+    speech_input_topic_arg = DeclareLaunchArgument(
+        'speech_input_topic',
+        default_value='/speech/intent_input',
+        description='语音/NLU 边缘 JSON 输入话题',
+    )
+    speech_intent_topic_arg = DeclareLaunchArgument(
+        'speech_intent_topic',
+        default_value='/speech/intent',
+        description='结构化语音意图话题',
+    )
+    perception_input_topic_arg = DeclareLaunchArgument(
+        'perception_input_topic',
+        default_value='/perception/detections_input',
+        description='视觉后端边缘 JSON 输入话题',
+    )
+    perception_scene_topic_arg = DeclareLaunchArgument(
+        'perception_scene_topic',
+        default_value='/perception/scene_state',
+        description='结构化视觉场景话题',
+    )
+    task_context_topic_arg = DeclareLaunchArgument(
+        'task_context_topic',
+        default_value='/task/context_signal',
+        description='面向外部任务服务的结构化上下文话题',
+    )
     baudrate_arg = DeclareLaunchArgument(
         'baudrate',
         default_value='115200',
@@ -339,6 +370,12 @@ def generate_launch_description():
             'debug': LaunchConfiguration('execution_debug'),
             'task_action_name': LaunchConfiguration('task_action_name'),
             'motion_action_name': LaunchConfiguration('motion_action_name'),
+            'enable_context': LaunchConfiguration('enable_context'),
+            'speech_intent_topic': LaunchConfiguration('speech_intent_topic'),
+            'perception_scene_topic': LaunchConfiguration(
+                'perception_scene_topic'
+            ),
+            'task_context_topic': LaunchConfiguration('task_context_topic'),
             'teleop_command_topic': LaunchConfiguration('execution_teleop_command_topic'),
             'teleop_control_topic': LaunchConfiguration('execution_teleop_control_topic'),
             'task_command_topic': LaunchConfiguration('execution_task_command_topic'),
@@ -417,6 +454,28 @@ def generate_launch_description():
         }.items(),
     )
 
+    context_stack = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('robot_bringup'),
+                'launch',
+                'context.launch.py',
+            ])
+        ),
+        condition=IfCondition(LaunchConfiguration('enable_context')),
+        launch_arguments={
+            'speech_input_topic': LaunchConfiguration('speech_input_topic'),
+            'speech_intent_topic': LaunchConfiguration('speech_intent_topic'),
+            'perception_input_topic': LaunchConfiguration(
+                'perception_input_topic'
+            ),
+            'perception_scene_topic': LaunchConfiguration(
+                'perception_scene_topic'
+            ),
+            'task_action_name': LaunchConfiguration('task_action_name'),
+        }.items(),
+    )
+
     log_info = LogInfo(
         msg=[
             '========================================\n',
@@ -427,6 +486,7 @@ def generate_launch_description():
             '    - task.launch.py\n',
             '    - hardware.launch.py\n',
             '    - simulation.launch.py\n',
+            '    - context.launch.py\n',
             '  WebSocket: ws://',
             LaunchConfiguration('ws_host'),
             ':',
@@ -464,6 +524,9 @@ def generate_launch_description():
             '\n',
             '  仿真域启用: ',
             LaunchConfiguration('enable_simulation'),
+            '\n',
+            '  上下文域启用: ',
+            LaunchConfiguration('enable_context'),
             '\n',
             '========================================\n',
         ],
@@ -513,6 +576,12 @@ def generate_launch_description():
         debug_aggregate_period_arg,
         debug_aggregate_max_len_arg,
         enable_simulation_arg,
+        enable_context_arg,
+        speech_input_topic_arg,
+        speech_intent_topic_arg,
+        perception_input_topic_arg,
+        perception_scene_topic_arg,
+        task_context_topic_arg,
         baudrate_arg,
         i2c_address_arg,
         i2c_bus_arg,
@@ -529,4 +598,5 @@ def generate_launch_description():
         task_stack,
         hardware_stack,
         simulation_stack,
+        context_stack,
     ])
