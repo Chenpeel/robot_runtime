@@ -62,7 +62,7 @@ class YourNode(Node):
 ### 3. 独立运行（测试）
 
 ```bash
-cd src/websocket
+cd src/bridges/teleoperation_bridge
 python -m websocket_bridge.ws_server --host 0.0.0.0 --port 9105 --debug
 ```
 
@@ -150,7 +150,7 @@ servo_hardware -> ServoState -> /servo/state -> execution_manager
   终失败不会阻断其余资源清理。
 - BVH 的消息、发布、联锁、错误合同和专用 demo launch 已归属
   `record_load_action`，不再是本包默认职责。运行方式见
-  `src/record_load_action/README.md`。
+  `src/tools/record_load_action/README.md`。
 
 状态查询与状态广播现在也会携带执行层反馈：
 
@@ -364,7 +364,7 @@ heartbeat:
 运行单元测试:
 
 ```bash
-cd src/websocket
+cd src/bridges/teleoperation_bridge
 pytest test/ -v
 ```
 

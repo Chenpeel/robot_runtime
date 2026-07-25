@@ -63,7 +63,7 @@
 2. **串口路径必须正确**：确保硬件上确实存在该串口设备
 3. **修改后需要重启系统**：修改配置后需要重新启动 ROS 2 launch 文件才能生效
 4. **开发环境 vs 安装环境**：
-   - 开发环境：直接修改 `src/websocket/config/bus_servo_map.json`
+   - 开发环境：直接修改 `src/bridges/teleoperation_bridge/config/bus_servo_map.json`
    - 安装环境：修改安装后的 `share/websocket_bridge/config/bus_servo_map.json`
 
 ### 重新编译和安装
@@ -80,7 +80,7 @@ source install/setup.bash
 启动系统后，launch 文件会打印加载的配置信息：
 
 ```
-✓ 已加载舵机映射配置: /path/to/{this_repo}/src/websocket/config/bus_servo_map.json
+✓ 已加载舵机映射配置: /path/to/{this_repo}/src/bridges/teleoperation_bridge/config/bus_servo_map.json
   配置内容: {'/dev/ttyAMA0': [1, 2], ...}
 ```
 
@@ -98,7 +98,7 @@ source install/setup.bash
 如果配置文件加载失败，系统会使用默认配置并打印警告：
 
 ```
-⚠ 警告: 舵机映射配置文件不存在: /path/to/{this_repo}/src/websocket/config/bus_servo_map.json
+⚠ 警告: 舵机映射配置文件不存在: /path/to/{this_repo}/src/bridges/teleoperation_bridge/config/bus_servo_map.json
   将使用默认配置
 ```
 
@@ -112,5 +112,5 @@ source install/setup.bash
 BVH 动作配置、请求样例、可选 demo launch 与运行说明均归属
 `record_load_action` 包。默认 WebSocket schema 不再广告或装配 BVH，详见：
 
-- `src/record_load_action/README.md`
-- `src/record_load_action/config/bvh_play_request.json`
+- `src/tools/record_load_action/README.md`
+- `src/tools/record_load_action/config/bvh_play_request.json`

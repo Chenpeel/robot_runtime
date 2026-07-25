@@ -207,7 +207,7 @@ def run_scenario():
                     for item in probe.speech_statuses)
                 and any(item.status == 'rejected'
                         and item.reason == 'object_id_not_unique'
-                        and item.observation_id == 'obs-phase5'
+                        and item.observation_id == 'observation-phase5'
                         and item.session_id == 'session-phase5'
                         for item in probe.scenes)
                 and any(item.source == 'speech'
@@ -217,7 +217,7 @@ def run_scenario():
                         for item in probe.contexts)
                 and any(item.source == 'perception'
                         and item.reason == 'object_id_not_unique'
-                        and item.event_id == 'obs-phase5'
+                        and item.event_id == 'observation-phase5'
                         and item.session_id == 'session-phase5'
                         for item in probe.contexts)
         )):
