@@ -61,14 +61,32 @@ bus_protocol_router（协议识别 + ID路由）
 ```text
 /perception/detections_input → vision_perception
                              → /perception/scene_state
-                             → task_service_bridge
-                             → /task/context_signal
+                             ├→ task_service_bridge → /task/context_signal
+                             └→ parallel_3dof_controller
+                                SceneAdmissionGate
+                                → lease 前检查 → task lease
+                                → 锁内复查 / MotionCommand 批次提交
 ```
 
 `speech_interface` 只通过正式 `/task/execute` Action 发起执行，不直连 motion、
 execution 或 driver。`vision_perception` 只发布结构化场景，不发布执行命令。
 当前两个输入 topic 都是可测试的边缘 JSON backend 合同，不代表真实 ASR/TTS、
 相机或检测模型已经完成。
+
+`full_system` 与 `task.launch.py` 在 `enable_context:=true` 时会让当前 motion
+owner 的正式 `/motion/execute` task 路径两次检查 `SceneState`：申请 task lease
+前先 fail-closed；获得 lease 后、首条 task `MotionCommand` 前，
+`SceneAdmissionGate` 会持锁重评估最新场景并同步提交整批命令。场景必须
+`status=ok`、未超过 `scene_max_age_sec`、包含非空 observation ID，且 session
+与 `ExecuteTask` 完整匹配。frame 必须匹配 `scene_required_frame_id`；对象 ID
+必须非空且唯一，`target_group` 对应的目标标签必须唯一存在，目标置信度、三轴
+正尺寸和 AABB 安全包络必须分别满足 `scene_target_min_confidence` 与
+`scene_target_max_extent_m`。缺失、被拒绝、空 observation、过期、跨 session
+或几何不安全的场景会以可恢复 Result 返回，且不会发出 task control、motion 或
+servo 命令；若场景在 lease 等待中失效，controller 会先 cancel/release 已取得
+lease，再返回 rejected，仍不发布 task motion 或 servo 命令。该门禁仅约束正式
+task Action，不把遗留 `~/ankle_rpy` 调试输入描述为场景感知入口。设置
+`enable_context:=false` 则保留不依赖场景的既有任务行为。
 
 **性能指标**:
 
@@ -228,6 +246,10 @@ ros2 launch robot_bringup full_system.launch.py \
   device_id:=robot \
   enable_simulation:=true \
   enable_context:=true \
+  scene_max_age_sec:=2.0 \
+  scene_required_frame_id:=camera_link \
+  scene_target_min_confidence:=0.6 \
+  scene_target_max_extent_m:=2.0 \
   debug:=true \
   baudrate:=115200
 ```
@@ -241,6 +263,25 @@ ros2 launch robot_bringup context.launch.py \
   enable_speech_interface:=true \
   enable_vision_perception:=true
 ```
+
+### 运行时 Profiling
+
+在已 source 的 ROS 工作区内，可运行下列无硬件闭环基线。它分别测量
+`execution_manager`、当前 motion owner 与 `simulation_bridge` 的真实 rclpy/DDS
+端到端延迟、吞吐、进程 CPU 比例和 p50/p95/p99/jitter；运行期间会为所有端点加
+按 PID 隔离的 topic remap，不会接入默认控制图。
+
+```bash
+python3 scripts/profile_runtime_hotpaths.py \
+  --samples 200 \
+  --warmup 20 \
+  --timeout-sec 2 \
+  --output /tmp/runtime-profile.json
+```
+
+已归档的 Humble ARM64 基线与统计口径见
+`docs/runtime_profiling_baseline.md`。该数据用于决定是否存在真实 C++ 迁移热点，
+不是硬件性能承诺，也不能替代目标 Jazzy 或设备回归。
 
 ### 方式二: 使用初始化脚本
 
@@ -268,7 +309,7 @@ ros2 run servo_hardware bus_port_driver --ros-args \
 
 # 2.1 启动总线协议路由
 ros2 run servo_hardware bus_protocol_router --ros-args \
-  -p bus_map_file:=$PWD/src/websocket/config/bus_servo_map.json
+  -p bus_map_file:=$PWD/src/bridges/teleoperation_bridge/config/bus_servo_map.json
 
 # 3. 启动PCA舵机驱动
 ros2 run servo_hardware pca_servo_driver
@@ -413,11 +454,11 @@ ls -l /dev/ttyAMA*
 
 #### 3. 舵机ID映射
 
-根据 `src/websocket/config/bus_servo_map.json` 配置实际ID映射：
+根据 `src/bridges/teleoperation_bridge/config/bus_servo_map.json` 配置实际ID映射：
 
 **注意**:
 - Web客户端只需发送舵机ID，系统自动路由到正确的串口
-- ID映射配置在 `src/websocket/config/bus_servo_map.json`
+- ID映射配置在 `src/bridges/teleoperation_bridge/config/bus_servo_map.json`
 - 支持非连续ID分配（如[3, 7, 9, 10, 11]）
 
 ### I2C配置
@@ -561,7 +602,7 @@ docker compose --profile dev --profile production --profile manual down --remove
 # 使用生产配置启动
 docker compose --profile production up -d ros2_servo_prod
 
-# 生产模式会自动运行 robot_bringup/full_system.launch.py
+# 生产模式会自动运行 src/bringup/robot_bringup/launch/full_system.launch.py
 ```
 
 ---
@@ -571,45 +612,34 @@ docker compose --profile production up -d ros2_servo_prod
 ```
 ros/
 ├── src/
-│   ├── servo_msgs/              # 自定义消息类型
-│   │   ├── msg/
-│   │   │   ├── ServoCommand.msg
-│   │   │   └── ServoState.msg
-│   │   └── package.xml
-│   │
-│   ├── servo_hardware/          # 舵机硬件驱动
-│   │   ├── bus_servo.py         # 总线舵机驱动（支持ID过滤）
-│   │   ├── pca_servo.py         # PCA9685驱动
-│   │   ├── bus_port_driver      # 串口驱动节点（按端口）
-│   │   ├── bus_protocol_router  # 协议识别与统一路由
-│   │   ├── pca_servo_driver     # PCA舵机节点
-│   │   └── package.xml
-│   │
-│   ├── robot_bringup/           # 系统集成与整机启动
-│   │   ├── launch/
-│   │   │   ├── context.launch.py
-│   │   │   ├── parallel_3dof_multi_system.launch.py
-│   │   │   ├── full_system.launch.py
-│   │   │   ├── hardware.launch.py
-│   │   │   ├── task.launch.py
-│   │   │   ├── teleop.launch.py
-│   │   │   └── simulation.launch.py
-│   │   └── package.xml
-│   ├── task_api_msgs/           # ExecuteTask 与 TaskContextSignal 接口
-│   ├── task_service_bridge/     # 唯一 task Action 桥与上下文汇聚
-│   ├── speech_msgs/             # 结构化 SpeechIntent 接口
-│   ├── speech_interface/        # 语音意图边缘适配与 task client
-│   ├── perception_msgs/         # DetectedObject 与 SceneState 接口
-│   ├── vision_perception/       # 检测结果边缘适配
-│   └── websocket_bridge/        # WebSocket桥接
-│       ├── bridge_node.py       # ROS2桥接节点
-│       ├── ws_server.py         # WebSocket服务器
-│       ├── websocket_handler.py # 消息处理器
-│       ├── config/              # 配置文件
-│       │   ├── std_web2ros_stream.json
-│       │   ├── std_ros2web_stream.json
-│       │   └── bus_servo_map.json  # 舵机ID映射配置
-│       └── package.xml
+│   ├── interfaces/              # ROS 公共接口职责域
+│   │   ├── motion_msgs/
+│   │   ├── perception_msgs/
+│   │   ├── servo_msgs/
+│   │   ├── speech_msgs/
+│   │   └── task_api_msgs/
+│   ├── control/
+│   │   └── parallel_3dof_controller/ # 当前 motion owner
+│   ├── execution/
+│   │   ├── execution_manager/   # 执行仲裁与驱动适配
+│   │   ├── sensor_hardware/     # IMU 驱动
+│   │   └── servo_hardware/      # 舵机与协议驱动
+│   ├── bridges/
+│   │   ├── teleoperation_bridge/ # ROS 包名仍为 websocket_bridge
+│   │   ├── task_service_bridge/
+│   │   ├── simulation_bridge/
+│   │   └── sim_joint_bridge_cpp/
+│   ├── bringup/
+│   │   └── robot_bringup/       # 系统集成与分域 launch
+│   ├── speech/
+│   │   └── speech_interface/
+│   ├── perception/
+│   │   └── vision_perception/
+│   ├── description/
+│   │   ├── robot_description/
+│   │   └── mjc_viewer/
+│   └── tools/
+│       └── record_load_action/  # BVH/demo 可选工具
 ├── scripts/
 │   ├── init.sh                  # 初始化脚本
 │   ├── test_bus_servo.sh        # 总线舵机测试

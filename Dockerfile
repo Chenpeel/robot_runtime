@@ -66,6 +66,9 @@ RUN apt-get update && apt-get install -y \
     ros-${ROS_DISTRO}-std-msgs \
     ros-${ROS_DISTRO}-robot-state-publisher \
     ros-${ROS_DISTRO}-joint-state-publisher \
+    ros-${ROS_DISTRO}-ros2-control \
+    ros-${ROS_DISTRO}-ros2-controllers \
+    libi2c-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建工作空间

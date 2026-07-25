@@ -10,6 +10,7 @@ def _default_config_path() -> Path:
     return (
         repo_root
         / 'src'
+        / 'tools'
         / 'record_load_action'
         / 'config'
         / 'bvh_action_map.json'
