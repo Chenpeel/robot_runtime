@@ -34,6 +34,7 @@
 
 #include "robot_hardware/conversion.hpp"
 #include "robot_hardware/i2c_device.hpp"
+#include "robot_hardware/position_actuator_system.hpp"
 
 namespace robot_hardware
 {
@@ -45,40 +46,30 @@ namespace robot_hardware
  * 是最近命令的估计回显，
  * 不能视为关节的实测位置。
  */
-class Pca9685System : public hardware_interface::SystemInterface
+class Pca9685System : public PositionActuatorSystem
 {
 public:
-  hardware_interface::CallbackReturn on_init(
-    const hardware_interface::HardwareInfo & info) override;
-
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
-
-  hardware_interface::CallbackReturn on_configure(
-    const rclcpp_lifecycle::State & previous_state) override;
-  hardware_interface::CallbackReturn on_cleanup(
-    const rclcpp_lifecycle::State & previous_state) override;
-  hardware_interface::CallbackReturn on_activate(
-    const rclcpp_lifecycle::State & previous_state) override;
-  hardware_interface::CallbackReturn on_deactivate(
-    const rclcpp_lifecycle::State & previous_state) override;
-
   hardware_interface::return_type read(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
   hardware_interface::return_type write(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
-  struct JointConfiguration
-  {
-    std::uint8_t channel{0};
-    double offset_raw{0.0};
-    PositionCalibration calibration;
-  };
+  // --- PositionActuatorSystem 纯虚函数实现 ---
+  bool do_configure() override;
+  bool do_cleanup() override;
+  std::optional<double> do_read_single(std::size_t index) override;
+  bool do_write_single(std::size_t index, double position) override;
+  void do_stop_single(std::size_t index) override;
+
+  // --- PositionActuatorSystem 可选覆盖 ---
+  void parse_hardware_params(
+    const std::unordered_map<std::string, std::string> & parameters) override;
+  JointConfig parse_joint_config(
+    const hardware_interface::ComponentInfo & joint) override;
 
   void initialize_controller();
   void write_channel(std::uint8_t channel, std::uint16_t pwm);
-  void set_channel_full_off(std::uint8_t channel);
 
   I2cDevice device_;
   std::string i2c_device_{"/dev/i2c-1"};
@@ -88,9 +79,10 @@ private:
   std::uint16_t max_pwm_{520};
   bool deactivate_full_off_{true};
 
-  std::vector<JointConfiguration> joints_;
-  std::vector<double> command_positions_;
-  std::vector<double> state_positions_;
+  /// PCA9685 专属字段：每个关节的通道号和 PWM 偏置
+  std::vector<std::uint8_t> channels_;
+  std::vector<double> offset_raws_;
+
   std::vector<int> last_pwm_;
 };
 

@@ -35,27 +35,21 @@
 #include "rclcpp/macros.hpp"
 #include "robot_hardware/bus_servo_protocol.hpp"
 #include "robot_hardware/conversion.hpp"
+#include "robot_hardware/param_utils.hpp"
+#include "robot_hardware/position_actuator_system.hpp"
 #include "robot_hardware/serial_port.hpp"
 
 namespace robot_hardware
 {
 
-class BusServoSystem : public hardware_interface::SystemInterface
+class BusServoSystem : public PositionActuatorSystem
 {
 public:
   RCLCPP_SHARED_PTR_DEFINITIONS(BusServoSystem)
 
-  hardware_interface::CallbackReturn on_init(
-    const hardware_interface::HardwareInfo & info) override;
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
-  hardware_interface::CallbackReturn on_configure(
-    const rclcpp_lifecycle::State & previous_state) override;
   hardware_interface::CallbackReturn on_activate(
     const rclcpp_lifecycle::State & previous_state) override;
   hardware_interface::CallbackReturn on_deactivate(
-    const rclcpp_lifecycle::State & previous_state) override;
-  hardware_interface::CallbackReturn on_cleanup(
     const rclcpp_lifecycle::State & previous_state) override;
   hardware_interface::return_type read(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
@@ -74,8 +68,20 @@ private:
     unsigned int consecutive_errors{0};
   };
 
+  // --- PositionActuatorSystem 纯虚函数实现 ---
+  bool do_configure() override;
+  bool do_cleanup() override;
+  std::optional<double> do_read_single(std::size_t index) override;
+  bool do_write_single(std::size_t index, double position) override;
+  void do_stop_single(std::size_t index) override;
+
+  // --- PositionActuatorSystem 可选覆盖 ---
+  void parse_hardware_params(
+    const std::unordered_map<std::string, std::string> & parameters) override;
+  JointConfig parse_joint_config(
+    const hardware_interface::ComponentInfo & joint) override;
+
   bool read_servo(std::size_t index, bool report_error);
-  void stop_all() noexcept;
 
   std::string port_;
   int baud_rate_{115200};

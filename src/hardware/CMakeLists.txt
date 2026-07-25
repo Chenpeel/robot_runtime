@@ -20,6 +20,7 @@ add_library(${PROJECT_NAME} SHARED
   src/bus_servo_system.cpp
   src/i2c_device.cpp
   src/pca9685_system.cpp
+  src/position_actuator_system.cpp
   src/serial_port.cpp
   src/yb_imu_sensor.cpp
 )
