@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<library path="robot_hardware">
+  <class
+    name="robot_hardware/BusServoSystem"
+    type="robot_hardware::BusServoSystem"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>Mixed LX/ZL bus servos sharing one serial port.</description>
+  </class>
+  <class
+    name="robot_hardware/Pca9685System"
+    type="robot_hardware::Pca9685System"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>PCA9685 open-loop position system.</description>
+  </class>
+  <class
+    name="robot_hardware/YbImuSensor"
+    type="robot_hardware::YbImuSensor"
+    base_class_type="hardware_interface::SensorInterface">
+    <description>YbImu sensor over I2C or serial transport.</description>
+  </class>
+</library>
