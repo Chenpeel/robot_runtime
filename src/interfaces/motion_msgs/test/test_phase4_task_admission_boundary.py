@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _read(relative_path: str) -> str:
@@ -73,7 +73,7 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
     """固定正式 task、teleop、普通 motion 与驱动层之间的入口边界。"""
 
     def test_motion_msgs_exports_task_control_and_state(self):
-        cmake = _read('src/motion_msgs/CMakeLists.txt')
+        cmake = _read('src/interfaces/motion_msgs/CMakeLists.txt')
         self.assertIn('"msg/TaskExecutionControl.msg"', cmake)
         self.assertIn('"msg/TaskExecutionState.msg"', cmake)
 
@@ -87,11 +87,11 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
                 'builtin_interfaces/Time stamp',
             ],
             _message_fields(
-                'src/motion_msgs/msg/TaskExecutionControl.msg'
+                'src/interfaces/motion_msgs/msg/TaskExecutionControl.msg'
             ),
         )
         state_fields = _message_fields(
-            'src/motion_msgs/msg/TaskExecutionState.msg'
+            'src/interfaces/motion_msgs/msg/TaskExecutionState.msg'
         )
         for field in (
             'bool active',
@@ -127,7 +127,9 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
                 'string lease_id',
                 'builtin_interfaces/Time stamp',
             ],
-            _message_fields('src/motion_msgs/msg/MotionCommand.msg'),
+            _message_fields(
+                'src/interfaces/motion_msgs/msg/MotionCommand.msg'
+            ),
         )
         self.assertEqual(
             [
@@ -153,12 +155,14 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
                 'string last_rejection_reason',
                 'builtin_interfaces/Time stamp',
             ],
-            _message_fields('src/motion_msgs/msg/ExecutionState.msg'),
+            _message_fields(
+                'src/interfaces/motion_msgs/msg/ExecutionState.msg'
+            ),
         )
 
     def test_execution_manager_owns_task_admission_and_state(self):
         node_path = (
-            'src/execution_manager/execution_manager/'
+            'src/execution/execution_manager/execution_manager/'
             'execution_manager_node.py'
         )
         imports = _imported_names(node_path, 'motion_msgs.msg')
@@ -178,7 +182,7 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
             .issubset(subscriptions)
         )
         arbitrator = _read(
-            'src/execution_manager/execution_manager/arbitrator.py'
+            'src/execution/execution_manager/execution_manager/arbitrator.py'
         )
         self.assertIn("self.mode = 'task_active'", arbitrator)
         self.assertIn("self.active_source = 'task'", arbitrator)
@@ -188,11 +192,13 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
 
     def test_execution_manager_owns_driver_level_service_adaptation(self):
         node_path = (
-            'src/execution_manager/execution_manager/'
+            'src/execution/execution_manager/execution_manager/'
             'execution_manager_node.py'
         )
         source = _read(node_path)
-        package_source = _read('src/execution_manager/package.xml')
+        package_source = _read(
+            'src/execution/execution_manager/package.xml'
+        )
 
         self.assertIn('ReadActuatorPosition', source)
         self.assertIn('StopActuators', source)
@@ -208,10 +214,11 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
         self.assertIn('<depend>servo_msgs</depend>', package_source)
 
         for relative_path in (
-            'src/task_service_bridge/package.xml',
-            'src/task_service_bridge/task_service_bridge/bridge_node.py',
-            'src/parallel_3dof_controller/package.xml',
-            'src/parallel_3dof_controller/parallel_3dof_controller/'
+            'src/bridges/task_service_bridge/package.xml',
+            'src/bridges/task_service_bridge/task_service_bridge/'
+            'bridge_node.py',
+            'src/control/parallel_3dof_controller/package.xml',
+            'src/control/parallel_3dof_controller/parallel_3dof_controller/'
             'controller_node.py',
         ):
             with self.subTest(relative_path=relative_path):
@@ -225,10 +232,12 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
 
     def test_ros_pub_sub_smoke_is_colcon_discoverable(self):
         runner = _read(
-            'src/execution_manager/test/task_admission_ros_smoke.py'
+            'src/execution/execution_manager/test/'
+            'task_admission_ros_smoke.py'
         )
         pytest_entry = _read(
-            'src/execution_manager/test/test_task_admission_ros_smoke.py'
+            'src/execution/execution_manager/test/'
+            'test_task_admission_ros_smoke.py'
         )
 
         self.assertIn('def run_scenario()', runner)
@@ -237,9 +246,10 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
 
     def test_launches_wire_task_topics_and_timeout(self):
         launch_paths = (
-            'src/execution_manager/launch/execution_manager.launch.py',
-            'src/robot_bringup/launch/teleop.launch.py',
-            'src/robot_bringup/launch/full_system.launch.py',
+            'src/execution/execution_manager/launch/'
+            'execution_manager.launch.py',
+            'src/bringup/robot_bringup/launch/teleop.launch.py',
+            'src/bringup/robot_bringup/launch/full_system.launch.py',
         )
         required_tokens = (
             'task_command_topic',
@@ -255,10 +265,13 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
 
     def test_bvh_blocks_task_window_but_websocket_is_not_task_entry(self):
         extension = _read(
-            'src/record_load_action/record_load_action/'
+            'src/tools/record_load_action/record_load_action/'
             'bvh_websocket_extension.py'
         )
-        bridge = _read('src/websocket/websocket_bridge/bridge_node.py')
+        bridge = _read(
+            'src/bridges/teleoperation_bridge/websocket_bridge/'
+            'bridge_node.py'
+        )
 
         self.assertIn("'bvh_blocked_by_active_task'", extension)
         self.assertIn("snapshot.get('active_source') == 'task'", extension)
@@ -268,15 +281,18 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
 
     def test_formal_task_entry_is_owned_by_task_service_bridge(self):
         task_bridge_node = _read(
-            'src/task_service_bridge/task_service_bridge/bridge_node.py'
+            'src/bridges/task_service_bridge/task_service_bridge/'
+            'bridge_node.py'
         )
-        task_bridge_package = _read('src/task_service_bridge/package.xml')
+        task_bridge_package = _read(
+            'src/bridges/task_service_bridge/package.xml'
+        )
         motion_owner_node = _read(
-            'src/parallel_3dof_controller/parallel_3dof_controller/'
+            'src/control/parallel_3dof_controller/parallel_3dof_controller/'
             'controller_node.py'
         )
         motion_owner_package = _read(
-            'src/parallel_3dof_controller/package.xml'
+            'src/control/parallel_3dof_controller/package.xml'
         )
 
         self.assertEqual(1, task_bridge_node.count('ActionServer('))
@@ -285,7 +301,9 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
         self.assertIn("'/motion/execute'", task_bridge_node)
         self.assertNotIn(
             'servo_msgs',
-            _runtime_dependencies('src/task_service_bridge/package.xml'),
+            _runtime_dependencies(
+                'src/bridges/task_service_bridge/package.xml'
+            ),
         )
         self.assertNotIn('servo_msgs', task_bridge_node)
         self.assertNotIn('MotionCommand', task_bridge_node)
@@ -311,14 +329,19 @@ class TestPhase4TaskAdmissionBoundary(unittest.TestCase):
                 motion_entry_owners.append(relative_path)
 
         self.assertEqual(
-            ['src/task_service_bridge/task_service_bridge/bridge_node.py'],
+            [
+                'src/bridges/task_service_bridge/task_service_bridge/'
+                'bridge_node.py'
+            ],
             task_entry_owners,
         )
         self.assertEqual(
             [
-                'src/parallel_3dof_controller/parallel_3dof_controller/'
+                'src/bridges/task_service_bridge/task_service_bridge/'
+                'bridge_node.py',
+                'src/control/parallel_3dof_controller/'
+                'parallel_3dof_controller/'
                 'controller_node.py',
-                'src/task_service_bridge/task_service_bridge/bridge_node.py',
             ],
             sorted(motion_entry_owners),
         )

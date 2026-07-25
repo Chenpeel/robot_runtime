@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 RUNTIME_DEPENDENCY_TAGS = {
     'build_depend',
     'build_export_depend',
@@ -97,7 +97,9 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
     """固定上层、执行层和驱动层之间的双向接口边界。"""
 
     def test_motion_msgs_exports_actuator_state_contract(self):
-        message_source = _read('src/motion_msgs/msg/ActuatorState.msg')
+        message_source = _read(
+            'src/interfaces/motion_msgs/msg/ActuatorState.msg'
+        )
         required_fields = {
             'string actuator_type',
             'uint16 actuator_id',
@@ -118,17 +120,20 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
 
         self.assertIn(
             '"msg/ActuatorState.msg"',
-            _read('src/motion_msgs/CMakeLists.txt'),
+            _read('src/interfaces/motion_msgs/CMakeLists.txt'),
         )
 
     def test_upper_packages_depend_only_on_motion_interface(self):
         upper_packages = {
-            'src/websocket': 'src/websocket/websocket_bridge',
-            'src/parallel_3dof_controller': (
-                'src/parallel_3dof_controller/parallel_3dof_controller'
+            'src/bridges/teleoperation_bridge': (
+                'src/bridges/teleoperation_bridge/websocket_bridge'
             ),
-            'src/record_load_action': (
-                'src/record_load_action/record_load_action'
+            'src/control/parallel_3dof_controller': (
+                'src/control/parallel_3dof_controller/'
+                'parallel_3dof_controller'
+            ),
+            'src/tools/record_load_action': (
+                'src/tools/record_load_action/record_load_action'
             ),
         }
 
@@ -171,16 +176,20 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
 
         self.assertNotIn(
             'motion_msgs',
-            _manifest_dependencies('src/hardware/package.xml'),
+            _manifest_dependencies(
+                'src/execution/servo_hardware/package.xml'
+            ),
         )
         self.assertNotIn(
             'motion_msgs',
-            _import_roots('src/hardware/servo_hardware'),
+            _import_roots(
+                'src/execution/servo_hardware/servo_hardware'
+            ),
         )
 
     def test_execution_manager_owns_command_and_feedback_adaptation(self):
         node_path = (
-            'src/execution_manager/execution_manager/'
+            'src/execution/execution_manager/execution_manager/'
             'execution_manager_node.py'
         )
         motion_imports = _imported_names(node_path, 'motion_msgs.msg')
@@ -209,7 +218,10 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
         )
 
     def test_websocket_consumes_execution_feedback_not_driver_feedback(self):
-        bridge_path = 'src/websocket/websocket_bridge/bridge_node.py'
+        bridge_path = (
+            'src/bridges/teleoperation_bridge/websocket_bridge/'
+            'bridge_node.py'
+        )
         motion_imports = _imported_names(bridge_path, 'motion_msgs.msg')
         subscriptions = _ros_factory_message_types(
             bridge_path,
@@ -221,15 +233,17 @@ class TestPhase3ExecutionBoundary(unittest.TestCase):
         self.assertIn('ActuatorState', subscriptions)
         self.assertNotIn(
             '/servo/state',
-            _runtime_string_literals('src/websocket/websocket_bridge'),
+            _runtime_string_literals(
+                'src/bridges/teleoperation_bridge/websocket_bridge'
+            ),
         )
 
     def test_bringup_wires_execution_feedback_topic(self):
         teleop_source = _read(
-            'src/robot_bringup/launch/teleop.launch.py'
+            'src/bringup/robot_bringup/launch/teleop.launch.py'
         )
         full_system_source = _read(
-            'src/robot_bringup/launch/full_system.launch.py'
+            'src/bringup/robot_bringup/launch/full_system.launch.py'
         )
 
         self.assertIn("'driver_state_topic': '/servo/state'", teleop_source)

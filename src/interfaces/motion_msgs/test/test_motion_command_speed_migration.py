@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _message_fields(relative_path: str) -> List[Tuple[str, str]]:
@@ -60,7 +60,7 @@ class TestMotionCommandSpeedMigration(unittest.TestCase):
     """防止已弃用字段重新进入仓库内置运行链路。"""
 
     def test_public_field_is_deprecated_during_migration_window(self):
-        relative_path = 'src/motion_msgs/msg/MotionCommand.msg'
+        relative_path = 'src/interfaces/motion_msgs/msg/MotionCommand.msg'
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding='utf-8')
         fields = _message_fields(relative_path)
 
@@ -71,10 +71,10 @@ class TestMotionCommandSpeedMigration(unittest.TestCase):
 
     def test_builtin_producers_do_not_write_speed(self):
         producers = (
-            'src/websocket/websocket_bridge/bridge_node.py',
-            'src/parallel_3dof_controller/'
+            'src/bridges/teleoperation_bridge/websocket_bridge/bridge_node.py',
+            'src/control/parallel_3dof_controller/'
             'parallel_3dof_controller/controller_node.py',
-            'src/record_load_action/record_load_action/'
+            'src/tools/record_load_action/record_load_action/'
             'bvh_websocket_extension.py',
         )
 
@@ -98,7 +98,8 @@ class TestMotionCommandSpeedMigration(unittest.TestCase):
 
     def test_execution_adapter_does_not_read_speed(self):
         relative_path = (
-            'src/execution_manager/execution_manager/command_adapter.py'
+            'src/execution/execution_manager/execution_manager/'
+            'command_adapter.py'
         )
         source = (REPOSITORY_ROOT / relative_path).read_text(encoding='utf-8')
         speed_accesses = _attribute_accesses(relative_path, 'speed')
@@ -114,23 +115,25 @@ class TestMotionCommandSpeedMigration(unittest.TestCase):
 
     def test_distinct_speed_contracts_remain_intact(self):
         servo_fields = _message_fields(
-            'src/servo_msgs/msg/ServoCommand.msg'
+            'src/interfaces/servo_msgs/msg/ServoCommand.msg'
         )
         execution_source = (
             REPOSITORY_ROOT
-            / 'src/execution_manager/execution_manager/execution_manager_node.py'
+            / 'src/execution/execution_manager/execution_manager/'
+            'execution_manager_node.py'
         ).read_text(encoding='utf-8')
         websocket_source = (
             REPOSITORY_ROOT
-            / 'src/websocket/websocket_bridge/message_handler.py'
+            / 'src/bridges/teleoperation_bridge/websocket_bridge/'
+            'message_handler.py'
         ).read_text(encoding='utf-8')
         bvh_request_source = (
             REPOSITORY_ROOT
-            / 'src/record_load_action/record_load_action/bvh_request.py'
+            / 'src/tools/record_load_action/record_load_action/bvh_request.py'
         ).read_text(encoding='utf-8')
         bvh_runtime_source = (
             REPOSITORY_ROOT
-            / 'src/record_load_action/record_load_action/bvh_runtime.py'
+            / 'src/tools/record_load_action/record_load_action/bvh_runtime.py'
         ).read_text(encoding='utf-8')
 
         self.assertIn(('uint16', 'speed'), servo_fields)
