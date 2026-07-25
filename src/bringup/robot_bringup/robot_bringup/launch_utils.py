@@ -24,17 +24,22 @@ def resolve_bus_config_file():
     except PackageNotFoundError:
         installed_config_file = ''
 
-    workspace_source_config_file = '/root/ros_ws/src/websocket/config/bus_servo_map.json'
+    workspace_source_config_file = (
+        '/root/ros_ws/src/bridges/teleoperation_bridge/config/'
+        'bus_servo_map.json'
+    )
     cwd_source_config_file = os.path.join(
         Path.cwd(),
         'src',
-        'websocket',
+        'bridges',
+        'teleoperation_bridge',
         'config',
         'bus_servo_map.json',
     )
     repo_source_config_file = os.path.join(
-        Path(__file__).resolve().parents[2],
-        'websocket',
+        Path(__file__).resolve().parents[3],
+        'bridges',
+        'teleoperation_bridge',
         'config',
         'bus_servo_map.json',
     )

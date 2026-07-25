@@ -255,6 +255,26 @@ def generate_launch_description():
         default_value='/perception/scene_state',
         description='结构化视觉场景话题',
     )
+    scene_max_age_sec_arg = DeclareLaunchArgument(
+        'scene_max_age_sec',
+        default_value='2.0',
+        description='context 启用时 motion owner 允许的场景最大接收年龄',
+    )
+    scene_required_frame_id_arg = DeclareLaunchArgument(
+        'scene_required_frame_id',
+        default_value='camera_link',
+        description='motion owner 接受目标几何的坐标系',
+    )
+    scene_target_min_confidence_arg = DeclareLaunchArgument(
+        'scene_target_min_confidence',
+        default_value='0.6',
+        description='目标脚踝对象的最低准入置信度',
+    )
+    scene_target_max_extent_m_arg = DeclareLaunchArgument(
+        'scene_target_max_extent_m',
+        default_value='2.0',
+        description='目标对象 AABB 各轴最大绝对边界',
+    )
     task_context_topic_arg = DeclareLaunchArgument(
         'task_context_topic',
         default_value='/task/context_signal',
@@ -374,6 +394,16 @@ def generate_launch_description():
             'speech_intent_topic': LaunchConfiguration('speech_intent_topic'),
             'perception_scene_topic': LaunchConfiguration(
                 'perception_scene_topic'
+            ),
+            'scene_max_age_sec': LaunchConfiguration('scene_max_age_sec'),
+            'scene_required_frame_id': LaunchConfiguration(
+                'scene_required_frame_id'
+            ),
+            'scene_target_min_confidence': LaunchConfiguration(
+                'scene_target_min_confidence'
+            ),
+            'scene_target_max_extent_m': LaunchConfiguration(
+                'scene_target_max_extent_m'
             ),
             'task_context_topic': LaunchConfiguration('task_context_topic'),
             'teleop_command_topic': LaunchConfiguration('execution_teleop_command_topic'),
@@ -581,6 +611,10 @@ def generate_launch_description():
         speech_intent_topic_arg,
         perception_input_topic_arg,
         perception_scene_topic_arg,
+        scene_max_age_sec_arg,
+        scene_required_frame_id_arg,
+        scene_target_min_confidence_arg,
+        scene_target_max_extent_m_arg,
         task_context_topic_arg,
         baudrate_arg,
         i2c_address_arg,

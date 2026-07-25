@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 RUNTIME_DEPENDENCY_TAGS = {
     'build_depend',
     'build_export_depend',
@@ -236,16 +236,16 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
 
     def test_simulation_responsibility_is_outside_websocket_package(self):
         websocket_dependencies = _manifest_dependencies(
-            'src/websocket/package.xml'
+            'src/bridges/teleoperation_bridge/package.xml'
         )
         websocket_imports = _import_roots(
-            'src/websocket/websocket_bridge'
+            'src/bridges/teleoperation_bridge/websocket_bridge'
         )
         simulation_dependencies = _manifest_dependencies(
-            'src/simulation_bridge/package.xml'
+            'src/bridges/simulation_bridge/package.xml'
         )
         simulation_imports = _import_roots(
-            'src/simulation_bridge/simulation_bridge'
+            'src/bridges/simulation_bridge/simulation_bridge'
         )
         simulation_packages = {
             'sim_joint_bridge_cpp',
@@ -254,20 +254,24 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
 
         self.assertEqual(
             'websocket_bridge',
-            _manifest_name('src/websocket/package.xml'),
+            _manifest_name(
+                'src/bridges/teleoperation_bridge/package.xml'
+            ),
         )
         self.assertEqual(
             'simulation_bridge',
-            _manifest_name('src/simulation_bridge/package.xml'),
+            _manifest_name('src/bridges/simulation_bridge/package.xml'),
         )
         self.assertTrue(simulation_packages.isdisjoint(websocket_dependencies))
         self.assertTrue(simulation_packages.isdisjoint(websocket_imports))
         self.assertNotIn('websocket_bridge', simulation_dependencies)
         self.assertNotIn('websocket_bridge', simulation_imports)
 
-        websocket_scripts = _setup_console_scripts('src/websocket/setup.py')
+        websocket_scripts = _setup_console_scripts(
+            'src/bridges/teleoperation_bridge/setup.py'
+        )
         simulation_scripts = _setup_console_scripts(
-            'src/simulation_bridge/setup.py'
+            'src/bridges/simulation_bridge/setup.py'
         )
         self.assertEqual(
             'websocket_bridge.bridge_node:main',
@@ -297,16 +301,18 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
                 str(path.relative_to(REPOSITORY_ROOT))
                 for path in (
                     REPOSITORY_ROOT
-                    / 'src/websocket/websocket_bridge/isaac_bridge_node.py',
+                    / 'src/bridges/teleoperation_bridge/websocket_bridge/'
+                    'isaac_bridge_node.py',
                     REPOSITORY_ROOT
-                    / 'src/websocket/websocket_bridge/isaac_bridge_utils.py',
+                    / 'src/bridges/teleoperation_bridge/websocket_bridge/'
+                    'isaac_bridge_utils.py',
                 )
                 if path.exists()
             ],
         )
 
         simulation_literals = _string_literals(
-            'src/robot_bringup/launch/simulation.launch.py'
+            'src/bringup/robot_bringup/launch/simulation.launch.py'
         )
         self.assertIn('simulation_bridge', simulation_literals)
         self.assertIn('simulation.launch.py', simulation_literals)
@@ -314,30 +320,35 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
     def test_sensor_hardware_is_an_independent_package(self):
         self.assertEqual(
             'sensor_hardware',
-            _manifest_name('src/sensor_hardware/package.xml'),
+            _manifest_name('src/execution/sensor_hardware/package.xml'),
         )
         self.assertEqual(
             'servo_hardware',
-            _manifest_name('src/hardware/package.xml'),
+            _manifest_name('src/execution/servo_hardware/package.xml'),
         )
 
         servo_dependencies = _manifest_dependencies(
-            'src/hardware/package.xml'
+            'src/execution/servo_hardware/package.xml'
         )
         sensor_dependencies = _manifest_dependencies(
-            'src/sensor_hardware/package.xml'
+            'src/execution/sensor_hardware/package.xml'
         )
-        servo_scripts = _setup_console_scripts('src/hardware/setup.py')
+        servo_scripts = _setup_console_scripts(
+            'src/execution/servo_hardware/setup.py'
+        )
         sensor_scripts = _setup_console_scripts(
-            'src/sensor_hardware/setup.py'
+            'src/execution/sensor_hardware/setup.py'
         )
         old_sensor_sources = [
             str(path.relative_to(REPOSITORY_ROOT))
             for path in (
-                REPOSITORY_ROOT / 'src/hardware/sensor_hardware/__init__.py',
-                REPOSITORY_ROOT / 'src/hardware/sensor_hardware/imu_driver.py',
                 REPOSITORY_ROOT
-                / 'src/hardware/sensor_hardware/imu_serial_driver.py',
+                / 'src/execution/servo_hardware/sensor_hardware/__init__.py',
+                REPOSITORY_ROOT
+                / 'src/execution/servo_hardware/sensor_hardware/imu_driver.py',
+                REPOSITORY_ROOT
+                / 'src/execution/servo_hardware/sensor_hardware/'
+                'imu_serial_driver.py',
             )
             if path.exists()
         ]
@@ -366,7 +377,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
         )
 
         hardware_nodes = _node_package_executables(
-            'src/robot_bringup/launch/hardware.launch.py'
+            'src/bringup/robot_bringup/launch/hardware.launch.py'
         )
         self.assertIn(
             ('sensor_hardware', 'imu_serial_driver'),
@@ -384,8 +395,8 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
 
     def test_action_playback_is_opt_in_from_the_default_stack(self):
         for manifest_path in (
-            'src/robot_bringup/package.xml',
-            'src/websocket/package.xml',
+            'src/bringup/robot_bringup/package.xml',
+            'src/bridges/teleoperation_bridge/package.xml',
         ):
             with self.subTest(manifest=manifest_path):
                 self.assertNotIn(
@@ -394,32 +405,36 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
                 )
 
         for launch_path in (
-            'src/robot_bringup/launch/full_system.launch.py',
-            'src/robot_bringup/launch/teleop.launch.py',
+            'src/bringup/robot_bringup/launch/full_system.launch.py',
+            'src/bringup/robot_bringup/launch/teleop.launch.py',
         ):
             with self.subTest(launch=launch_path):
                 self.assertNotIn('record_load_action', _read(launch_path))
 
         websocket_imports = _import_roots(
-            'src/websocket/websocket_bridge'
+            'src/bridges/teleoperation_bridge/websocket_bridge'
         )
         bringup_imports = _import_roots(
-            'src/robot_bringup/robot_bringup'
+            'src/bringup/robot_bringup/robot_bringup'
         )
         self.assertNotIn('record_load_action', websocket_imports)
         self.assertNotIn('record_load_action', bringup_imports)
         teleop_defaults = _launch_argument_defaults(
-            'src/robot_bringup/launch/teleop.launch.py'
+            'src/bringup/robot_bringup/launch/teleop.launch.py'
         )
         self.assertEqual('', teleop_defaults.get('bridge_extension_factories'))
 
         schema = json.loads(
-            _read('src/websocket/config/std_web2ros_stream.json')
+            _read(
+                'src/bridges/teleoperation_bridge/config/'
+                'std_web2ros_stream.json'
+            )
         )
         self.assertNotIn('bvh_play', _json_tokens(schema))
 
         demo_literals = _string_literals(
-            'src/record_load_action/launch/bvh_websocket_demo.launch.py'
+            'src/tools/record_load_action/launch/'
+            'bvh_websocket_demo.launch.py'
         )
         self.assertIn('robot_bringup', demo_literals)
         self.assertIn('teleop.launch.py', demo_literals)
@@ -430,7 +445,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
 
     def test_full_system_composes_runtime_domain_launches(self):
         full_system_path = (
-            'src/robot_bringup/launch/full_system.launch.py'
+            'src/bringup/robot_bringup/launch/full_system.launch.py'
         )
         returned_includes = _returned_include_targets(full_system_path)
         expected_includes = {
@@ -443,10 +458,12 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
 
         self.assertEqual(expected_includes, returned_includes)
 
-        setup_literals = _string_literals('src/robot_bringup/setup.py')
+        setup_literals = _string_literals(
+            'src/bringup/robot_bringup/setup.py'
+        )
         self.assertIn('launch/*.launch.py', setup_literals)
         bringup_dependencies = _manifest_dependencies(
-            'src/robot_bringup/package.xml'
+            'src/bringup/robot_bringup/package.xml'
         )
         self.assertTrue(
             {
@@ -497,7 +514,7 @@ class TestPhase2BoundaryCompletion(unittest.TestCase):
         for launch_name, expected in domain_packages.items():
             with self.subTest(launch=launch_name):
                 connected_packages = _connected_packages(
-                    f'src/robot_bringup/launch/{launch_name}'
+                    f'src/bringup/robot_bringup/launch/{launch_name}'
                 )
                 self.assertTrue(
                     expected['required'].issubset(connected_packages)

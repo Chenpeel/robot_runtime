@@ -66,6 +66,10 @@ class TestContextLaunchSource(unittest.TestCase):
         source = _source(FULL_SYSTEM_PATH)
 
         self.assertEqual('true', defaults['enable_context'])
+        self.assertEqual('2.0', defaults['scene_max_age_sec'])
+        self.assertEqual('camera_link', defaults['scene_required_frame_id'])
+        self.assertEqual('0.6', defaults['scene_target_min_confidence'])
+        self.assertEqual('2.0', defaults['scene_target_max_extent_m'])
         self.assertIn("'context.launch.py'", source)
         self.assertIn(
             "condition=IfCondition(LaunchConfiguration('enable_context'))",

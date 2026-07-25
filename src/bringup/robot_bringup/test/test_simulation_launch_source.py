@@ -150,7 +150,8 @@ class TestSimulationLaunchSource(unittest.TestCase):
         )
         self.assertIn("default_value=protocol_cache_default,", source)
         self.assertNotIn(
-            '/root/ros_ws/src/websocket/config/bus_protocol_cache.json',
+            '/root/ros_ws/src/bridges/teleoperation_bridge/config/'
+            'bus_protocol_cache.json',
             source,
         )
 

@@ -158,6 +158,13 @@ class TestTaskLaunchSource(unittest.TestCase):
             '/perception/scene_state',
             defaults.get('perception_scene_topic'),
         )
+        self.assertEqual('2.0', defaults.get('scene_max_age_sec'))
+        self.assertEqual(
+            'camera_link',
+            defaults.get('scene_required_frame_id'),
+        )
+        self.assertEqual('0.6', defaults.get('scene_target_min_confidence'))
+        self.assertEqual('2.0', defaults.get('scene_target_max_extent_m'))
         self.assertEqual('/task/context_signal', defaults.get('task_context_topic'))
         self.assertEqual(
             '/execution/task/command',
@@ -217,6 +224,24 @@ class TestTaskLaunchSource(unittest.TestCase):
             'motion_action_name',
             motion_arguments['motion_action_name'],
         )
+        self.assertEqual(
+            'enable_context',
+            motion_arguments['require_scene_context'],
+        )
+        self.assertEqual(
+            'perception_scene_topic',
+            motion_arguments['scene_state_topic'],
+        )
+        self.assertEqual(
+            'scene_max_age_sec',
+            motion_arguments['scene_max_age_sec'],
+        )
+        for interface_name in (
+            'scene_required_frame_id',
+            'scene_target_min_confidence',
+            'scene_target_max_extent_m',
+        ):
+            self.assertEqual(interface_name, motion_arguments[interface_name])
         for interface_name in (
             'task_command_topic',
             'task_control_topic',
@@ -322,7 +347,8 @@ class TestTaskLaunchSource(unittest.TestCase):
 
     def test_multi_system_keeps_single_formal_motion_owner(self):
         multi_launch = (
-            PACKAGE_ROOT.parent
+            PACKAGE_ROOT.parents[1]
+            / 'control'
             / 'parallel_3dof_controller'
             / 'launch'
             / 'parallel_3dof_multi.launch.py'
