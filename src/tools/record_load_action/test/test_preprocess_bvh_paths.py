@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 SCRIPT_PATH = REPOSITORY_ROOT / 'scripts/preprocess_bvh.py'
 SPEC = importlib.util.spec_from_file_location('preprocess_bvh', SCRIPT_PATH)
 PREPROCESS_BVH = importlib.util.module_from_spec(SPEC)
@@ -24,7 +24,7 @@ class TestPreprocessBvhPaths(unittest.TestCase):
 
         self.assertEqual(
             REPOSITORY_ROOT
-            / 'src/record_load_action/config/bvh_action_map.json',
+            / 'src/tools/record_load_action/config/bvh_action_map.json',
             config_path,
         )
         self.assertTrue(config_path.is_file())
@@ -44,7 +44,7 @@ class TestPreprocessBvhPaths(unittest.TestCase):
         )
 
     def test_explicit_input_directory_takes_precedence(self):
-        override = REPOSITORY_ROOT / 'src/record_load_action/config/bvh'
+        override = REPOSITORY_ROOT / 'src/tools/record_load_action/config/bvh'
 
         input_dir = PREPROCESS_BVH._resolve_input_dir(
             config_path=Path('/tmp/unrelated/actions.json'),
