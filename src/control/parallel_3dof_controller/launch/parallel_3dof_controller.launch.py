@@ -73,6 +73,36 @@ def generate_launch_description():
         default_value='true',
         description='是否持有正式 motion ActionServer',
     )
+    require_scene_context_arg = DeclareLaunchArgument(
+        'require_scene_context',
+        default_value='false',
+        description='是否在 task lease 和执行命令前强制校验结构化场景',
+    )
+    scene_state_topic_arg = DeclareLaunchArgument(
+        'scene_state_topic',
+        default_value='/perception/scene_state',
+        description='motion owner 消费的完整结构化场景话题',
+    )
+    scene_max_age_sec_arg = DeclareLaunchArgument(
+        'scene_max_age_sec',
+        default_value='2.0',
+        description='允许 motion 准入使用的场景最大接收年龄',
+    )
+    scene_required_frame_id_arg = DeclareLaunchArgument(
+        'scene_required_frame_id',
+        default_value='camera_link',
+        description='目标对象几何所在的唯一受信任坐标系',
+    )
+    scene_target_min_confidence_arg = DeclareLaunchArgument(
+        'scene_target_min_confidence',
+        default_value='0.6',
+        description='目标脚踝对象进入 motion owner 的最低置信度',
+    )
+    scene_target_max_extent_m_arg = DeclareLaunchArgument(
+        'scene_target_max_extent_m',
+        default_value='2.0',
+        description='目标对象 AABB 各轴允许的最大绝对边界',
+    )
     read_actuator_position_service_arg = DeclareLaunchArgument(
         'read_actuator_position_service',
         default_value='/execution/read_actuator_position',
@@ -138,6 +168,20 @@ def generate_launch_description():
                 'enable_motion_action_server': LaunchConfiguration(
                     'enable_motion_action_server'
                 ),
+                'require_scene_context': LaunchConfiguration(
+                    'require_scene_context'
+                ),
+                'scene_state_topic': LaunchConfiguration('scene_state_topic'),
+                'scene_max_age_sec': LaunchConfiguration('scene_max_age_sec'),
+                'scene_required_frame_id': LaunchConfiguration(
+                    'scene_required_frame_id'
+                ),
+                'scene_target_min_confidence': LaunchConfiguration(
+                    'scene_target_min_confidence'
+                ),
+                'scene_target_max_extent_m': LaunchConfiguration(
+                    'scene_target_max_extent_m'
+                ),
                 'read_actuator_position_service': LaunchConfiguration(
                     'read_actuator_position_service'
                 ),
@@ -179,6 +223,12 @@ def generate_launch_description():
         task_state_topic_arg,
         motion_action_name_arg,
         enable_motion_action_server_arg,
+        require_scene_context_arg,
+        scene_state_topic_arg,
+        scene_max_age_sec_arg,
+        scene_required_frame_id_arg,
+        scene_target_min_confidence_arg,
+        scene_target_max_extent_m_arg,
         read_actuator_position_service_arg,
         stop_actuators_service_arg,
         task_lease_wait_timeout_sec_arg,

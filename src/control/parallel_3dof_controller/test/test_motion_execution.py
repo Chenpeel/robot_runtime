@@ -265,6 +265,43 @@ class TestMotionExecution(unittest.TestCase):
             source,
         )
 
+    def test_scene_admission_precedes_lease_and_atomically_commits_commands(self):
+        source = (
+            Path(__file__).resolve().parents[1]
+            / 'parallel_3dof_controller'
+            / 'controller_node.py'
+        ).read_text(encoding='utf-8')
+        execute_start = source.index('async def _execute_motion')
+        initial_scene_index = source.index(
+            'scene_reason = self._scene_rejection_reason',
+            execute_start,
+        )
+        lease_index = source.index(
+            "self._publish_task_control('start', spec)",
+            execute_start,
+        )
+        commit_index = source.index(
+            'scene_reason, issued_monotonic = self._commit_task_commands(',
+            execute_start,
+        )
+        commit_helper_index = source.index('def _commit_task_commands')
+        atomic_gate_index = source.index(
+            'self.scene_admission.commit_if_accepted(',
+            commit_helper_index,
+        )
+        publish_index = source.index(
+            'self.task_motion_command_pub.publish(command)',
+            commit_helper_index,
+        )
+
+        self.assertLess(initial_scene_index, lease_index)
+        self.assertLess(lease_index, commit_index)
+        self.assertLess(publish_index, atomic_gate_index)
+        self.assertIn('async def _reject_before_command', source)
+        self.assertIn("'task_admission_release_unconfirmed'", source)
+        self.assertIn('SceneAdmissionGate', source)
+        self.assertIn("self.declare_parameter('require_scene_context', False)", source)
+
     def test_multi_instances_cannot_own_formal_motion_action(self):
         package_root = Path(__file__).resolve().parents[1]
         node_source = (

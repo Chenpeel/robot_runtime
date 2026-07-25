@@ -13,6 +13,7 @@ from motion_msgs.msg import TaskExecutionControl
 from motion_msgs.msg import TaskExecutionState
 from motion_msgs.srv import ReadActuatorPosition
 from motion_msgs.srv import StopActuators
+from perception_msgs.msg import SceneState
 import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -37,6 +38,9 @@ from .motion_execution import progress_fraction
 from .motion_execution import task_start_was_accepted
 from .motion_execution import task_start_was_rejected
 from .motion_execution import terminal_task_status
+from .scene_admission import SceneAdmissionGate
+from .scene_admission import SceneGeometryPolicy
+from .scene_admission import SceneObjectSnapshot
 
 DEFAULT_COMMAND_TOPIC = '/execution/motion/command'
 
@@ -68,8 +72,11 @@ class Parallel3DOFControllerNode(Node):
     - debug: 是否打印调试信息 (默认False)
     """
 
-    def __init__(self):
-        super().__init__('ankle_controller_node')
+    def __init__(self, *, parameter_overrides=None):
+        super().__init__(
+            'ankle_controller_node',
+            parameter_overrides=parameter_overrides,
+        )
 
         # 声明参数
         self.declare_parameter('l0', 0.02)
@@ -84,6 +91,15 @@ class Parallel3DOFControllerNode(Node):
         self.declare_parameter('task_state_topic', '/execution/task/state')
         self.declare_parameter('motion_action_name', '/motion/execute')
         self.declare_parameter('enable_motion_action_server', True)
+        self.declare_parameter('require_scene_context', False)
+        self.declare_parameter(
+            'scene_state_topic',
+            '/perception/scene_state',
+        )
+        self.declare_parameter('scene_max_age_sec', 2.0)
+        self.declare_parameter('scene_required_frame_id', 'camera_link')
+        self.declare_parameter('scene_target_min_confidence', 0.6)
+        self.declare_parameter('scene_target_max_extent_m', 2.0)
         self.declare_parameter(
             'read_actuator_position_service',
             '/execution/read_actuator_position',
@@ -117,6 +133,24 @@ class Parallel3DOFControllerNode(Node):
         motion_action_name = self.get_parameter('motion_action_name').value
         enable_motion_action_server = bool(
             self.get_parameter('enable_motion_action_server').value
+        )
+        self.require_scene_context = bool(
+            self.get_parameter('require_scene_context').value
+        )
+        scene_state_topic = str(
+            self.get_parameter('scene_state_topic').value
+        ).strip()
+        scene_max_age_sec = float(
+            self.get_parameter('scene_max_age_sec').value
+        )
+        scene_required_frame_id = str(
+            self.get_parameter('scene_required_frame_id').value
+        ).strip()
+        scene_target_min_confidence = float(
+            self.get_parameter('scene_target_min_confidence').value
+        )
+        scene_target_max_extent_m = float(
+            self.get_parameter('scene_target_max_extent_m').value
         )
         read_actuator_position_service = self.get_parameter(
             'read_actuator_position_service'
@@ -238,6 +272,22 @@ class Parallel3DOFControllerNode(Node):
         self._task_state_sequence = 0
         self._goal_admission = SingleGoalAdmission()
         self._pending_start_cleanups = {}
+        self.scene_admission = SceneAdmissionGate(
+            scene_max_age_sec,
+            geometry_policy=SceneGeometryPolicy(
+                required_frame_id=scene_required_frame_id,
+                minimum_confidence=scene_target_min_confidence,
+                maximum_extent_m=scene_target_max_extent_m,
+            ),
+        )
+        self.scene_state_sub = None
+        if self.require_scene_context:
+            self.scene_state_sub = self.create_subscription(
+                SceneState,
+                scene_state_topic,
+                self._on_scene_state,
+                20,
+            )
         self.task_state_sub = self.create_subscription(
             TaskExecutionState,
             task_state_topic,
@@ -390,6 +440,74 @@ class Parallel3DOFControllerNode(Node):
                 lease_id,
             )
 
+    def _on_scene_state(self, msg: SceneState) -> None:
+        self.scene_admission.update(
+            observation_id=msg.observation_id,
+            session_id=msg.session_id,
+            frame_id=msg.frame_id,
+            objects=(
+                SceneObjectSnapshot(
+                    object_id=item.object_id,
+                    label=item.label,
+                    confidence=float(item.confidence),
+                    x=float(item.x),
+                    y=float(item.y),
+                    z=float(item.z),
+                    size_x=float(item.size_x),
+                    size_y=float(item.size_y),
+                    size_z=float(item.size_z),
+                )
+                for item in msg.objects
+            ),
+            status=msg.status,
+            reason=msg.reason,
+            received_monotonic=time.monotonic(),
+        )
+
+    def _scene_rejection_reason(
+            self,
+            session_id: str,
+            target_group: str,
+    ) -> str:
+        if not self.require_scene_context:
+            return ''
+        decision = self.scene_admission.evaluate(
+            session_id=session_id,
+            target_group=target_group,
+            now_monotonic=time.monotonic(),
+        )
+        return '' if decision.accepted else decision.reason
+
+    def _commit_task_commands(
+            self,
+            spec,
+            lease_id: str,
+            commands,
+    ):
+        """在有效场景快照下原子提交当前 task 的整批执行命令。"""
+        task_commands = [
+            self._build_execution_command(command, spec.task_id, lease_id)
+            for command in commands
+        ]
+        issued_monotonic = [0.0]
+
+        def publish_batch() -> None:
+            issued_monotonic[0] = time.monotonic()
+            for command in task_commands:
+                self.task_motion_command_pub.publish(command)
+
+        if not self.require_scene_context:
+            publish_batch()
+            return '', issued_monotonic[0]
+        decision = self.scene_admission.commit_if_accepted(
+            session_id=spec.session_id,
+            target_group=spec.target_group,
+            now_monotonic=time.monotonic,
+            commit=publish_batch,
+        )
+        reason = '' if decision.accepted else decision.reason
+        return reason, issued_monotonic[0]
+
     def _motion_goal_callback(self, goal_request) -> GoalResponse:
         try:
             normalize_motion_goal(goal_request)
@@ -437,6 +555,18 @@ class Parallel3DOFControllerNode(Node):
         try:
             try:
                 spec = normalize_motion_goal(request)
+                scene_reason = self._scene_rejection_reason(
+                    spec.session_id,
+                    spec.target_group,
+                )
+                if scene_reason:
+                    goal_handle.abort()
+                    return self._finish_result(
+                        result,
+                        'rejected',
+                        scene_reason,
+                        recoverable=True,
+                    )
                 commands = self.solver.rpy_to_servo_commands(
                     math.radians(spec.roll_deg),
                     math.radians(spec.pitch_deg),
@@ -487,18 +617,22 @@ class Parallel3DOFControllerNode(Node):
                     lease_id,
                 )
 
-            issued_monotonic = time.monotonic()
             targets = {
                 int(command['id']): int(command['position'])
                 for command in commands
             }
-            for command in commands:
-                self.task_motion_command_pub.publish(
-                    self._build_execution_command(
-                        command,
-                        spec.task_id,
-                        lease_id,
-                    )
+            scene_reason, issued_monotonic = self._commit_task_commands(
+                spec,
+                lease_id,
+                commands,
+            )
+            if scene_reason:
+                return await self._reject_before_command(
+                    goal_handle,
+                    result,
+                    spec,
+                    lease_id,
+                    scene_reason,
                 )
 
             tracker = StablePositionTracker(self.stable_sample_count)
@@ -724,6 +858,32 @@ class Parallel3DOFControllerNode(Node):
             'cancelled',
             '' if terminal_status else 'task_admission_release_unconfirmed',
             recoverable=not terminal_status,
+        )
+
+    async def _reject_before_command(
+        self,
+        goal_handle,
+        result,
+        spec,
+        lease_id,
+        reason,
+    ):
+        """已取得 lease 但提交命令前场景失效时，撤销任务准入。"""
+        terminal_status = await self._release_task_admission(
+            'cancel',
+            spec,
+            lease_id,
+        )
+        result.admission_released = bool(terminal_status)
+        goal_handle.abort()
+        if not terminal_status:
+            self._register_pending_start_cleanup(spec)
+            reason = 'task_admission_release_unconfirmed'
+        return self._finish_result(
+            result,
+            'rejected',
+            reason,
+            recoverable=True,
         )
 
     async def _handle_unexpected_motion_error(

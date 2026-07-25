@@ -21,7 +21,11 @@ setup(
     maintainer_email='your_email@example.com',
     description='3自由度并联机构通用控制器 - 可用于脚踝、腰部等关节',
     license='MIT',
-    # 测试依赖在 package.xml 中管理
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
     entry_points={
         'console_scripts': [
             'parallel_3dof_node = parallel_3dof_controller.controller_node:main',

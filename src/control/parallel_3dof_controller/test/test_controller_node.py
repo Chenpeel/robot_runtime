@@ -361,7 +361,7 @@ class IntegrationTestInstructions(unittest.TestCase):
         ========================================
 
         1. 单元测试（不需要ROS环境）:
-           cd /home/chenpeel/work/repo/jiyuan/ros/src/parallel_3dof_controller
+           cd src/control/parallel_3dof_controller
            python3 -m pytest test/test_controller_node.py -v -k "not ROS"
 
         2. 完整集成测试（需要ROS环境）:

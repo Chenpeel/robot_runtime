@@ -143,7 +143,7 @@ ros2 topic echo /parallel_3dof_controller/ankle_theta
 ### 1. 测试运动学求解器
 
 ```bash
-cd src/parallel_3dof_controller
+cd src/control/parallel_3dof_controller
 python3 parallel_3dof_controller/kinematics_solver.py
 ```
 

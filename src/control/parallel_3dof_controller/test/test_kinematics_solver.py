@@ -329,18 +329,18 @@ class TestFullConversion:
         commands = solver.rpy_to_servo_commands(
             0.0, 0.0, 0.0, ankle_side='right')
 
-        # 右脚舵机ID应该是10, 11, 12
+        # 与默认配置和 multi-instance 右脚配置保持一致。
         ids = [cmd['id'] for cmd in commands]
-        assert ids == [10, 11, 12]
+        assert ids == [9, 10, 11]
 
     def test_left_ankle_servo_ids(self, solver):
         """测试左脚舵机ID"""
         commands = solver.rpy_to_servo_commands(
             0.0, 0.0, 0.0, ankle_side='left')
 
-        # 左脚舵机ID应该是13, 14, 15
+        # 与默认配置和 multi-instance 左脚配置保持一致。
         ids = [cmd['id'] for cmd in commands]
-        assert ids == [13, 14, 15]
+        assert ids == [12, 13, 14]
 
     def test_servo_duration_parameter(self, solver):
         """测试舵机运动时长参数"""
