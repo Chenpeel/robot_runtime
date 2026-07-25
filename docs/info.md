@@ -2,15 +2,18 @@
 
 ## 1. 文档角色
 
-当前重构过程中，文档按三层使用：
+当前重构过程中，文档按四层使用：
 
 1. 长期蓝本
    - `docs/plan.md`
    - `docs/module_responsibilities.md`
-2. 当前事实与阶段进度
+2. ROS 2 Control 专项长期设计
+   - `docs/ros2_control_architecture.md`
+   - `docs/ros2_control_migration_plan.md`
+3. 当前事实与阶段进度
    - `docs/refactor_update_plan.md`
    - `docs/current_module_responsibilities.md`
-3. 本文
+4. 本文
    - 用来约束日常推进方式、判断优先级，并明确下一阶段应该先做什么。
 
 约束：
@@ -19,6 +22,8 @@
 - 任何实现和提交，都要先回到这两份蓝本文档看“目标边界是什么”。
 - 当前实际落地情况，只写入 `docs/refactor_update_plan.md` 和
   `docs/current_module_responsibilities.md`。
+- ROS 2 Control 的目标分层、权限和迁移阶段只写入两份专项长期设计文档；
+  未经当前事实、近期计划和编码规则审查，不进入运行代码实现。
 
 
 ## 2. 推进规则
@@ -27,7 +32,8 @@
 
 1. 先对照长期蓝本判断目标边界。
 2. 再对照当前事实文档确认仓库真实状态。
-3. 只选择一个可以独立验证、可以单独提交的小阶段。
+3. 默认只选择一个可以独立验证、可以单独提交的小阶段；用户明确要求跨阶段进
+   度时，每个切片仍必须分别形成实现与验收闭环。
 4. 实现完成后，同步更新：
    - `docs/refactor_update_plan.md`
    - `docs/current_module_responsibilities.md`
@@ -51,17 +57,30 @@
   阶段，不能继续沿用旧百分比。
 - `docs/refactor_update_plan.md` 自身的 Phase A–F 只用于近期执行排序，不得替
   代 `docs/plan.md` Phase 0–6 作为全局进度分母。
-- 不为了“形式统一”先做大规模目录迁移。
+- 不为了“形式统一”一次性迁移全部职责域。
 - 不把过渡兼容代码写成长期架构事实。
 - 不把 demo、调试、仿真临时链路重新混回正式主链路。
 - 某一块重构完成且旧目录、旧副本、旧入口已经无引用时，应及时删除，不长
   期保留“等以后再清理”的废弃目录；目录级清理应作为对应重构阶段的收尾动
   作，而不是无限后延。
 
+### ROS 2 Control 专项工作流
+
+转向 ROS 2 Control 时，必须按下列顺序推进：
+
+1. 先在 `ros2_control_architecture.md` 冻结分层、职责、权限、接口、
+   安全与实时性红线。
+2. 再在 `ros2_control_migration_plan.md` 冻结总体阶段、依赖、验收和回滚。
+3. 然后建立当前事实、近期更新计划和编码规则三份专项实施文档。
+4. 仅在上述文档通过审查后，选择一个可独立验证的小切片实现。
+
+专项文档只描述其归属层：长期设计不写成当前实现，当前事实不提前宣称目标
+架构已接线，近期计划不替代全局 Phase 0–6 计分。
+
 
 ## 3. 当前阶段判断
 
-截至 2026-07-21，当前重构已经完成的关键基础包括：
+截至 2026-07-24，当前重构已经完成的关键基础包括：
 
 - `robot_bringup` 已承接整机主入口，并拆出 hardware / teleop / task /
   simulation / context 五个子域；context 域通过 `enable_context` 显式启用，
@@ -95,6 +114,34 @@
   中的 32 项重叠；两组分别用于调分审计与较宽回归，不能相加。当轮宿主环境
   未提供 `colcon`、`ros2` 与 Docker Compose，因此没有把 ROS 构建、安装后
   entry point、launch 启动或容器联测计入 Phase 2 完成证据。
+- Phase 1 的物理目录迁移当前覆盖全部 20 个 ROS 包：既有公共接口位于
+  `src/interfaces/`，控制、执行、桥接、bringup、语音、感知、描述与工具包
+  分别位于 `src/control/`、`src/execution/`、`src/bridges/`、
+  `src/bringup/`、`src/speech/`、`src/perception/`、`src/description/` 和
+  `src/tools/`；新增 `robot_hardware` 位于独立的 `src/hardware/` ROS 2
+  Control 硬件域。ROS 包名、接口定义与公共业务语义均未随物理路径改变。
+- 全仓目录合同固定全部 20 个包的当前职责域位置、manifest 包名不变、包名唯一
+  且发现集合完整；新增合同项明确 `robot_hardware` 属于独立 `hardware` 域。
+  初始化脚本、Docker Compose、BVH 工具、配置 fallback、仓库级源码合同和事实
+  文档中的物理路径已同步更新，ROS 包名、Python import、entry point、Topic、
+  Service、Action 与公共业务语义保持不变。
+- 本轮在新的 `/private/tmp/robot-runtime-phase1-all-20260724` 隔离工作区，以
+  `src` 为唯一 base path 完成全部 20 个 ROS 包的 clean build，用时约
+  `5min42s`；build / install / log 均使用新目录，未复用上一轮 install。source
+  本轮 install 后，`robot_bringup` 的 `full_system.launch.py`、`task.launch.py`、
+  `context.launch.py`，以及 `mjc_viewer/mjc_viewer.launch.py`、
+  `robot_description/display.launch.py`、
+  `record_load_action/bvh_websocket_demo.launch.py` 共 6 个安装后 launch 的
+  `--show-args` 均解析成功。该结果补齐了此前 16 包主运行闭包未覆盖
+  `record_load_action`、`robot_description` 和 `mjc_viewer` 的证据缺口；它不
+  等于 `robot_hardware` 已接入正式运行链。
+- 定向回归通过：motion 接口 25 项、bringup 35 项、controller 41 项、speech
+  16 项、perception 14 项、simulation 3 项、execution 32 项、task bridge 28
+  项、驱动安全 11 项和 BVH 路径/转换 6 项；task bridge 包含三类真实
+  Action/DDS smoke。因此 Phase 1 的 `100%` 现由全 20 包构建、安装后 6 个
+  launch 解析和既有 DDS / 定向回归共同支撑。该完成状态只覆盖
+  `docs/plan.md` 固定的目录重组、构建和 launch 标准，不代表历史 ROS 包名已
+  全部重命名，也不替代 Phase 3 schema、目标 Jazzy 或硬件发布验收。
 - `execution_manager` 已建立最小执行边界，teleop 与 motion 已不再都直接碰驱动层。
 - `sensor_hardware` 已独立成 ROS 包。
 - teleop 控制权链已落地显式 claim / keepalive / release。
@@ -226,7 +273,7 @@
   `/servo/set_driver_safety` 聚合全部有效 port driver 的应用 ACK；ACK 返回前
   持续保留 stop token 与 estop，release 失败或超时会保持二者并锁存故障；故
   障锁存时普通 estop release 不会发布驱动级 release。
-- `robot_bringup/task.launch.py` 当前组合 execution manager、motion owner
+- `src/bringup/robot_bringup/launch/task.launch.py` 当前组合 execution manager、motion owner
   和 task bridge，`full_system` 会关闭 teleop 子栈内的重复 execution owner。
   Phase 4B/C 在 ARM64 ROS 2 Humble 的禁网、只读、`/tmp` 隔离容器完成 12 包
   闭包构建；八个目标包的功能 xUnit 汇总 158 项零失败，另有未被包注册器发现
@@ -262,7 +309,7 @@
   构化 speech intent 与 scene state，并统一发布 `/task/context_signal`。该
   context adapter 不发布 `MotionCommand`、`ServoCommand` 或
   `TaskExecutionControl`，也不改变 `/task/execute -> /motion/execute` 的唯一
-  正式 Action 链。`robot_bringup/context.launch.py` 提供独立装配，
+  正式 Action 链。`src/bringup/robot_bringup/launch/context.launch.py` 提供独立装配，
   `full_system` 已把 context 作为第五个可选运行域。
 - Phase 5 隔离验收在禁网、源码只读的 ARM64 ROS 2 Humble 容器完成 16 包依
   赖闭包构建；八个直接相关包共 `119` 项测试零失败。`SpeechIntent`、
@@ -270,25 +317,88 @@
   launch 参数解析通过。独立真实 Action/DDS smoke 用时 `0.5387s`，覆盖语音
   意图到 fake motion 成功结果、感知场景到 task context，以及低置信语音与
   重复对象 ID 的拒绝链。
-- 该 Humble 证据覆盖核心垂直切片。后续又补齐了拒绝链身份保留、感知
-  `float32` 范围和 JSON 资源上限，以及 `enable_context=false` 同时关闭 task
-  bridge 上下文订阅/发布的边界；宿主定向回归已通过。由于本轮末尾本机 Docker
-  守护进程不可用，最终加固后的源码尚待守护进程恢复后重跑隔离 ROS 构建与
-  smoke；该待补验证不增加进度，也不把先前的 Humble 结论外推为 Jazzy 或设备
-  验收。
-- 基于两个接口包、两个 producer owner、task context consumer、独立 bringup
-  和 Action/DDS 证据，`docs/plan.md` Phase 5 从 `0%` 提升到 `50%`。全局原始
-  进度由 `57.1%` 提升到 `64.3%`，实际推进约 `7.1` 个百分点；按最近 `5%`
-  展示由 `55%` 提升到 `65%`，顶部进度条更新为 13/20 格。本轮推进超过用户
-  要求的 `4` 个百分点。边缘输入仍依赖上游 JSON，真实 ASR/TTS、相机/检测模
-  型、motion owner 对场景的消费、目标 Jazzy 和部署环境验收尚未完成，因此
-  Phase 5 不计为 `75% / 100%`。
+- 该 Humble 证据覆盖核心垂直切片。随后补齐了拒绝链身份保留、感知 `float32`
+  范围和 JSON 资源上限，以及 `enable_context=false` 同时关闭 task bridge
+  上下文订阅/发布的边界；本轮已在同一类禁网、源码只读 ARM64 Humble 容器重新
+  构建 16 包，并对 `parallel_3dof_controller`、`task_service_bridge`、
+  `robot_bringup` 汇总 59 项测试零失败。
+- 当前 motion owner 已新增可选 `SceneAdmissionGate`。context 启用时它直接订
+  阅完整 `/perception/scene_state`，仅保护正式 `/motion/execute` task 路径：
+  Action 已接受后、申请 task lease 前首次 fail-closed 检查 `status=ok`、场景接
+  收年龄、非空 observation ID、完整 session 和 observation replay；不可变快照
+  同时保留 frame 与完整对象集合，并以 `SceneGeometryPolicy` 校验 frame、对象
+  ID 唯一性、`target_group` 对应的唯一目标标签、置信度、正尺寸和 AABB 安全包
+  络。取得 lease 后、首条 task `MotionCommand` 前再持锁复用同一身份与几何策
+  略，并原子提交整批三执行器命令，场景更新不能插入该批命令。
+- 缺失、rejected、空 observation、stale、session mismatch 及不安全几何在
+  lease 前返回稳定、可恢复 Result，且不产生 task control、task motion 或 servo
+  命令；若场景在 lease 等待中失效，则同 task/trace/session 的
+  `start -> cancel` 会释放已取得的非空 lease，仍无 task motion 或 servo 命令。
+  本机 ROS 2 Humble Action/DDS smoke 用时 `3.0229s`，fresh 场景由真实
+  controller、execution manager 与 fake driver 完成三个执行器目标。遗留
+  `~/ankle_rpy` 调试输入不属于这条正式 task 场景准入边界。
+- 本轮在本机 macOS ARM64 ROS 2 Humble 环境以 `/private/tmp` 独立 build/install
+  目录完成 16 包依赖闭包构建，并 source 该 install 重跑真实 scene smoke。该
+  环境需显式固定 micromamba Python 3.12/NumPy、启用 CMP0148 兼容策略，并把
+  ROS 前缀的 `libatomic` 加入 module/shared/executable linker 搜索路径；这是
+  本机 CMake 4.3 自动选择 Homebrew Python 3.14 和 ROS 前缀链接设置造成的环境
+  适配，不是接口源码变更或发布就绪结论。
+- 本轮全新 16 包 clean build 后 source 新 install，scene admission 的真实
+  owner Action/DDS smoke 2 项约 `4.23s` 通过；task bridge 全套 28 项在
+  `9.752s` 内通过。测试覆盖 frame、对象身份、目标选择、置信度、非有限几何、
+  尺寸和安全包络拒绝，lease-race 保持同身份 `start -> cancel` 并释放非空
+  lease，fresh 安全场景仍完成三个执行器目标。
+- 基于两个结构化接口包、两个 producer owner、task bridge consumer、独立
+  bringup，以及当前 motion owner 对 `DetectedObject` frame、标签、置信度与
+  AABB 的实际消费，`docs/plan.md` Phase 5 从 `75%` 提升到 `100%`。lease 前
+  与 lease 后原子准入复用同一几何策略，已满足固定蓝本完成标准。真实 ASR/TTS、
+  相机硬件/检测模型、更多任务规划、目标 Jazzy、部署 ACL 和真实硬件停止验收
+  仍是发布加固或后续能力，不再扩张为 Phase 5 固定蓝本分母门禁。
+- 为落实 Phase 6 的“按 profiling 结果”前置条件，新增
+  `scripts/profile_runtime_hotpaths.py`，以 PID 隔离的真实 rclpy/DDS 顺序闭环
+  测量 execution manager、当前 motion owner 和 simulation bridge。ARM64
+  Humble 16 包 clean build 后三条路径各采集 200 个计量样本和 20 个 warmup，
+  均零超时：execution p50/p95/p99 为 16.55/43.75/57.16ms，motion 为
+  24.06/50.12/70.13ms，simulation 为 13.99/33.03/45.51ms；详细环境、统计
+  口径、尾延迟与 CPU 限制记录在 `docs/runtime_profiling_baseline.md`。
+- 本轮先修正 profiling 基线：`parallel_3dof_params.yaml` 改用 ROS wildcard
+  节点选择器，避免 launch 将节点重命名为 `parallel_3dof_controller` 后几何
+  参数失效；solver 测试的默认舵机 ID 期望也已与正式配置统一为右侧 `9–11`、
+  左侧 `12–14`。脚本新增显式 `--motion-l0/l1/l2` 参数和 solver 分段计时，
+  本机 Humble 五轮、每轮 200 样本和 20 warmup 均零超时；motion 端到端五轮
+  平均 p50/p95/p99 为 `1.51/2.56/3.93ms`，solver 分段为
+  `0.260/0.564/0.896ms`，p50 占端到端约 `17.2%`。这只收紧热点证据，不改变
+  Phase 6 `25%`。
+- 基于三域实际运行基线和热点排序，Phase 6 从 `0%` 提升到 `25%`；尚未有
+  同接口 C++ 后端、launch 单值切换、Python/C++ 对比或硬件/仿真回归，不能计
+  为 `50%`。Phase 5 与 Phase 6 各提升一档后，全局原始进度由 `64.3%` 提升到
+  `71.4%`，实际推进约 `7.1` 个百分点；按最近 `5%` 展示由 `65%` 提升到
+  `70%`，顶部进度条更新为 14/20 格。本轮推进超过用户要求的 `4` 个百分点。
+- 本轮 Phase 1 与 Phase 5 各提升一档，阶段快照为
+  `100 / 50 / 100 / 75 / 100 / 100 / 25`。阶段总和 `550`，除以 7 后全局
+  原始进度由 `71.4%` 提升到 `78.6%`，实际推进约 `7.1` 个百分点；按最近
+  `5%` 展示为 `80%`，进度条为 16/20 格，超过至少推进 `4` 个百分点的要求。
+- 本次继续完成 Phase 1 剩余两档，阶段快照为
+  `100 / 100 / 100 / 75 / 100 / 100 / 25`。阶段总和 `600`，除以 7 后全局
+  原始进度由 `78.6%` 提升到 `85.7%`，实际推进约 `7.1` 个百分点；按最近
+  `5%` 展示为 `85%`，进度条为 17/20 格，超过至少推进 `4` 个百分点的要求。
+- 此前补齐的 Phase 1 19 包 clean build 与 6 个安装后 launch 解析证据，现已由
+  2026-07-24 的 20 包 clean build 复核；两次工作均只确认既有 `100%` 档位仍然
+  有效，不重复计分。当前阶段总和仍为 `600`，原始均值仍为 `85.7%`，按最近
+  `5%` 展示仍为 `85%`。
+- 本轮全局复核后，只有 Phase 3 和 Phase 6 尚未封顶；单阶段提升一档只增加
+  `25 / 7 = 3.57` 个原始百分点，严格满足“至少推进 4%”必须同时完成
+  Phase 3 `75% -> 100%` 与 Phase 6 `25% -> 50%`。Phase 3 仍需项目所有者冻结
+  最终中性 schema、canonical topic、旧 subscriber 兼容和版本策略；Phase 6
+  仍需目标 Jazzy、同接口 C++ 后端、Python/C++ 差分、launch 单值切换以及仿真
+  和物理硬件回归。上述门禁未形成证据前，不能通过重复计分或修改分母虚增进度。
 - BVH/demo capability 的动作输出已改走 `/execution/motion/command`，不再复
   用 teleop 命令入口。
 - BVH 配置所有权当前也已完全收回 `record_load_action`，运行时不再继续把
   `websocket_bridge` 当成 `bvh_action_map.json` 的兜底来源。
-- BVH 的运行说明当前也已继续收回 `record_load_action/README.md`；
-  `websocket/config/README.md` 只保留指向说明。
+- BVH 的运行说明当前也已继续收回
+  `src/tools/record_load_action/README.md`；
+  `src/bridges/teleoperation_bridge/config/README.md` 只保留指向说明。
 - `robot_bringup` 与 `websocket_bridge` 当前也已不再继续把
   `bvh_action_file` 作为 public launch/参数入口上抬；默认解析路径完全收
   回 `record_load_action`。
@@ -321,7 +431,7 @@
 - `docs/motion_command_speed_migration.md` 已记录删除字段前的仓外依赖、旧
   rosbag、目标 schema、版本策略、clean rebuild 与同步重启门禁。当前未取得
   这些外部事实，因此本轮不修改 ROS 公共消息布局。
-- `record_load_action/bvh_websocket_demo.launch.py` 是当前显式 opt-in 入口；
+- `src/tools/record_load_action/launch/bvh_websocket_demo.launch.py` 是当前显式 opt-in 入口；
   默认 `robot_bringup` teleop/full-system 与默认 WebSocket schema 均不再装
   配或广告 BVH。
 - `BvhPlaybackRuntime` 继续创建并持有 `BvhActionPlayer`；进入 blocked 时先
@@ -361,10 +471,15 @@
 - speech/perception 的结构化接口、producer、task context adapter 与 bringup
   已落地，但当前 JSON 只代表边缘 backend 合同，不代表真实 ASR/TTS、相机或
   检测模型已经完成。
-- 正式 task/motion Action、反馈、取消和 stop 确认已经落地，但当前只实现
-  `ankle_pose`，scene context 也尚未进入 motion owner 的规划或执行决策。
-- `parallel_3dof_controller` 当前是经过验证的 motion owner，但包名和职责目录
-  尚未收口成正式 `motion_control`；迁移必须保持现有 Action 合同不变。
+- 正式 task/motion Action、反馈、取消和 stop 确认已经落地，context 启用时
+  `SceneState` 已进入 motion owner 的身份、新鲜度和对象级几何准入；当前只
+  实现 `ankle_pose`，尚无轨迹规划或多任务场景决策。
+- 三域 DDS profiling 已有第一版热点排序，但 execution tail latency 的单次
+  异常、Python/DDS/NumPy 成本归因和目标 Jazzy/硬件数据尚未完成，不能据此直
+  接启动 C++ 重写。
+- `parallel_3dof_controller` 当前是经过验证的 motion owner，且已位于
+  `src/control/parallel_3dof_controller`；但 ROS 包名尚未收口成正式
+  `motion_control`，后续命名迁移必须保持现有 Action 合同不变。
 - task bridge 的进程内单目标策略与 execution tombstone 已能覆盖当前运行时，
   但部署级唯一入口、ROS ACL 和跨节点重启的持久幂等仍未完成。
 - fake driver 已证明控制图和停止状态机，不代表多协议真实硬件已经完成停止验
@@ -378,9 +493,11 @@
 - 在保持当前结构化消息和稳定拒绝 reason 的前提下接入真实 ASR/NLU、TTS 与
   相机/检测 backend；设备或模型验收必须单独记录，不能复用 JSON smoke 结
   论。
-- 为 motion owner 增加明确、可测试的 `SceneState` / task context 消费场景，
-  仍通过正式 task/motion/execution 边界执行，禁止 perception 直接发布执行
-  或驱动命令。
+- 在不放宽现有 scene gate 的 session、新鲜度、replay、frame、置信度和 AABB
+  门禁前提下，将真实检测 backend 或更高层规划场景接入同一正式
+  task/motion/execution 边界；禁止 perception 直接发布执行或驱动命令。
+- 在目标 Jazzy、目标硬件或等价仿真环境中重复三域 profiling，并用 tracing 拆
+  分 publish、callback、求解、状态发布与 DDS 时间；确认稳定热点前不迁移 C++。
 - 在不修改现有 Action 身份与停止字段的前提下增加下一种真实任务类型，并为
   每种类型提供实际 owner、完成反馈和取消清理证据。
 - 评估 `parallel_3dof_controller -> motion_control` 的包边界收口，避免为命名
@@ -402,16 +519,31 @@
 - `speech_interface` 与 `vision_perception` 已分别形成严格 JSON 边缘适配
   器，结构化输出经 `task_service_bridge` 汇入 `/task/context_signal`；
   `robot_bringup` 已以独立 context 域装配两条链路。
-- context 链已在 Humble 隔离环境完成接口生成、16 包构建、119 项测试和真实
-  Action/DDS smoke；这些证据不替代真实设备、目标 Jazzy 或部署环境验收。
-- `simulation_bridge/simulation.launch.py` 已进一步把包级 enable 开关从
+- context 链已在 Humble 隔离环境完成接口生成、16 包构建、119 项初始回归与
+  重新构建后的 59 项受影响包测试。本机 source 独立 install 后也完成 16 包
+  clean build。`SceneAdmissionGate` 通过真实 controller 的 Action/DDS smoke
+  证明身份、新鲜度、frame、目标对象、置信度、尺寸和 AABB 拒绝均无
+  control/motion/servo 命令逸出；lease 等待竞态会 start/cancel 并释放 lease
+  但无 motion/servo 命令，fresh 安全场景可完成。这些证据不替代真实设备、目标
+  Jazzy 或部署环境验收。
+- 校准后的受影响回归已通过：`parallel_3dof_controller` 为 `108 passed`、
+  `25` 个 subtests、`1 skipped`，`robot_bringup` 为 `36 passed`、`65` 个
+  subtests；真实 profiling 冒烟为 3 条路径各 `5/5`、零超时。DDS 复测仍只
+  能作为 Humble 基线，不能替代目标 Jazzy 或物理硬件验收。controller 的
+  `setup.py` 同时补齐 pytest test extra，修复 `colcon test` 只运行空 unittest
+  suite 的注册缺陷；重建后包级测试发现 109 个 item，`colcon test-result`
+  汇总 134 项、零错误、零失败、1 项跳过。
+- `scripts/profile_runtime_hotpaths.py` 已完成 execution/motion/simulation 三
+  域 600 个真实 DDS 计量样本的初始基线；它只支持热点排序和 Phase 6 的 25%
+  证据，尚不支持 C++ 迁移结论。
+- `src/bridges/simulation_bridge/launch/simulation.launch.py` 已进一步把包级 enable 开关从
   `enable_isaac_bridge`、`enable_sim_cpp_bridge` 收口为
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge`。
-- `websocket_bridge/message_handler.py` 当前也已开始把 `servo_control`
+- `src/bridges/teleoperation_bridge/websocket_bridge/message_handler.py` 当前也已开始把 `servo_control`
   解析结果标准化为 `MotionCommand` 风格字段：显式补 `value_encoding`、
   `duration_ms`，并在 bus 输入为角度时先换算到 pulse us；`bridge_node.py`
   也会只采用这组显式时长语义继续下发，不再镜像旧 `MotionCommand.speed`。
-- `execution_manager/command_adapter.py` 当前也已移除 consumer 侧旧
+- `src/execution/execution_manager/execution_manager/command_adapter.py` 当前也已移除 consumer 侧旧
   `speed` 时长回退，只把正值 `duration_ms` 提升为内部执行时长；测试 fixture
   也已清除旧公共字段，改为覆盖缺失、非法和非正 `duration_ms`。
 - `motion_msgs` 当前已把公共 `MotionCommand.speed` 标记为弃用，并注册标准
@@ -421,15 +553,16 @@
   生命周期当前均已收回 `record_load_action` 的可选 capability；
   `bridge_node` 只保留通用扩展工厂、状态通知与关闭钩子。
 - 默认 teleop/full-system 不启用 BVH；需要演示链路时由
-  `record_load_action/bvh_websocket_demo.launch.py` 显式装配，并继续走
+  `src/tools/record_load_action/launch/bvh_websocket_demo.launch.py` 显式装配，并继续走
   `/execution/motion/command` 与 `execution_manager`。
-- `simulation_bridge/simulation.launch.py` 当前也已进一步不再把
+- `src/bridges/simulation_bridge/launch/simulation.launch.py` 当前也已进一步不再把
   `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部 capability
   开关保留为 package-level public surface，而是回到纯 assembly 入口，直接
   编排 `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两条内部子
   链路。
-- `sim_publish_rate_hz` 也已进一步从 `simulation_bridge/simulation.launch.py`
-  下沉到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，不再
+- `sim_publish_rate_hz` 也已进一步从
+  `src/bridges/simulation_bridge/launch/simulation.launch.py` 下沉到
+  `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，不再
   作为 package-level public surface 暴露；`sim_joint_bridge.launch.py`
   当前也不再重复声明这组默认值。
 - `sim_servo_bridge.launch.py` 与 `sim_servo_bridge_node.py` 现在也已把
@@ -441,13 +574,13 @@
 - `sim_servo_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
   / 限幅 launch 参数；这组默认值此前已从 `isaac_bridge_debug`、
   `isaac_enforce_limits` 收口到 `debug`、`enforce_position_limits`，现在
-  统一由 `simulation_bridge/config/default_params.yaml` 与节点默认参数持有。
+  统一由 `src/bridges/simulation_bridge/config/default_params.yaml` 与节点默认参数持有。
 - `simulation_bridge` 的包元数据描述与运行说明当前也已改用
   simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
   为 Isaac 专名节点。
 - `sim_joint_bridge.launch.py` 当前也已不再继续声明 bridge-specific 的调试
   launch 参数；对应默认值现在统一由
-  `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
+  `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
 - `sim_joint_bridge_cpp` 当前也已把 joint 子链路的可执行名、节点名与默认参
   数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避免继续和
   Python servo 子链路复用同一节点身份。
@@ -457,19 +590,19 @@
 - `sim_joint_bridge_cpp` 现在也已移除 `servo_cmd_topic`、
   `joint_cmd_topic`、`joint_state_fb_topic`、`publish_rate_hz` 这组旧参数
   兼容分支，只保留当前 simulation 词表。
-- C++ 子链路当前也已把目录从 `src/sim_servo_bridge_cpp` 迁到
-  `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点身
+- C++ 子链路此前已从旧的 `sim_servo_bridge_cpp` 根级目录迁到
+  `src/bridges/sim_joint_bridge_cpp`；此后目录名、ROS 包名与节点身
   份已回到同一套 `sim_joint_*` 词表。
 - `sim_joint_bridge.launch.py` 当前也已显式加载
-  `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
+  `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参数
   所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
 - `sim_joint_bridge.launch.py` 当前也已不再继续内联
   `servo_command_topic`、`servo_state_topic` 这组 driver-facing 固定接线，
-  改为统一由 `sim_joint_bridge_cpp/config/default_params.yaml` 持有默认值。
+  改为统一由 `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 持有默认值。
 - `sim_joint_bridge.launch.py` 当前也已不再重复声明
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
   `sim_publish_rate_hz` 这组 simulator-facing 默认值，进一步把默认值所有权
-  收回到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数。
+  收回到 `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数。
 - `sim_joint_bridge_cpp` 当前也已把 `servo_type` 参数收紧为收发两侧共用的同
   一语义：既控制下发 `ServoCommand.servo_type`，也控制回读 `ServoState`
   的过滤条件；非法值会回退到 `bus`。
@@ -477,14 +610,14 @@
   并在非法值时回退到 `100`，与 Python `sim_servo_bridge_node.py` 的默认速
   度语义保持同一方向。
 - `sim_servo_bridge.launch.py` 当前也已显式加载
-  `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的默认
+  `src/bridges/simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的默认
   参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点默认值
   里。
 - `sim_servo_bridge.launch.py` 当前也已不再重复声明
   `sim_servo_command_topic`、`sim_servo_state_topic` 这组 simulator-facing
   默认值，进一步把默认值所有权收回到
-  `simulation_bridge/config/default_params.yaml` 与节点默认参数。
-- `simulation_bridge/simulation.launch.py` 现在也已不再暴露
+  `src/bridges/simulation_bridge/config/default_params.yaml` 与节点默认参数。
+- `src/bridges/simulation_bridge/launch/simulation.launch.py` 现在也已不再暴露
   `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`，package-level public
   surface 已进一步收紧为单一 domain entry。
 - `bridge_stack.launch.py` 当前也已移除，`simulation.launch.py` 直接 include
@@ -496,12 +629,15 @@
 
 下一阶段建议优先审计的文件：
 
-- `src/motion_msgs/msg/MotionCommand.msg`
+- `src/interfaces/motion_msgs/msg/MotionCommand.msg`
 - `docs/motion_command_speed_migration.md`
-- `src/execution_manager/execution_manager/command_adapter.py`
-- `src/websocket/websocket_bridge/bridge_node.py`
-- `src/parallel_3dof_controller/parallel_3dof_controller/controller_node.py`
-- `src/record_load_action/record_load_action/bvh_websocket_extension.py`
+- `src/execution/execution_manager/execution_manager/command_adapter.py`
+- `src/bridges/teleoperation_bridge/websocket_bridge/bridge_node.py`
+- `src/control/parallel_3dof_controller/parallel_3dof_controller/controller_node.py`
+- `src/control/parallel_3dof_controller/parallel_3dof_controller/scene_admission.py`
+- `scripts/profile_runtime_hotpaths.py`
+- `docs/runtime_profiling_baseline.md`
+- `src/tools/record_load_action/record_load_action/bvh_websocket_extension.py`
 
 实施后必须同步更新：
 

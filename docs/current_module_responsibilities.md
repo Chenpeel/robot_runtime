@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文记录截至 2026-07-21 的仓库当前事实，用于补充说明现有模块到底已经承担了
+本文记录截至 2026-07-24 的仓库当前事实，用于补充说明现有模块到底已经承担了
 什么职责。
 
 它与长期规划文档的关系如下：
@@ -28,6 +28,7 @@
   - `execution_manager`
 - 执行器驱动
   - `servo_hardware`
+  - `robot_hardware`，当前独立 ROS 2 Control 硬件旁路
 - 传感器接入
   - `sensor_hardware`，已独立成 ROS 包
 - 正式任务入口
@@ -44,8 +45,8 @@
   - `simulation_bridge`
   - `sim_joint_bridge_cpp`
 - 接口、工具与描述资源
-  - `motion_msgs`
-  - `servo_msgs`
+  - `src/interfaces/` 下的 `motion_msgs`、`servo_msgs`、`task_api_msgs`、
+    `speech_msgs`、`perception_msgs`
   - `record_load_action`
   - `robot_description`
   - `mjc_viewer`
@@ -58,7 +59,7 @@
 - 状态
   - 已实现，处于第一版独立编排层状态。
 - 当前承接位置
-  - ROS 包目录：`src/robot_bringup`
+  - ROS 包目录：`src/bringup/robot_bringup`
   - ROS 包名：`robot_bringup`
 - 当前主要职责
   - 承接整机主入口 `full_system.launch.py`。
@@ -87,6 +88,11 @@
     停；`full_system` 通过 `enable_context` 显式组合该第五域，并将
     `/speech/intent`、`/perception/scene_state` 和 `/task/context_signal`
     接线透传给 task 域。
+  - context 启用时，task launch 会把 `perception_scene_topic`、
+    `scene_max_age_sec`、`scene_required_frame_id`、
+    `scene_target_min_confidence`、`scene_target_max_extent_m` 和 scene-required
+    开关传给当前 motion owner；关闭 context 时不创建该 scene subscription，
+    保持无场景任务链行为。
 - 当前主要输入
   - 启动参数
   - 各职责域包的 launch 与配置引用
@@ -109,7 +115,7 @@
 - 状态
   - 已实现，且处于明显的过渡态。
 - 当前承接位置
-  - 目录：`src/websocket`
+  - 目录：`src/bridges/teleoperation_bridge`
   - ROS 包名：`websocket_bridge`
 - 当前主要职责
   - 提供 WebSocket 服务端接入。
@@ -151,7 +157,8 @@
     装配可选扩展；默认值为空，默认运行时不加载任何扩展。
   - 核心节点只面向扩展调用通用的 `register_message_handlers`、
     `on_execution_state` 和 `close` 生命周期钩子，不再内建 BVH 协议知识。
-  - `websocket_bridge/package.xml` 已移除对 `record_load_action` 的依赖；
+  - `src/bridges/teleoperation_bridge/package.xml` 已移除对
+    `record_load_action` 的依赖；
     核心代码也不再持有 BVH topic、publisher、消息注册、teleop 联锁或
     错误映射。
   - 默认 `teleop.launch.py`、`full_system.launch.py` 和 WebSocket core schema
@@ -208,7 +215,7 @@
 - 状态
   - 已实现，核心驱动链路已在使用中，但包边界仍是过渡态。
 - 当前承接位置
-  - 目录：`src/hardware`
+  - 目录：`src/execution/servo_hardware`
   - ROS 包名：`servo_hardware`
 - 当前主要职责
   - 提供总线舵机驱动。
@@ -245,8 +252,8 @@
 - 状态
   - 已拆分为独立 ROS 包。
 - 当前承接位置
-  - ROS 包目录：`src/sensor_hardware`
-  - Python 包目录：`src/sensor_hardware/sensor_hardware`
+  - ROS 包目录：`src/execution/sensor_hardware`
+  - Python 包目录：`src/execution/sensor_hardware/sensor_hardware`
 - 当前主要职责
   - 提供 IMU 的 I2C 驱动节点。
   - 提供 IMU 的串口驱动节点。
@@ -273,7 +280,7 @@
 - 状态
   - 已实现，但属于控制原型和过渡方案。
 - 当前承接位置
-  - 目录：`src/parallel_3dof_controller`
+  - 目录：`src/control/parallel_3dof_controller`
   - ROS 包名：`parallel_3dof_controller`
 - 当前主要职责
   - 订阅脚踝 RPY 姿态命令。
@@ -285,12 +292,26 @@
     motion owner。
   - 为正式 goal 申请、续租和释放 task lease，携带 task lease 向
     `/execution/task/command` 发布三执行器目标。
+  - context 启用时，正式 `/motion/execute` task 路径订阅完整
+    `perception_msgs/SceneState`。Action 已接受后、申请 task lease 前，以线程
+    安全的 `SceneAdmissionGate` 检查 `status=ok`、接收新鲜度、非空
+    observation ID、完整 session 匹配和 observation replay；不可变快照保留
+    frame 与完整对象集合，并由 `SceneGeometryPolicy` 校验 frame、对象 ID
+    唯一性、`target_group` 目标标签、置信度、正尺寸和 AABB 安全包络。
+  - lease 已取得后、首条 task 命令前会在同一 gate 锁内复用同一身份与几何
+    策略，重评估最新场景并提交整批命令；此时不满足则先以同身份
+    cancel/release lease，再返回 recoverable result，不发布 task
+    `MotionCommand` 或 `ServoCommand`。遗留 `~/ankle_rpy` 调试输入不属于该
+    正式 task 场景准入边界。
   - 通过 `/execution/read_actuator_position` 读取驱动实际位置，要求三执行
     器连续三个新样本进入容差后才返回成功，不把 accepted 或目标回显当完成。
   - cancel/timeout/driver error 会请求 `/execution/stop_actuators`；取消只有
     在 stop 写出、连续稳定位置采样、task cancel 和终态 lease 清理后才返回，
     `stop_command_sent` 与 `stop_confirmed` 独立报告。
   - 将姿态结果转换为 `motion_msgs/MotionCommand`。
+  - 默认参数文件使用 ROS wildcard 节点选择器，因此 launch 将节点重命名为
+    `parallel_3dof_controller` 时，正式几何参数 `l0=0.02`、`l1=0.01`、
+    `l2=0.03` 仍会生效；多实例配置继续通过显式参数覆盖。
   - 在输出 `MotionCommand` 时已开始显式以 `duration_ms` 与
     `value_encoding` 作为主语义，不再镜像写入已弃用的 `speed` 字段。
   - 求解器输出当前只保留 `duration_ms` 时长字段，控制器也只消费该字段；旧
@@ -303,6 +324,7 @@
   - `/execution/task/state`
   - `/execution/read_actuator_position`
   - `/execution/stop_actuators`
+  - context 启用时的 `/perception/scene_state`
 - 当前主要输出
   - 通过参数 `command_topic` 默认输出
     `motion_msgs/MotionCommand` 到
@@ -318,6 +340,13 @@
   - 已不再直接依赖 `servo_msgs`，但当前正式 Action 只支持 `ankle_pose`，包
     名和目录也还没有收口成长期蓝本中的 `motion_control`。普通 RPY topic 与
     `MotionCommand` 仍保留驱动风格过渡字段。
+  - scene gate 已消费对象级 frame、标签、置信度和 AABB，但仍不实现真实相机
+    模型、对象跟踪、轨迹规划或多任务场景决策。
+  - 本机 Humble 校准 profiling 的 5 轮、每轮 200 个顺序样本均零超时，
+    `Vector3 -> controller -> 3 x MotionCommand` 平均 p50/p95/p99 为
+    1.51/2.56/3.93ms；solver 分段为 0.260/0.564/0.896ms，约占端到端
+    p50 的 17.2%。仍需在 Jazzy/目标环境完成 Python/C++ 差分、DDS tracing
+    和硬件/仿真回归后才能决定是否迁移。
 - 与长期规划的关系
   - 长期更接近 `motion_control` 的前身。
   - 当前已先输出到执行边界，后续还需继续把过渡消息演进为更稳定的控制语
@@ -328,7 +357,7 @@
 - 状态
   - 已落地最小可运行实现，处于第一版过渡态。
 - 当前承接位置
-  - 目录：`src/execution_manager`
+  - 目录：`src/execution/execution_manager`
   - ROS 包名：`execution_manager`
 - 当前主要职责
   - 接收 `motion_msgs/TeleopControl`，处理 teleop 控制权的申请、续租与释放。
@@ -343,6 +372,10 @@
   - 当前优先级固定为 estop、正式 task、普通 teleop、普通 motion/demo。
     task 活跃时只接受 requester 等于当前 `task_id` 且 lease 匹配的 task
     topic 命令，新的 teleop claim 与普通 motion 均被拒绝。
+  - 第一版真实 DDS profiling 中，`MotionCommand -> execution_manager ->
+    ServoCommand` 的 200 个顺序样本零超时，p50/p95/p99 为
+    16.55/43.75/57.16ms；尾延迟和 jitter 当前最高，先做重复测量与 tracing，
+    不据此直接重写安全状态机。
   - 正式 task start 会撤销普通 teleop holder/lease，并清理被抢占的旧 motion
     活跃窗口；finish、cancel、timeout 会撤销 task 准入。estop 会同时清空
     task/teleop lease 和普通 motion 活跃时间，解除后旧 lease 不会自动恢
@@ -455,7 +488,7 @@
   - 已落地第一版 Python 仿真桥实现；本轮 launch contract 与默认参数归属
     已基本收口完成，当前主要剩余最终包边界合并与必要维护。
 - 当前承接位置
-  - 目录：`src/simulation_bridge`
+  - 目录：`src/bridges/simulation_bridge`
   - ROS 包名：`simulation_bridge`
 - 当前主要职责
   - 承接 Isaac 仿真侧与当前舵机链路之间的消息互转。
@@ -479,13 +512,13 @@
     一部分 simulator-facing 参数收口到 simulation 词表，但 Python / C++
     两条桥接链路的 topic 与参数语义仍未完全收成一套更高层的 simulation
     接口。
-  - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
+  - 当前 `src/bridges/simulation_bridge/launch/simulation.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 这组 simulation 域
     topic 参数；这些 simulator-facing 细节现已进一步下沉到
-    `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，并已有
+    `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数，并已有
     source-level contract 测试固定这层更小的 package-level public
     surface。
-  - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
+  - 当前 `src/bridges/simulation_bridge/launch/simulation.launch.py` 也已不再继续暴露
     `isaac_command_topic`、`isaac_state_topic`、
     `isaac_enforce_limits` 这组 Python Isaac bridge 细节参数，以及
     `isaac_bridge_debug`、`sim_cpp_bridge_debug` 这组 bridge-specific
@@ -503,7 +536,7 @@
   - 当前 `sim_servo_bridge.launch.py` 也已不再继续声明 bridge-specific 的调
     试 / 限幅 launch 参数；这组默认值此前已从 `isaac_bridge_debug`、
     `isaac_enforce_limits` 收口到 `debug`、`enforce_position_limits`，现
-    在统一由 `simulation_bridge/config/default_params.yaml` 与节点默认参数
+    在统一由 `src/bridges/simulation_bridge/config/default_params.yaml` 与节点默认参数
     持有。
   - 当前 `simulation_bridge` 的包元数据描述与运行说明也已改用
     simulation / sim_servo 词表，不再把 Python servo 子链路入口继续表述
@@ -513,7 +546,7 @@
     收口，不能由 Phase 2 完成状态替代。
   - 当前 `sim_joint_bridge.launch.py` 也已不再继续声明 bridge-specific 的调
     试 launch 参数；对应默认值现在统一由
-    `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
+    `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默认参数持有。
   - 当前 `sim_joint_bridge_cpp` 也已把 joint 子链路的可执行名、节点名与默
     认参数根节点从 `sim_servo_bridge_*` 收口为 `sim_joint_bridge_*`，避
     免继续和 Python servo 子链路复用同一节点身份。
@@ -521,19 +554,19 @@
     `sim_joint_*` 参数词表，减少源码内部仍用泛化 `joint_*` /
     `publish_rate_*` 变量名带来的语义漂移。
   - 当前 C++ 子链路也已把目录从 `src/sim_servo_bridge_cpp` 迁到
-    `src/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点
+    `src/bridges/sim_joint_bridge_cpp`，旧目录壳已清理；此后目录名、ROS 包名与节点
     身份已回到同一套 `sim_joint_*` 词表。
   - 当前 `sim_joint_bridge.launch.py` 也已显式加载
-    `sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
+    `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml`，把 C++ 子链路的默认参
     数所有权收回到包内配置，而不是继续散落在 launch 内联默认值里。
   - 当前 `sim_joint_bridge.launch.py` 也已不再继续内联
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing 固定接
-    线，改为统一由 `sim_joint_bridge_cpp/config/default_params.yaml` 持有
+    线，改为统一由 `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 持有
     默认值。
   - 当前 `sim_joint_bridge.launch.py` 也已不再重复声明
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulator-facing 默认值，进一步把默认值所
-    有权收回到 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默
+    有权收回到 `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默
     认参数。
   - 当前 `sim_joint_bridge_cpp` 也已把 `servo_type` 参数收紧为收发两侧共
     用的同一语义：既控制下发 `ServoCommand.servo_type`，也控制回读
@@ -542,18 +575,18 @@
     `default_speed`，并在非法值时回退到 `100`，与 Python
     `sim_servo_bridge_node.py` 的默认速度语义保持同一方向。
   - 当前 `sim_servo_bridge.launch.py` 也已显式加载
-    `simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的
+    `src/bridges/simulation_bridge/config/default_params.yaml`，把 Python servo 子链路的
     默认参数所有权收回到包内配置，而不是继续散落在 launch 内联常量与节点
     默认值里。
   - 当前 `sim_servo_bridge.launch.py` 也已不再重复声明
     `sim_servo_command_topic`、`sim_servo_state_topic` 这组
     simulator-facing 默认值，进一步把默认值所有权收回到
-    `simulation_bridge/config/default_params.yaml` 与节点默认参数。
-  - 当前 `simulation_bridge/simulation.launch.py` 也已不再继续暴露
+    `src/bridges/simulation_bridge/config/default_params.yaml` 与节点默认参数。
+  - 当前 `src/bridges/simulation_bridge/launch/simulation.launch.py` 也已不再继续暴露
     `sim_publish_rate_hz` 这类偏 `sim_cpp_bridge` 实现细节的调优参数；该参
-    数现已只保留在 `sim_joint_bridge_cpp/config/default_params.yaml` 与节点默
+    数现已只保留在 `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 与节点默
     认参数。
-  - 当前 `simulation_bridge/simulation.launch.py` 自己也已不再暴露
+  - 当前 `src/bridges/simulation_bridge/launch/simulation.launch.py` 自己也已不再暴露
     `servo_command_topic`、`servo_state_topic` 这组 driver-facing launch
     参数，而是将其收回为 simulation 域内部固定接线；`robot_bringup`
     也不再感知这两个内部常量。
@@ -571,25 +604,25 @@
   - 当前 `robot_bringup` 也已不再继续暴露
     `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组内部 bridge 实现级启
     停开关，而是改为只保留一个 `enable_simulation` 域级开关。
-  - 当前 `simulation_bridge/simulation.launch.py` 也已进一步不再以
+  - 当前 `src/bridges/simulation_bridge/launch/simulation.launch.py` 也已进一步不再以
     `enable_isaac_bridge`、`enable_sim_cpp_bridge` 这组实现名开关作为包级
     public surface，而是进一步回到单一 domain entry；原先过渡存在的
     `enable_sim_servo_bridge`、`enable_sim_joint_bridge` 这组内部
     capability-based 开关当前也已从 package-level public launch 退场，
     `simulation.launch.py` 直接编排 `sim_servo_bridge.launch.py` 与
     `sim_joint_bridge.launch.py` 两条内部子链路。
-  - 当前 `robot_bringup/full_system.launch.py` 也已不再继续暴露
+  - 当前 `src/bringup/robot_bringup/launch/full_system.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；这些参数现已收回到
-    `robot_bringup/simulation.launch.py` 这个 simulation 域入口中。
-  - 当前 `robot_bringup/simulation.launch.py` 也已不再继续暴露
+    `src/bringup/robot_bringup/launch/simulation.launch.py` 这个 simulation 域入口中。
+  - 当前 `src/bringup/robot_bringup/launch/simulation.launch.py` 也已不再继续暴露
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这组 simulation 域细节参数；其中
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic` 与
     `sim_publish_rate_hz` 当前都已进一步下沉到
     `sim_joint_bridge.launch.py` 这个内部子链路边界。
   - 当前 `simulation_bridge` 包内也已补出 `simulation.launch.py` 作为包级
-    public 入口；当前由 `robot_bringup/simulation.launch.py` 只 include
+    public 入口；当前由 `src/bringup/robot_bringup/launch/simulation.launch.py` 只 include
     这个包级 public 入口，而 `simulation.launch.py` 已直接编排
     `sim_servo_bridge.launch.py` 与 `sim_joint_bridge.launch.py` 两个子 launch，
     用于明确 Python 与 C++ 两条桥接链路的内部职责边界。
@@ -597,6 +630,10 @@
     contract 为主，只保留少量关键旧词表回归断言。
   - 当前虽然已有独立 launch，且 bringup 已开始不再暴露 driver-facing 的
     内部接线参数，但整机默认链路仍需由 `robot_bringup` include 调起。
+  - 已具备第一版真实 DDS profiling 基线：禁网 ARM64 ROS 2 Humble 容器中，
+    `ServoCommand -> SimServoBridge -> ServoCommand` 的 200 个顺序样本零超
+    时，p50/p95/p99 分别为 13.99/33.03/45.51ms。该结果只用于热点取舍，未
+    形成 Python/C++ 等价后端或迁移结论。
 - 与长期规划的关系
   - 已开始形成 `simulation_bridge` 正式责任域。
   - 后续需要继续把 C++ 仿真桥与实现本体一起最终收口，但这部分当前已不再
@@ -607,7 +644,7 @@
 - 状态
   - 已实现，可选启用，处于过渡态。
 - 当前承接位置
-  - 目录：`src/sim_joint_bridge_cpp`
+  - 目录：`src/bridges/sim_joint_bridge_cpp`
   - ROS 包名：`sim_joint_bridge_cpp`
 - 当前主要职责
   - 将 `/sim/joint_cmd` 转换为 `/servo/command`。
@@ -629,11 +666,11 @@
     `sim_joint_cmd_topic`、`sim_joint_state_fb_topic`、
     `sim_publish_rate_hz` 这套当前参数词表，旧参数兼容分支已移除。
     simulator-facing 与 driver-facing 默认值均由
-    `sim_joint_bridge_cpp/config/default_params.yaml` 和节点默认参数持有，
+    `src/bridges/sim_joint_bridge_cpp/config/default_params.yaml` 和节点默认参数持有，
     `simulation_bridge` 的 package-level launch 不再显式暴露这些细节；但
     仿真域的其它参数与消息 contract 仍未完全统一。
   - 当前虽仍由 `robot_bringup` 的整机链路间接触发，但其节点装配与启停已
-    先收口到 `simulation_bridge/simulation.launch.py` 与其内部子 launch
+    先收口到 `src/bridges/simulation_bridge/launch/simulation.launch.py` 与其内部子 launch
     编排中，仍未完全完成的是包边界与实现本体的最终合并，而不再是
     launch 入口归属本身。
   - 当前 joint 子链路的运行身份也已开始向 capability 词表收口，子 launch
@@ -647,7 +684,7 @@
 - 状态
   - 已实现，且是当前相对稳定的驱动级接口边界。
 - 当前承接位置
-  - 目录：`src/servo_msgs`
+  - 目录：`src/interfaces/servo_msgs`
   - ROS 包名：`servo_msgs`
 - 当前主要职责
   - 提供舵机命令、状态和相关服务定义。
@@ -671,7 +708,7 @@
 - 状态
   - 已实现最小控制与执行接口集合，处于正式语义继续收口阶段。
 - 当前承接位置
-  - 目录：`src/motion_msgs`
+  - 目录：`src/interfaces/motion_msgs`
   - ROS 包名：`motion_msgs`
 - 当前主要职责
   - 以 `MotionCommand` 承接上层控制和 teleop 执行请求。
@@ -701,7 +738,7 @@
 - 状态
   - 已落地第一版正式任务接口。
 - 当前承接位置
-  - 目录：`src/task_api_msgs`
+  - 目录：`src/interfaces/task_api_msgs`
   - ROS 包名：`task_api_msgs`
 - 当前主要职责
   - 定义 `ExecuteTask` Action，使用结构化 `ankle_pose` goal。
@@ -724,7 +761,7 @@
 - 状态
   - 已落地第一版唯一正式任务 Action 入口。
 - 当前承接位置
-  - 目录：`src/task_service_bridge`
+  - 目录：`src/bridges/task_service_bridge`
   - ROS 包名：`task_service_bridge`
 - 当前主要职责
   - 提供唯一 `/task/execute` ActionServer，并以唯一 `/motion/execute`
@@ -747,7 +784,7 @@
 - 状态
   - 已落地第一版结构化语音意图消息。
 - 当前承接位置
-  - 目录：`src/speech_msgs`
+  - 目录：`src/interfaces/speech_msgs`
   - ROS 包名：`speech_msgs`
 - 当前主要职责
   - 以 `SpeechIntent` 表达 intent/task/trace/session 身份、当前
@@ -762,7 +799,7 @@
 - 状态
   - 已落地第一版结构化场景消息。
 - 当前承接位置
-  - 目录：`src/perception_msgs`
+  - 目录：`src/interfaces/perception_msgs`
   - ROS 包名：`perception_msgs`
 - 当前主要职责
   - 以 `DetectedObject` 表达对象身份、标签、置信度、三维位置与尺寸。
@@ -771,15 +808,15 @@
 - 当前非职责
   - 不实现相机采集、检测模型、任务规划或 motion/driver 命令。
 - 当前问题
-  - 当前 scene schema 已形成边界，但尚无真实相机/检测模型或 motion owner
-    消费验收。
+  - 当前 scene schema 已进入 motion owner 的身份、新鲜度和对象级几何准入闭
+    环，但尚无真实相机/检测模型、对象跟踪、轨迹规划或多任务消费验收。
 
 ### 3.15 `speech_interface`
 
 - 状态
   - 已落地第一版语音意图边缘 adapter 和正式任务客户端。
 - 当前承接位置
-  - 目录：`src/speech_interface`
+  - 目录：`src/speech/speech_interface`
   - ROS 包名：`speech_interface`
 - 当前主要职责
   - 订阅 `/speech/intent_input` 的边缘 JSON，严格拒绝重复、未知、缺失或越
@@ -800,7 +837,7 @@
 - 状态
   - 已落地第一版检测结果边缘 adapter。
 - 当前承接位置
-  - 目录：`src/vision_perception`
+  - 目录：`src/perception/vision_perception`
   - ROS 包名：`vision_perception`
 - 当前主要职责
   - 订阅 `/perception/detections_input` 的边缘 JSON，严格校验对象唯一 ID、
@@ -811,15 +848,16 @@
   - 不发布 task/motion/servo 命令，不负责执行仲裁或驱动协议。
   - 不实现真实相机采集或检测模型。
 - 当前问题
-  - 当前 JSON adapter 与结构化输出已经过 DDS smoke，但不等同于真实视觉设
-    备、模型精度或闭环场景消费验收。
+  - 当前 JSON adapter 与结构化输出已通过 task bridge 和 motion owner 的
+    DDS/Action 准入 smoke，但不等同于真实视觉设备、模型精度、对象跟踪或
+    几何规划验收。
 
 ### 3.17 `record_load_action`
 
 - 状态
   - 已实现，当前作为显式 opt-in 的工具/演示包。
 - 当前承接位置
-  - 目录：`src/record_load_action`
+  - 目录：`src/tools/record_load_action`
   - ROS 包名：`record_load_action`
 - 当前主要职责
   - 承载 BVH 资源配置。
@@ -847,7 +885,7 @@
     内保留的已弃用 `MotionCommand.speed`；请求级 `speed_ms` 合同与播放器内
     部 timing 行为保持不变。
   - 提供 `bvh_websocket_demo.launch.py` 作为显式演示入口；它 include
-    `robot_bringup/teleop.launch.py`，显式传入
+    `src/bringup/robot_bringup/launch/teleop.launch.py`，显式传入
     `record_load_action.bvh_websocket_extension:create_extension`，并将
     motion 输入固定接到 `/execution/motion/command`。
   - 默认 teleop/full-system launch 不启用该扩展，默认 WebSocket schema
@@ -893,7 +931,7 @@
 - 状态
   - 已实现，职责边界相对清晰。
 - 当前承接位置
-  - 目录：`src/robot_description`
+  - 目录：`src/description/robot_description`
   - ROS 包名：`robot_description`
 - 当前主要职责
   - 承载 URDF、mesh、MJCF、纹理与展示资源。
@@ -913,7 +951,7 @@
 - 状态
   - 已实现，属于展示与仿真辅助模块。
 - 当前承接位置
-  - 目录：`src/mjc_viewer`
+  - 目录：`src/description/mjc_viewer`
   - ROS 包名：`mjc_viewer`
 - 当前主要职责
   - 提供 MuJoCo 视图与仿真展示辅助能力。
@@ -928,6 +966,49 @@
 - 与长期规划的关系
   - 长期应继续留在描述/展示辅助域，不进入执行仲裁主链。
 
+### 3.20 `robot_hardware`
+
+- 状态
+  - 已新增为独立 `ament_cmake` ROS 2 Control 包；可构建，但尚未接入正式
+    task/motion/execution 主链。
+- 当前承接位置
+  - ROS 包目录：`src/hardware`
+  - ROS 包名：`robot_hardware`
+- 当前主要职责
+  - 导出 `BusServoSystem`、`Pca9685System` 与 `YbImuSensor` 三个
+    ros2_control plugin。
+  - Bus/PCA 为 joint-name `position` command/state interface 提供弧度制
+    读写，并在插件内完成 rad/raw 标定、协议和串口/I2C I/O。
+  - IMU 导出 orientation、angular velocity、linear acceleration 等标准 state
+    interface。
+  - 独立 launch 可装配 controller_manager、broadcaster 和当前单个 14-joint
+    `JointTrajectoryController`。
+- 当前主要输入
+  - controller_manager 内已 claim 的 position command interface。
+  - ros2_control xacro、hardware YAML 与 controller YAML。
+- 当前主要输出
+  - joint position state interface。
+  - IMU state interface。
+  - 对串口/I2C 设备的协议读写。
+- 当前非职责
+  - 不解析 task、teleop、scene、lease 或 `MotionCommand`。
+  - 不接受 `JointTrajectory` 或 `/servo/command` 业务 topic。
+  - 不执行并联机构 IK/FK，不生成轨迹或任务结果。
+- 当前问题
+  - `jiyuan_hardware.yaml` 的协议仍为 `unconfigured`，不能作为真机
+    commissioning 完成证据。
+  - 新路径与 legacy Python driver 路径未接线；若同时启动会竞争同一串口或
+    I2C 设备，因此不能并行成为物理 owner。
+  - 单一 14-joint JTC 不适合当前三关节踝部目标；资源组、trajectory gateway、
+    cancel/stop/recovery、反馈 freshness 和 limits 合同尚未建立。
+  - PCA state 是最后命令回显，不能作为真实位置、`target_reached` 或
+    `stop_confirmed` 依据；Bus read 的时序预算也尚未完成 profiling 验收。
+- 与长期规划的关系
+  - `docs/ros2_control_architecture.md` 已冻结其长期硬件 interface 边界：
+    lifecycle、标定、协议和有界 I/O 留在此层，运动学和执行授权不下沉。
+  - 在专项现状、近期计划和编码规则完成审查前，它只是独立旁路，不替代
+    `servo_hardware` 或正式 bringup。
+
 
 ## 4. 当前尚未落地的目标模块
 
@@ -939,6 +1020,10 @@
 - `teleoperation_bridge`
   - 当前只有混合职责的 `websocket_bridge`，还不能直接等同于正式
     `teleoperation_bridge`。
+- ROS 2 Control 正式执行链
+  - 当前 `robot_hardware` 只提供独立硬件/控制器旁路；`execution_manager`
+    trajectory gateway、单值 backend bringup 和正式 stop/recovery 语义均未
+    落地，不能当成已经完成的目标模块。
 
 
 ## 5. 当前事实到长期规划的映射
@@ -990,6 +1075,11 @@
 - `sensor_hardware`
   - 当前事实：已独立成 ROS 包
   - 长期去向：独立成 `sensor_hardware` ROS 包
+- `robot_hardware`
+  - 当前事实：独立 ROS 2 Control C++ hardware plugin 包，尚未接线到
+    `robot_bringup`、`execution_manager` 或正式 Action 链
+  - 长期去向：作为 ROS 2 Control hardware interface，只持有设备协议、标定、
+    lifecycle 与有界 I/O；不承接运动学或执行授权
 - `sim_joint_bridge_cpp`
   - 当前事实：仍是独立 C++ 仿真桥
   - 长期去向：继续向 `simulation_bridge` 责任域收口
@@ -1011,6 +1101,10 @@ stop 前迟到命令不会在 stop 后重新驱动执行器，ACK 前也不会�
 `vision_perception` 已形成两个结构化上下文垂直切片，统一经
 `task_service_bridge` 发布 `TaskContextSignal`，并由 `robot_bringup` 的独立
 context 域装配；当前边缘 JSON 合同不等同于真实语音、相机或模型完成。
+新增的 `robot_hardware` 已提供 ROS 2 Control hardware plugin，但当前只是独立
+旁路；正式路径仍经 legacy `servo_hardware`。ROS 2 Control 目标分层和总体迁移
+计划已单独冻结，下一步先审查专项当前事实、近期计划和编码规则，再开始任何
+controller 或硬件切换实现。
 仓库仍需继续面对这些现实问题：`websocket_bridge` 仍混合
 teleop/debug/status/IMU 上行职责，`parallel_3dof_controller` 虽已输出
 `MotionCommand`，但接口仍保留 servo 风格过渡字段；其中 `speed` 已进入弃
