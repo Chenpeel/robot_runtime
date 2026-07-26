@@ -1,0 +1,8 @@
+{
+    "type": "bvh_play",
+    "action": "walking",
+    "loop": false,
+    "speed_ms": 33,
+    "playback_rate": 1.0,
+    "frame_ms": 16.7
+}

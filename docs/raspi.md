@@ -55,13 +55,20 @@ docker compose --profile dev up -d ros2_servo_dev
 docker compose exec ros2_servo_dev bash
 
 # 在容器内：默认已位于容器工作区根目录，直接编译
-colcon build --packages-select websocket_bridge servo_hardware
+colcon build --packages-select \
+  robot_bringup \
+  websocket_bridge \
+  execution_manager \
+  motion_msgs \
+  servo_hardware \
+  sensor_hardware \
+  simulation_bridge
 
 # source环境
 source install/setup.bash
 
 # 启动系统
-ros2 launch websocket_bridge full_system.launch.py
+ros2 launch robot_bringup full_system.launch.py
 ```
 
 ## 使用方式
@@ -89,7 +96,7 @@ ros2 run servo_hardware bus_port_driver --ros-args \
   -p lx_servo_ids:="[1,2]"
 
 # 启动完整系统
-ros2 launch websocket_bridge full_system.launch.py
+ros2 launch robot_bringup full_system.launch.py
 ```
 
 **退出容器**：
@@ -337,11 +344,18 @@ python3 --version  # 应该是3.12.x
 
 # 2. 进入容器编译
 docker compose exec ros2_servo_dev bash
-colcon build --packages-select websocket_bridge servo_hardware
+colcon build --packages-select \
+  robot_bringup \
+  websocket_bridge \
+  execution_manager \
+  motion_msgs \
+  servo_hardware \
+  sensor_hardware \
+  simulation_bridge
 
 # 3. 测试
 source install/setup.bash
-ros2 launch websocket_bridge full_system.launch.py
+ros2 launch robot_bringup full_system.launch.py
 
 # 4. 如果需要重启容器
 exit

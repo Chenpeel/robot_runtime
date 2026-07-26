@@ -1,0 +1,110 @@
+ports:
+  ttyAMA0:
+    device: /dev/ttyAMA0
+  ttyAMA1:
+    device: /dev/ttyAMA1
+  ttyAMA2:
+    device: /dev/ttyAMA2
+  ttyAMA3:
+    device: /dev/ttyAMA3
+
+# protocol 必须在真机 commissioning 后逐项改为 lx 或 zl。
+joints:
+  left_hip_roll_joint:
+    port: ttyAMA0
+    servo_id: 4
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  left_knee_joint:
+    port: ttyAMA0
+    servo_id: 8
+    protocol: unconfigured
+    pulse_min: 1500
+    pulse_max: 2500
+    direction: 1
+  left_hip_cube_joint:
+    port: ttyAMA1
+    servo_id: 3
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  left_thigh_joint:
+    port: ttyAMA1
+    servo_id: 5
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  left_ankle_cube_joint:
+    port: ttyAMA1
+    servo_id: 12
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1
+  left_ankle_axle_joint:
+    port: ttyAMA1
+    servo_id: 13
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1
+  left_foot_joint:
+    port: ttyAMA1
+    servo_id: 14
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1
+  right_hip_roll_joint:
+    port: ttyAMA2
+    servo_id: 6
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  right_knee_joint:
+    port: ttyAMA2
+    servo_id: 7
+    protocol: unconfigured
+    pulse_min: 1500
+    pulse_max: 2500
+    direction: 1
+  right_hip_cube_joint:
+    port: ttyAMA3
+    servo_id: 1
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  right_thigh_joint:
+    port: ttyAMA3
+    servo_id: 2
+    protocol: unconfigured
+    pulse_min: 500
+    pulse_max: 2500
+    direction: 1
+  right_ankle_cube_joint:
+    port: ttyAMA3
+    servo_id: 9
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1
+  right_ankle_axle_joint:
+    port: ttyAMA3
+    servo_id: 10
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1
+  right_foot_joint:
+    port: ttyAMA3
+    servo_id: 11
+    protocol: unconfigured
+    pulse_min: 1167
+    pulse_max: 1833
+    direction: 1

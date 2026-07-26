@@ -152,7 +152,7 @@ LAUNCH_WS_DEBUG=${LAUNCH_WS_DEBUG:-false}
 LAUNCH_DEBUG_AGGREGATE=${LAUNCH_DEBUG_AGGREGATE:-true}
 LAUNCH_DEBUG_AGGREGATE_PERIOD=${LAUNCH_DEBUG_AGGREGATE_PERIOD:-1.0}
 LAUNCH_DEBUG_AGGREGATE_MAX_LEN=${LAUNCH_DEBUG_AGGREGATE_MAX_LEN:-120}
-LAUNCH_PROTOCOL_CACHE_FILE=${LAUNCH_PROTOCOL_CACHE_FILE:-/root/ros_ws/src/websocket/config/bus_protocol_cache.json}
+LAUNCH_PROTOCOL_CACHE_FILE=${LAUNCH_PROTOCOL_CACHE_FILE:-/root/ros_ws/src/bridges/teleoperation_bridge/config/bus_protocol_cache.json}
 LAUNCH_MANUAL_PROTOCOL_MAP_FILE=${LAUNCH_MANUAL_PROTOCOL_MAP_FILE:-}
 LAUNCH_LX_ID_RANGES=${LAUNCH_LX_ID_RANGES:-21-34}
 LAUNCH_ZL_ID_RANGES=${LAUNCH_ZL_ID_RANGES:-35-43}
@@ -162,12 +162,12 @@ LAUNCH_PROBE_ON_UNKNOWN_COMMAND=${LAUNCH_PROBE_ON_UNKNOWN_COMMAND:-true}
 LAUNCH_PROBE_RETRY_INTERVAL_SEC=${LAUNCH_PROBE_RETRY_INTERVAL_SEC:-3.0}
 LAUNCH_RUNTIME_PROBE_INTERVAL_SEC=${LAUNCH_RUNTIME_PROBE_INTERVAL_SEC:-0.05}
 LAUNCH_READ_SERVICE_TIMEOUT_SEC=${LAUNCH_READ_SERVICE_TIMEOUT_SEC:-0.35}
-PARALLEL_INSTANCES_FILE=${PARALLEL_INSTANCES_FILE:-/root/ros_ws/src/parallel_3dof_controller/config/parallel_3dof_instances.yaml}
+PARALLEL_INSTANCES_FILE=${PARALLEL_INSTANCES_FILE:-/root/ros_ws/src/control/parallel_3dof_controller/config/parallel_3dof_instances.yaml}
 
 if [ "$LAUNCH_MODE" = "multi" ]; then
-    log_info "Launch mode: websocket_bus_servo + parallel_3dof_multi"
+    log_info "Launch mode: robot_bringup multi-system + parallel_3dof_multi"
     launch_cmd=(
-        ros2 launch websocket_bridge websocket_bus_servo.launch.py
+        ros2 launch robot_bringup parallel_3dof_multi_system.launch.py
         "instances_file:=$PARALLEL_INSTANCES_FILE"
         "debug:=$LAUNCH_DEBUG"
         "bridge_debug:=$LAUNCH_BRIDGE_DEBUG"
@@ -191,7 +191,7 @@ if [ "$LAUNCH_MODE" = "multi" ]; then
 else
     log_info "Launch mode: full_system"
     launch_cmd=(
-        ros2 launch websocket_bridge full_system.launch.py
+        ros2 launch robot_bringup full_system.launch.py
         "debug:=$LAUNCH_DEBUG"
         "bridge_debug:=$LAUNCH_BRIDGE_DEBUG"
         "bus_servo_debug:=$LAUNCH_BUS_SERVO_DEBUG"

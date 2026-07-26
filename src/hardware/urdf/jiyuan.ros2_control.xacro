@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="jiyuan_ros2_control">
+  <xacro:arg
+    name="hardware_config"
+    default="$(find robot_hardware)/config/jiyuan_hardware.yaml"/>
+  <xacro:arg name="imu_transport" default="serial"/>
+  <xacro:arg name="imu_device" default="/dev/ttyAMA4"/>
+  <xacro:property
+    name="hardware"
+    value="${xacro.load_yaml('$(arg hardware_config)')}"/>
+
+  <!-- 几何和 mesh 始终复用 robot_description，避免复制 37 MB 资源。 -->
+  <xacro:include filename="$(find robot_description)/urdf/assets.urdf"/>
+
+  <xacro:macro name="bus_joint" params="joint_name">
+    <xacro:property name="joint_config" value="${hardware['joints'][joint_name]}"/>
+    <xacro:property
+      name="raw_min"
+      value="${125 + (joint_config['pulse_min'] - 500) * 750.0 / 2000.0 if joint_config['protocol'] == 'lx' else 833 + (joint_config['pulse_min'] - 500) * 1334.0 / 2000.0}"/>
+    <xacro:property
+      name="raw_max"
+      value="${125 + (joint_config['pulse_max'] - 500) * 750.0 / 2000.0 if joint_config['protocol'] == 'lx' else 833 + (joint_config['pulse_max'] - 500) * 1334.0 / 2000.0}"/>
+    <joint name="${joint_name}">
+      <command_interface name="position">
+        <param name="min">-1.57079632679</param>
+        <param name="max">1.57079632679</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <param name="servo_id">${joint_config['servo_id']}</param>
+      <param name="protocol">${joint_config['protocol']}</param>
+      <param name="raw_min">${raw_min}</param>
+      <param name="raw_max">${raw_max}</param>
+      <param name="direction">${joint_config['direction']}</param>
+      <param name="offset_rad">0</param>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="bus_hardware" params="name port_key">
+    <hardware>
+      <plugin>robot_hardware/BusServoSystem</plugin>
+      <param name="port">${hardware['ports'][port_key]['device']}</param>
+      <param name="baud_rate">115200</param>
+      <param name="move_duration_ms">100</param>
+      <param name="read_timeout_ms">20</param>
+      <param name="feedback_per_cycle">1</param>
+      <param name="max_consecutive_errors">5</param>
+      <param name="read_position">true</param>
+      <param name="release_torque_on_deactivate">false</param>
+    </hardware>
+  </xacro:macro>
+
+  <ros2_control name="jiyuan_bus_ttyAMA0" type="system">
+    <xacro:bus_hardware name="jiyuan_bus_ttyAMA0" port_key="ttyAMA0"/>
+    <xacro:bus_joint joint_name="left_hip_roll_joint"/>
+    <xacro:bus_joint joint_name="left_knee_joint"/>
+  </ros2_control>
+
+  <ros2_control name="jiyuan_bus_ttyAMA1" type="system">
+    <xacro:bus_hardware name="jiyuan_bus_ttyAMA1" port_key="ttyAMA1"/>
+    <xacro:bus_joint joint_name="left_hip_cube_joint"/>
+    <xacro:bus_joint joint_name="left_thigh_joint"/>
+    <xacro:bus_joint joint_name="left_ankle_cube_joint"/>
+    <xacro:bus_joint joint_name="left_ankle_axle_joint"/>
+    <xacro:bus_joint joint_name="left_foot_joint"/>
+  </ros2_control>
+
+  <ros2_control name="jiyuan_bus_ttyAMA2" type="system">
+    <xacro:bus_hardware name="jiyuan_bus_ttyAMA2" port_key="ttyAMA2"/>
+    <xacro:bus_joint joint_name="right_hip_roll_joint"/>
+    <xacro:bus_joint joint_name="right_knee_joint"/>
+  </ros2_control>
+
+  <ros2_control name="jiyuan_bus_ttyAMA3" type="system">
+    <xacro:bus_hardware name="jiyuan_bus_ttyAMA3" port_key="ttyAMA3"/>
+    <xacro:bus_joint joint_name="right_hip_cube_joint"/>
+    <xacro:bus_joint joint_name="right_thigh_joint"/>
+    <xacro:bus_joint joint_name="right_ankle_cube_joint"/>
+    <xacro:bus_joint joint_name="right_ankle_axle_joint"/>
+    <xacro:bus_joint joint_name="right_foot_joint"/>
+  </ros2_control>
+
+  <ros2_control name="jiyuan_imu" type="sensor">
+    <hardware>
+      <plugin>robot_hardware/YbImuSensor</plugin>
+      <param name="transport">$(arg imu_transport)</param>
+      <param name="device">$(arg imu_device)</param>
+      <param name="baud_rate">115200</param>
+      <param name="address">35</param>
+      <param name="algo_type">9</param>
+      <param name="calibrate_on_start">false</param>
+    </hardware>
+    <sensor name="imu_sensor">
+      <state_interface name="orientation.x"/>
+      <state_interface name="orientation.y"/>
+      <state_interface name="orientation.z"/>
+      <state_interface name="orientation.w"/>
+      <state_interface name="angular_velocity.x"/>
+      <state_interface name="angular_velocity.y"/>
+      <state_interface name="angular_velocity.z"/>
+      <state_interface name="linear_acceleration.x"/>
+      <state_interface name="linear_acceleration.y"/>
+      <state_interface name="linear_acceleration.z"/>
+    </sensor>
+  </ros2_control>
+</robot>

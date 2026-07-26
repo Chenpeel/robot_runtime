@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>task_service_bridge</name>
+  <version>0.0.0</version>
+  <description>外部任务 Action 到内部运动 Action 的边界适配器</description>
+  <maintainer email="chenpeel@foxmail.com">chenpeel</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>action_msgs</depend>
+  <depend>motion_msgs</depend>
+  <depend>perception_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>speech_msgs</depend>
+  <depend>task_api_msgs</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>execution_manager</test_depend>
+  <test_depend>parallel_3dof_controller</test_depend>
+  <test_depend>servo_hardware</test_depend>
+  <test_depend>servo_msgs</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

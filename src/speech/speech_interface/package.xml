@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>speech_interface</name>
+  <version>0.0.0</version>
+  <description>外部语音 JSON 到结构化意图和正式任务 Action 的适配器</description>
+  <maintainer email="chenpeel@foxmail.com">chenpeel</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>speech_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>task_api_msgs</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

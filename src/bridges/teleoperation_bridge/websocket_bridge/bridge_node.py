@@ -1,0 +1,981 @@
+"""
+WebSocket桥接节点 - 连接 WebSocket 服务器和 ROS 2 执行边界
+
+数据流:
+1. WebSocket客户端 -> WebSocket服务器 -> bridge_node
+   -> /execution/teleop/control + /execution/teleop/command -> execution_manager
+2. execution_manager -> /execution/actuator_state -> bridge_node
+   -> WebSocket服务器 -> WebSocket客户端
+"""
+
+import asyncio
+from importlib import import_module
+import threading
+from typing import Optional
+
+from motion_msgs.msg import ActuatorState
+from motion_msgs.msg import ExecutionState
+from motion_msgs.msg import MotionCommand
+from motion_msgs.msg import TeleopControl
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+
+try:
+    from sensor_msgs.msg import ImuData
+    HAS_IMU_DATA = True
+except Exception:  # pragma: no cover - optional dependency
+    ImuData = None
+    HAS_IMU_DATA = False
+
+from .ws_server import WebSocketBridgeServer
+from .error_codes import TeleopControlRejectedException
+from .debug_aggregator import DebugAggregator
+
+DEFAULT_COMMAND_TOPIC = '/execution/teleop/command'
+DEFAULT_TELEOP_CONTROL_TOPIC = '/execution/teleop/control'
+DEFAULT_ACTUATOR_STATE_TOPIC = '/execution/actuator_state'
+BUS_MIN_US = 500
+BUS_MAX_US = 2500
+
+
+class WebSocketROS2Bridge(Node):
+    """WebSocket到ROS 2的桥接节点
+
+    功能:
+    1. 启动WebSocket服务器监听Web客户端
+    2. 将WebSocket消息转换为ROS 2话题消息
+    3. 订阅ROS 2话题并转发到WebSocket客户端
+    """
+
+    def __init__(self, ws_host: str = "0.0.0.0", ws_port: int = 9105,
+                 device_id: str = "robot", debug: bool = False):
+        """
+        初始化桥接节点
+
+        Args:
+            ws_host: WebSocket服务器监听地址
+            ws_port: WebSocket服务器监听端口
+            device_id: 设备ID
+            debug: 是否启用调试模式
+        """
+        super().__init__('websocket_ros2_bridge')
+
+        # 声明ROS参数
+        self.declare_parameter('ws_host', ws_host)
+        self.declare_parameter('ws_port', ws_port)
+        self.declare_parameter('device_id', device_id)
+        self.declare_parameter('debug', debug)
+        self.declare_parameter('command_topic', DEFAULT_COMMAND_TOPIC)
+        self.declare_parameter('teleop_control_topic', DEFAULT_TELEOP_CONTROL_TOPIC)
+        self.declare_parameter(
+            'actuator_state_topic',
+            DEFAULT_ACTUATOR_STATE_TOPIC,
+        )
+        self.declare_parameter('execution_state_topic', '/execution/state')
+        self.declare_parameter('extension_factories', '')
+        self.declare_parameter('imu_debug', debug)
+        self.declare_parameter('heartbeat_debug', False)
+        self.declare_parameter('ws_debug', False)
+        self.declare_parameter('debug_aggregate', True)
+        self.declare_parameter('debug_aggregate_period', 1.0)
+        self.declare_parameter('debug_aggregate_max_len', 120)
+
+        # 从ROS参数读取配置
+        self.ws_host = self.get_parameter('ws_host').value
+        self.ws_port = self.get_parameter('ws_port').value
+        self.device_id = self.get_parameter('device_id').value
+        self.debug = self.get_parameter('debug').value
+        self.command_topic = self.get_parameter('command_topic').value
+        self.teleop_control_topic = self.get_parameter('teleop_control_topic').value
+        self.actuator_state_topic = self.get_parameter(
+            'actuator_state_topic'
+        ).value
+        self.execution_state_topic = self.get_parameter('execution_state_topic').value
+        self.extension_factories = str(
+            self.get_parameter('extension_factories').value or ''
+        )
+        self.imu_debug = self.get_parameter('imu_debug').value
+        self.heartbeat_debug = self.get_parameter('heartbeat_debug').value
+        self.ws_debug = self.get_parameter('ws_debug').value
+        self.debug_aggregate = self.get_parameter('debug_aggregate').value
+        self.debug_aggregate_period = float(self.get_parameter('debug_aggregate_period').value)
+        self.debug_aggregate_max_len = int(self.get_parameter('debug_aggregate_max_len').value)
+
+        if self.debug_aggregate_period <= 0:
+            self.debug_aggregate_period = 1.0
+
+        self.debug_aggregator = None
+        if self.debug_aggregate:
+            self.debug_aggregator = DebugAggregator(
+                emit=self.get_logger().info,
+                max_len=self.debug_aggregate_max_len
+            )
+            self.create_timer(self.debug_aggregate_period, self.debug_aggregator.flush)
+
+        # ROS 2话题
+        # 发布 teleop MotionCommand 到执行层
+        self.teleop_command_pub = self.create_publisher(
+            MotionCommand,
+            self.command_topic,
+            10
+        )
+        self.teleop_control_pub = self.create_publisher(
+            TeleopControl,
+            self.teleop_control_topic,
+            10
+        )
+
+        self.latest_execution_state = {}
+
+        # 只消费 execution_manager 适配后的执行器反馈。
+        self.actuator_state_sub = self.create_subscription(
+            ActuatorState,
+            self.actuator_state_topic,
+            self.actuator_state_callback,
+            10
+        )
+        self.execution_state_sub = self.create_subscription(
+            ExecutionState,
+            self.execution_state_topic,
+            self.execution_state_callback,
+            10
+        )
+
+        # 订阅 IMU 传感器数据
+        self.imu_data_sub = None
+        if HAS_IMU_DATA:
+            self.imu_data_sub = self.create_subscription(
+                ImuData,
+                '/sensor/imu',
+                self.imu_data_callback,
+                10
+            )
+        else:
+            self.get_logger().warn('ImuData消息不可用，已跳过IMU订阅')
+
+        self.extensions = self._load_extensions(self.extension_factories)
+
+        # WebSocket服务器
+        self.ws_server: Optional[WebSocketBridgeServer] = None
+        self.ws_loop: Optional[asyncio.AbstractEventLoop] = None
+        self.ws_thread: Optional[threading.Thread] = None
+
+        self.get_logger().info(
+            f'WebSocket桥接节点已初始化: ws://{ws_host}:{ws_port}, '
+            f'command_topic={self.command_topic}, '
+            f'teleop_control_topic={self.teleop_control_topic}, '
+            f'actuator_state_topic={self.actuator_state_topic}, '
+            f'execution_state_topic={self.execution_state_topic}, '
+            f'extensions={len(self.extensions)}'
+        )
+
+    def _load_extensions(self, factory_specs: str) -> list:
+        """按 ``module:callable`` 列表加载显式配置的扩展。"""
+        extensions = []
+        try:
+            for raw_spec in str(factory_specs or '').split(','):
+                spec = raw_spec.strip()
+                if not spec:
+                    continue
+
+                extension = self._load_extension(spec)
+                extensions.append(extension)
+        except Exception:
+            # 节点初始化将失败，但已创建的扩展仍需先尽力释放自身资源。
+            for extension in reversed(extensions):
+                try:
+                    extension.close()
+                except Exception as close_error:
+                    self.get_logger().error(
+                        f'回滚扩展 {type(extension).__name__} 失败: '
+                        f'{close_error}'
+                    )
+            raise
+
+        return extensions
+
+    def _load_extension(self, spec: str):
+        """加载并校验单个 ``module:callable`` 扩展工厂。"""
+        try:
+            module_name, factory_name = spec.rsplit(':', 1)
+        except ValueError as exc:
+            raise ValueError(f'扩展工厂格式无效: {spec!r}') from exc
+
+        module_name = module_name.strip()
+        factory_name = factory_name.strip()
+        if not module_name or not factory_name:
+            raise ValueError(f'扩展工厂格式无效: {spec!r}')
+
+        module = import_module(module_name)
+        factory = getattr(module, factory_name)
+        if not callable(factory):
+            raise TypeError(f'扩展工厂不可调用: {spec!r}')
+
+        extension = factory(self)
+        try:
+            self._validate_extension(extension, spec)
+        except Exception:
+            close_extension = getattr(extension, 'close', None)
+            if callable(close_extension):
+                try:
+                    close_extension()
+                except Exception as close_error:
+                    self.get_logger().error(
+                        f'回滚无效扩展 {type(extension).__name__} 失败: '
+                        f'{close_error}'
+                    )
+            raise
+        return extension
+
+    @staticmethod
+    def _validate_extension(extension, factory_spec: str) -> None:
+        """验证扩展实现完整的生命周期契约。"""
+        required_methods = (
+            'register_message_handlers',
+            'on_execution_state',
+            'close',
+        )
+        missing_methods = [
+            method_name
+            for method_name in required_methods
+            if not callable(getattr(extension, method_name, None))
+        ]
+        if missing_methods:
+            raise TypeError(
+                f'扩展 {factory_spec!r} 缺少可调用方法: '
+                f'{", ".join(missing_methods)}'
+            )
+
+    def _register_extension_message_handlers(self, server) -> None:
+        """将已加载扩展的消息处理器注册到 WebSocket 服务。"""
+        for extension in self.extensions:
+            extension.register_message_handlers(server)
+
+    def _create_websocket_server(self) -> WebSocketBridgeServer:
+        """同步创建并配置服务，使扩展注册错误在启动线程前暴露。"""
+        server = WebSocketBridgeServer(
+            host=self.ws_host,
+            port=self.ws_port,
+            device_id=self.device_id,
+            debug=self.ws_debug,
+            debug_logger=self.debug_aggregator,
+        )
+        server.set_servo_command_callback(self.handle_servo_command)
+        server.set_teleop_claim_callback(self.handle_teleop_claim)
+        server.set_teleop_release_callback(self.handle_teleop_release)
+        server.set_heartbeat_callback(self.handle_heartbeat)
+        server.set_status_query_callback(self.handle_status_query)
+        self._register_extension_message_handlers(server)
+        return server
+
+    def start_websocket_server(self):
+        """在独立线程中启动WebSocket服务器"""
+        # 服务与扩展注册在当前线程完成；显式配置错误必须阻止节点假启动。
+        self.ws_server = self._create_websocket_server()
+
+        def run_ws_server():
+            """WebSocket服务器运行函数（在独立线程中）"""
+            # 创建新的事件循环
+            self.ws_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.ws_loop)
+
+            # 运行服务器
+            try:
+                self.ws_loop.run_until_complete(self.ws_server.start())
+                self.get_logger().info('WebSocket服务器已启动')
+
+                # 保持运行
+                self.ws_loop.run_forever()
+            except Exception as e:
+                self.get_logger().error(f'WebSocket服务器异常: {e}')
+            finally:
+                if self.ws_loop:
+                    self.ws_loop.close()
+
+        # 启动WebSocket线程
+        self.ws_thread = threading.Thread(target=run_ws_server, daemon=True)
+        self.ws_thread.start()
+
+        self.get_logger().info('WebSocket服务器线程已启动')
+
+    @staticmethod
+    def _coerce_float(value, default=None):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _coerce_uint16(value, default=None):
+        try:
+            val = int(round(float(value)))
+        except (TypeError, ValueError):
+            return default
+        return max(0, min(65535, val))
+
+    @staticmethod
+    def _map_angle_to_pulse(angle: float) -> int:
+        """Map angle in [0, 180] to pulse width 500-2500us."""
+        angle = max(0.0, min(180.0, angle))
+        return int(round(BUS_MIN_US + angle * (2000.0 / 180.0)))
+
+    @staticmethod
+    def _map_pulse_to_centered_angle(pulse: float) -> float:
+        """Map pulse width 500-2500us to angle in [-90, 90]."""
+        pulse = max(float(BUS_MIN_US), min(float(BUS_MAX_US), float(pulse)))
+        return (pulse - BUS_MIN_US) * (180.0 / 2000.0) - 90.0
+
+    async def handle_servo_command(
+        self,
+        servo_cmd: dict,
+        context: dict | None = None,
+    ):
+        """
+        处理来自WebSocket的舵机控制命令
+
+        Args:
+            servo_cmd: 舵机命令字典
+                {
+                    "servo_type": "bus" | "pca",
+                    "servo_id": int,
+                    "position": int,
+                    "value_encoding": str (可选，显式目标值编码),
+                    "duration_ms": int (可选，显式执行时长),
+                    "speed": int (兼容字段)
+                }
+        """
+        try:
+            servo_type = servo_cmd.get("servo_type", "bus")
+            value_encoding = str(
+                servo_cmd.get("value_encoding") or ""
+            ).strip().lower()
+            raw_position = servo_cmd.get("position")
+            if raw_position is None:
+                raise ValueError("缺少 position 字段")
+
+            position = self._normalize_motion_position(
+                servo_type=servo_type,
+                raw_position=raw_position,
+                value_encoding=value_encoding,
+            )
+            duration_ms = self._resolve_duration_ms(
+                servo_cmd.get("duration_ms"),
+                servo_cmd.get("speed", 100),
+            )
+            requester_id = self._extract_requester_id(context)
+            lease_id = self._extract_lease_id(context)
+            self._ensure_teleop_command_allowed(
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
+
+            # 转换为 MotionCommand 消息
+            msg = self._build_motion_command(
+                servo_type=servo_type,
+                servo_id=servo_cmd["servo_id"],
+                position=position,
+                value_encoding=(
+                    value_encoding
+                    or self._motion_value_encoding_for_servo_type(servo_type)
+                ),
+                duration_ms=duration_ms,
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
+
+            # 发布到ROS 2话题
+            self.teleop_command_pub.publish(msg)
+
+            self._debug_log(
+                "servo_command",
+                (
+                    f"{msg.servo_type} ID={msg.servo_id} "
+                    f"POS={msg.position} ENC={msg.value_encoding} "
+                    f"DURATION_MS={msg.duration_ms} "
+                    f"requester_id={requester_id} lease_id={lease_id}"
+                ),
+                self.debug
+            )
+
+        except Exception as e:
+            self.get_logger().error(f'处理舵机命令失败: {e}')
+            raise
+
+    async def handle_heartbeat(self, context: dict | None = None):
+        """处理心跳消息"""
+        requester_id = self._extract_requester_id(context)
+        lease_id = self._extract_lease_id(context)
+        if self._teleop_control_is_active():
+            self._publish_teleop_control(
+                'keepalive',
+                requester_id=requester_id,
+                lease_id=lease_id,
+            )
+        self._debug_log("heartbeat", "received", self.heartbeat_debug)
+
+    async def handle_teleop_claim(self, context: dict | None = None):
+        """处理 teleop 控制权申请。"""
+        requester_id = self._extract_requester_id(context)
+        lease_id = self._extract_lease_id(context)
+        self._publish_teleop_control(
+            'claim',
+            requester_id=requester_id,
+            lease_id=lease_id,
+        )
+        self._debug_log(
+            "teleop_control",
+            f"claim requester_id={requester_id} lease_id={lease_id}",
+            self.debug
+        )
+        return self._build_teleop_ack_payload(requester_id, lease_id)
+
+    async def handle_teleop_release(self, context: dict | None = None):
+        """处理 teleop 控制权释放。"""
+        requester_id = self._extract_requester_id(context)
+        lease_id = self._extract_lease_id(context)
+        self._publish_teleop_control(
+            'release',
+            requester_id=requester_id,
+            lease_id=lease_id,
+        )
+        self._debug_log(
+            "teleop_control",
+            f"release requester_id={requester_id} lease_id={lease_id}",
+            self.debug
+        )
+        return self._build_teleop_ack_payload(requester_id, lease_id)
+
+    async def handle_status_query(self) -> dict:
+        """
+        处理状态查询请求
+
+        Returns:
+            dict: 当前系统状态
+        """
+        now = self.get_clock().now()
+        snapshot = (
+            self.ws_server.get_status_snapshot()
+            if self.ws_server
+            else self._build_status_snapshot()
+        )
+        snapshot.update({
+            "type": "status_response",
+            "device_id": self.device_id,
+            "status": "online",
+            "ros_nodes": self.get_node_names(),
+            "timestamp": now.nanoseconds / 1e9  # 转换为秒（浮点数）
+        })
+        return snapshot
+
+    def execution_state_callback(self, msg: ExecutionState):
+        """处理 execution_manager 状态反馈。"""
+        try:
+            state = self._execution_state_msg_to_dict(msg)
+            changed = state != self.latest_execution_state
+            self.latest_execution_state = state
+
+            for extension in self.extensions:
+                try:
+                    extension.on_execution_state(dict(state))
+                except Exception as exc:
+                    self.get_logger().error(
+                        f'扩展 {type(extension).__name__} '
+                        f'处理 execution state 失败: {exc}'
+                    )
+
+            if self.ws_server:
+                self.ws_server.update_execution_state(state)
+
+            if changed and self.ws_server and self.ws_loop and not self.ws_loop.is_closed():
+                if self.ws_loop.is_running():
+                    payload = {
+                        "type": "execution_state",
+                        "execution_state": state,
+                    }
+                    asyncio.run_coroutine_threadsafe(
+                        self.ws_server.broadcast_status(payload),
+                        self.ws_loop
+                    )
+        except Exception as e:
+            self.get_logger().error(f'处理 execution state 回调异常: {e}')
+
+    def actuator_state_callback(self, msg: ActuatorState):
+        """
+        处理 execution_manager 适配后的执行器反馈。
+
+        Args:
+            msg: ActuatorState 消息
+        """
+        try:
+            state = self._actuator_state_msg_to_payload(msg)
+
+            self._debug_log(
+                "actuator_state",
+                (
+                    f"{msg.actuator_type} ID={msg.actuator_id} "
+                    f"POS={msg.position_raw} ERR={msg.driver_error_code}"
+                ),
+                self.debug
+            )
+
+            # 更新WebSocket服务器的状态
+            if self.ws_server:
+                self.ws_server.update_servo_state(
+                    msg.actuator_id,
+                    msg.actuator_type,
+                    state['position']
+                )
+
+                # 广播状态到所有WebSocket客户端
+                if self.ws_loop and not self.ws_loop.is_closed() and self.ws_loop.is_running():
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            self.ws_server.broadcast_status(state),
+                            self.ws_loop
+                        )
+                    except RuntimeError as e:
+                        if self.debug:
+                            self.get_logger().warning(f'无法广播状态（事件循环不可用）: {e}')
+                elif self.debug:
+                    self._debug_log("ws_broadcast_skip", "event loop not running", self.debug)
+
+        except Exception as e:
+            self.get_logger().error(f'处理执行器状态回调异常: {e}')
+
+    @classmethod
+    def _actuator_state_msg_to_payload(cls, msg: ActuatorState) -> dict:
+        """保持既有 WebSocket 状态字段，同时隐藏 ROS 驱动消息。"""
+        angle = None
+        position = msg.position_raw
+        if msg.value_encoding == 'bus_pulse_us':
+            angle = cls._map_pulse_to_centered_angle(position)
+            position = angle
+
+        return {
+            'servo_type': msg.actuator_type,
+            'servo_id': msg.actuator_id,
+            'position': position,
+            'angle': angle,
+            'pulse': (
+                msg.position_raw
+                if msg.value_encoding == 'bus_pulse_us'
+                else None
+            ),
+            'load': msg.load,
+            'temperature': msg.temperature,
+            'error_code': msg.driver_error_code,
+            'timestamp': msg.stamp.sec + msg.stamp.nanosec / 1e9,
+        }
+
+    def imu_data_callback(self, msg: ImuData):
+        """
+        处理 IMU 传感器数据（来自 IMU 驱动节点）
+
+        Args:
+            msg: ImuData消息
+        """
+        try:
+            # 转换为 JSON 字典
+            imu_data = {
+                "type": "sensor_data",
+                "sensor_type": msg.sensor_type,
+                "sensor_id": msg.sensor_id,
+                "data": {
+                    "accel": {
+                        "x": msg.accel_x,
+                        "y": msg.accel_y,
+                        "z": msg.accel_z,
+                        "unit": "g"
+                    },
+                    "gyro": {
+                        "x": msg.gyro_x,
+                        "y": msg.gyro_y,
+                        "z": msg.gyro_z,
+                        "unit": "rad/s"
+                    },
+                    "mag": {
+                        "x": msg.mag_x,
+                        "y": msg.mag_y,
+                        "z": msg.mag_z,
+                        "unit": "uT"
+                    },
+                    "quaternion": {
+                        "w": msg.quat_w,
+                        "x": msg.quat_x,
+                        "y": msg.quat_y,
+                        "z": msg.quat_z
+                    },
+                    "euler": {
+                        "roll": msg.roll,
+                        "pitch": msg.pitch,
+                        "yaw": msg.yaw,
+                        "unit": "deg"
+                    },
+                    "baro": {
+                        "height": msg.baro_height,
+                        "temperature": msg.baro_temp,
+                        "pressure": msg.baro_pressure
+                    }
+                },
+                "error_code": msg.error_code,
+                "timestamp": msg.stamp.sec + msg.stamp.nanosec / 1e9
+            }
+
+            self._debug_log(
+                "imu",
+                (
+                    f"euler=({msg.roll:.1f}, {msg.pitch:.1f}, {msg.yaw:.1f}) "
+                    f"accel=({msg.accel_x:.2f}, {msg.accel_y:.2f}, {msg.accel_z:.2f})"
+                ),
+                self.imu_debug
+            )
+
+            # 广播到所有 WebSocket 客户端
+            if self.ws_server and self.ws_loop and not self.ws_loop.is_closed():
+                if self.ws_loop.is_running():
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            self.ws_server.broadcast_status(imu_data),
+                            self.ws_loop
+                        )
+                    except RuntimeError as e:
+                        if self.imu_debug:
+                            self.get_logger().warning(f'无法广播 IMU 数据（事件循环不可用）: {e}')
+
+        except Exception as e:
+            self.get_logger().error(f'处理 IMU 数据回调异常: {e}')
+
+    def _debug_log(self, category, message, enabled):
+        if not enabled:
+            return
+        if self.debug_aggregator:
+            self.debug_aggregator.record(category, message)
+        else:
+            self.get_logger().info(message)
+
+    def _build_status_snapshot(self) -> dict:
+        movement_active = bool(
+            self.latest_execution_state.get('teleop_active')
+            or self.latest_execution_state.get('motion_active')
+            or self.latest_execution_state.get('task_active')
+        )
+        listening = self.latest_execution_state.get('active_source') == 'teleop'
+        action = str(self.latest_execution_state.get('mode') or 'idle')
+        led_state = 'red' if self.latest_execution_state.get('estop_active') else (
+            'green' if movement_active else 'off'
+        )
+        return {
+            "character_name": self.device_id,
+            "bus_servos": {},
+            "pwm_servos": {},
+            "current_status": {
+                "movement_active": movement_active,
+                "listening": listening,
+                "action": action,
+                "led_state": led_state,
+            },
+            "execution_state": dict(self.latest_execution_state),
+            "result_code": 200,
+        }
+
+    def _publish_teleop_control(
+        self,
+        action: str,
+        requester_id: str | None = None,
+        lease_id: str | None = None,
+    ) -> None:
+        msg = TeleopControl()
+        msg.action = str(action).strip().lower()
+        msg.requester_id = str(requester_id or '').strip()
+        msg.lease_id = str(lease_id or '').strip()
+        msg.stamp = self.get_clock().now().to_msg()
+        self.teleop_control_pub.publish(msg)
+
+    def _build_teleop_ack_payload(self, requester_id: str, lease_id: str) -> dict:
+        execution_state = dict(self.latest_execution_state)
+        holder_id = str(execution_state.get('teleop_holder_id') or '')
+        current_lease_id = str(execution_state.get('teleop_lease_id') or '')
+        teleop_active = bool(execution_state.get('teleop_active'))
+        holder_matches = bool(requester_id) and holder_id == requester_id
+        lease_matches = bool(lease_id) and current_lease_id == lease_id
+        return {
+            'status': 'requested',
+            'requester_id': requester_id,
+            'teleop_lease_id': current_lease_id,
+            'execution_state': execution_state,
+            'known_holder_matches': holder_matches,
+            'known_lease_matches': lease_matches,
+            'known_teleop_active': teleop_active,
+        }
+
+    @staticmethod
+    def _extract_requester_id(context: dict | None) -> str:
+        if not isinstance(context, dict):
+            return ''
+        return str(context.get('requester_id') or '').strip()
+
+    @staticmethod
+    def _extract_lease_id(context: dict | None) -> str:
+        if not isinstance(context, dict):
+            return ''
+        return str(context.get('lease_id') or '').strip()
+
+    def _ensure_teleop_command_allowed(
+        self,
+        requester_id: str,
+        lease_id: str,
+    ) -> None:
+        execution_state = dict(self.latest_execution_state)
+        holder_id = str(execution_state.get('teleop_holder_id') or '')
+        current_lease_id = str(execution_state.get('teleop_lease_id') or '')
+        teleop_active = bool(execution_state.get('teleop_active'))
+        active_source = str(execution_state.get('active_source') or '')
+
+        rejection_reason = ''
+        if not teleop_active or active_source != 'teleop':
+            rejection_reason = 'teleop_control_not_granted'
+        elif not requester_id:
+            rejection_reason = 'teleop_requester_id_required'
+        elif holder_id != requester_id:
+            rejection_reason = 'teleop_control_not_holder'
+        elif current_lease_id and not lease_id:
+            rejection_reason = 'teleop_control_lease_required'
+        elif current_lease_id and current_lease_id != lease_id:
+            rejection_reason = 'teleop_control_lease_mismatch'
+
+        if not rejection_reason:
+            return
+
+        raise TeleopControlRejectedException(
+            message=f'teleop command rejected: {rejection_reason}',
+            details={
+                'reason': rejection_reason,
+                'requester_id': requester_id,
+                'lease_id': lease_id,
+                'teleop_holder_id': holder_id,
+                'teleop_lease_id': current_lease_id,
+                'teleop_active': teleop_active,
+                'active_source': active_source,
+            },
+        )
+
+    @staticmethod
+    def _motion_value_encoding_for_servo_type(servo_type: str) -> str:
+        normalized_type = str(servo_type).strip().lower()
+        if normalized_type == 'bus':
+            return 'bus_pulse_us'
+        if normalized_type == 'pca':
+            return 'pca_tick'
+        return ''
+
+    @staticmethod
+    def _resolve_duration_ms(value, fallback=100) -> int:
+        primary = WebSocketROS2Bridge._coerce_uint16(value, None)
+        if primary and primary > 0:
+            return primary
+        secondary = WebSocketROS2Bridge._coerce_uint16(fallback, None)
+        if secondary and secondary > 0:
+            return secondary
+        return 100
+
+    def _normalize_motion_position(
+        self,
+        servo_type: str,
+        raw_position,
+        value_encoding: str,
+    ) -> int:
+        normalized_type = str(servo_type).strip().lower()
+        normalized_encoding = str(value_encoding or '').strip().lower()
+        position_val = self._coerce_float(raw_position, None)
+        if position_val is None:
+            raise ValueError(f"非法 position: {raw_position}")
+
+        if normalized_type == "bus":
+            if normalized_encoding == "bus_pulse_us":
+                if BUS_MIN_US <= position_val <= BUS_MAX_US:
+                    return int(round(position_val))
+                raise ValueError(
+                    f"bus_pulse_us 超出范围[{BUS_MIN_US}, {BUS_MAX_US}]: "
+                    f"{position_val}"
+                )
+
+            if normalized_encoding not in ("",):
+                raise ValueError(f"不支持的 bus value_encoding: {value_encoding}")
+
+            if BUS_MIN_US <= position_val <= BUS_MAX_US:
+                return int(round(position_val))
+
+            if 0.0 <= position_val <= 180.0:
+                return self._map_angle_to_pulse(position_val)
+
+            raise ValueError(
+                f"bus position 超出兼容范围[0, 180]或[{BUS_MIN_US}, {BUS_MAX_US}]: "
+                f"{position_val}"
+            )
+
+        if normalized_type == "pca":
+            if normalized_encoding not in ("", "pca_tick"):
+                raise ValueError(f"不支持的 pca value_encoding: {value_encoding}")
+            position = self._coerce_uint16(position_val, None)
+            if position is None:
+                raise ValueError(f"非法 pca position: {raw_position}")
+            return position
+
+        raise ValueError(f"未知 servo_type: {servo_type}")
+
+    def _build_motion_command(
+        self,
+        servo_type: str,
+        servo_id: int,
+        position: int,
+        value_encoding: str,
+        duration_ms: int,
+        requester_id: str,
+        lease_id: str,
+    ) -> MotionCommand:
+        msg = MotionCommand()
+        msg.servo_type = str(servo_type)
+        msg.servo_id = int(servo_id)
+        msg.position = int(position)
+        msg.value_encoding = (
+            str(value_encoding).strip().lower()
+            or self._motion_value_encoding_for_servo_type(servo_type)
+        )
+        msg.duration_ms = int(duration_ms)
+        msg.requester_id = str(requester_id)
+        msg.lease_id = str(lease_id)
+        msg.stamp = self.get_clock().now().to_msg()
+        return msg
+
+    def _teleop_control_is_active(self) -> bool:
+        return bool(
+            self.latest_execution_state.get('teleop_active')
+            and self.latest_execution_state.get('active_source') == 'teleop'
+        )
+
+    @staticmethod
+    def _execution_state_msg_to_dict(msg: ExecutionState) -> dict:
+        active_source = str(msg.active_source) or None
+        mode = str(msg.mode)
+        return {
+            'mode': mode,
+            'active_source': active_source,
+            'teleop_holder_id': str(msg.teleop_holder_id or ''),
+            'teleop_lease_id': str(msg.teleop_lease_id or ''),
+            'estop_active': bool(msg.estop_active),
+            'teleop_active': bool(msg.teleop_active),
+            'motion_active': bool(msg.motion_active),
+            'task_active': bool(
+                mode == 'task_active' or active_source == 'task'
+            ),
+            'teleop_timeout_sec': float(msg.teleop_timeout_sec),
+            'motion_timeout_sec': float(msg.motion_timeout_sec),
+            'teleop_control_remaining_sec': float(
+                msg.teleop_control_remaining_sec
+            ),
+            'last_teleop_control_action': str(msg.last_teleop_control_action),
+            'last_teleop_control_accepted': bool(
+                msg.last_teleop_control_accepted
+            ),
+            'last_teleop_control_reason': str(msg.last_teleop_control_reason),
+            'teleop_control_accepted_count': int(
+                msg.teleop_control_accepted_count
+            ),
+            'teleop_control_rejected_count': int(
+                msg.teleop_control_rejected_count
+            ),
+            'accepted_counts': {
+                'teleop': int(msg.teleop_accepted_count),
+                'motion': int(msg.motion_accepted_count),
+            },
+            'rejected_counts': {
+                'teleop': int(msg.teleop_rejected_count),
+                'motion': int(msg.motion_rejected_count),
+            },
+            'last_rejection_reason': str(msg.last_rejection_reason),
+            'stamp': msg.stamp.sec + msg.stamp.nanosec / 1e9,
+        }
+
+    def shutdown(self):
+        """关闭节点和WebSocket服务器"""
+        self.get_logger().info('开始关闭WebSocket桥接节点...')
+
+        extensions_closed = self._close_extensions()
+
+        # 停止WebSocket服务器
+        if self.ws_server and self.ws_loop:
+            try:
+                # 在WebSocket事件循环中运行stop
+                future = asyncio.run_coroutine_threadsafe(
+                    self.ws_server.stop(),
+                    self.ws_loop
+                )
+                future.result(timeout=5.0)
+            except Exception as e:
+                self.get_logger().error(f'停止WebSocket服务器失败: {e}')
+
+        # 停止事件循环
+        if self.ws_loop:
+            self.ws_loop.call_soon_threadsafe(self.ws_loop.stop)
+
+        # 等待WebSocket线程结束
+        if self.ws_thread and self.ws_thread.is_alive():
+            self.ws_thread.join(timeout=2.0)
+
+        if extensions_closed:
+            self.get_logger().info('WebSocket桥接节点已关闭')
+        else:
+            self.get_logger().error(
+                'WebSocket桥接资源已清理，但部分扩展未确认关闭'
+            )
+
+    def _close_extensions(self) -> bool:
+        """关闭所有扩展，单个扩展失败时最多额外重试一次。"""
+        all_closed = True
+        for extension in self.extensions:
+            closed = False
+            for attempt in range(2):
+                try:
+                    extension.close()
+                    closed = True
+                    break
+                except Exception as exc:
+                    self.get_logger().error(
+                        f'关闭扩展 {type(extension).__name__} 失败 '
+                        f'(第 {attempt + 1}/2 次): {exc}'
+                    )
+            if not closed:
+                all_closed = False
+
+        return all_closed
+
+
+def main(args=None):
+    """主函数"""
+    rclpy.init(args=args)
+    bridge = None
+
+    try:
+        # 创建桥接节点(使用默认值,实际值从launch文件参数传入)
+        bridge = WebSocketROS2Bridge()
+        bridge.start_websocket_server()
+
+        executor = MultiThreadedExecutor()
+        executor.add_node(bridge)
+
+        # 运行ROS 2节点
+        bridge.get_logger().info('WebSocket桥接节点开始运行...')
+        executor.spin()
+    except KeyboardInterrupt:
+        if bridge is not None:
+            bridge.get_logger().info('收到退出信号')
+    finally:
+        if bridge is not None:
+            bridge.shutdown()
+            bridge.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

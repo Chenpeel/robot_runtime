@@ -1,0 +1,20 @@
+# 停止操作必须携带当前 task execution 身份与 lease。
+string task_id
+string trace_id
+string session_id
+string lease_id
+string actuator_type
+uint16[] actuator_ids
+---
+# stop_command_sent 只表示停止指令已经写出，不表示执行器已经停止。
+# stop_confirmed 只能来自后续真实稳定位置采样；service 本身若仅写 stop 指令，
+# 必须将 stop_confirmed 保持为 false。
+bool accepted
+bool stop_command_sent
+bool stop_confirmed
+string status
+string reason
+bool recoverable
+uint16[] stopped_actuator_ids
+uint16[] unsupported_actuator_ids
+builtin_interfaces/Time stamp

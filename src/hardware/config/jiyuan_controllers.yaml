@@ -1,0 +1,36 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    imu_broadcaster:
+      type: imu_sensor_broadcaster/IMUSensorBroadcaster
+    position_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+imu_broadcaster:
+  ros__parameters:
+    sensor_name: imu_sensor
+    frame_id: base_link
+
+position_trajectory_controller:
+  ros__parameters:
+    joints:
+      - right_hip_cube_joint
+      - right_thigh_joint
+      - right_hip_roll_joint
+      - right_knee_joint
+      - right_ankle_cube_joint
+      - right_ankle_axle_joint
+      - right_foot_joint
+      - left_hip_cube_joint
+      - left_thigh_joint
+      - left_hip_roll_joint
+      - left_knee_joint
+      - left_ankle_cube_joint
+      - left_ankle_axle_joint
+      - left_foot_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position

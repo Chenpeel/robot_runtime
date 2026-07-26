@@ -1,0 +1,658 @@
+"""
+WebSocket 服务器 - 主服务程序
+基于 pi/server.py 改写，集成 ROS 2 功能
+"""
+
+import asyncio
+import json
+import time
+import sys
+import uuid
+from typing import Set, Optional
+from websockets.server import serve, WebSocketServerProtocol
+from websockets.exceptions import ConnectionClosed
+
+from .error_codes import ErrorCode
+from .error_codes import ErrorResponse
+from .error_codes import WebSocketException
+from .websocket_handler import WebSocketHandler
+
+
+class WebSocketBridgeServer:
+    """
+    WebSocket通信桥接服务器
+
+    功能:
+    1. 管理 WebSocket 连接
+    2. 路由客户端消息到 ROS 2
+    3. 广播来自 ROS 2 的状态更新
+    """
+
+    def __init__(self, host: str = "0.0.0.0", port: int = 9102,
+                 device_id: str = "default", debug: bool = False,
+                 debug_logger=None):
+        """
+        初始化 WebSocket 服务器
+
+        Args:
+            host: 监听地址
+            port: 监听端口
+            device_id: 设备 ID
+            debug: 是否启用调试日志
+        """
+        self.host = host
+        self.port = port
+        self.device_id = device_id
+        self.debug = debug
+        self.debug_logger = debug_logger
+
+        self.handler = WebSocketHandler(
+            device_id=device_id,
+            debug=debug,
+            debug_logger=debug_logger
+        )
+        self.clients: Set[WebSocketServerProtocol] = set()
+        self.client_info = {}  # 客户端信息 {websocket: {"id": str, "name": str}}
+
+        # 将 ROS2 服务器本身注册为一个虚拟设备
+        self.robot_device = {
+            "id": "ros2-robot-device",
+            "name": device_id  # 使用 device_id 作为设备名（默认 "robot"）
+        }
+
+        self.server = None
+        self.running = True
+
+        # 心跳配置
+        self.heartbeat_interval = 15.0  # 秒
+        self.heartbeat_timeout = 5.0  # 秒
+
+    def _debug(self, category, message):
+        if not self.debug:
+            return
+        if self.debug_logger:
+            self.debug_logger.record(category, message)
+        else:
+            print(f"[WebSocketServer] {message}")
+
+    def set_servo_command_callback(self, callback):
+        """设置舵机命令回调"""
+        self.handler.register_servo_command_handler(callback)
+
+    def set_heartbeat_callback(self, callback):
+        """设置心跳回调"""
+        self.handler.register_heartbeat_handler(callback)
+
+    def set_teleop_claim_callback(self, callback):
+        """设置 teleop 控制权申请回调。"""
+        self.handler.register_teleop_claim_handler(callback)
+
+    def set_teleop_release_callback(self, callback):
+        """设置 teleop 控制权释放回调。"""
+        self.handler.register_teleop_release_handler(callback)
+
+    def set_status_query_callback(self, callback):
+        """设置状态查询回调"""
+        self.handler.register_status_query_handler(callback)
+
+    def set_message_callback(self, msg_type: str, callback):
+        """为特定消息类型设置通用回调。"""
+        self.handler.register_message_handler(msg_type, callback)
+
+    async def start(self):
+        """启动 WebSocket 服务器"""
+        try:
+            self.server = await serve(
+                self.handle_client,
+                self.host,
+                self.port,
+                ping_interval=10,
+                ping_timeout=5
+            )
+            print(f"[WebSocketServer] 启动成功: ws://{self.host}:{self.port}")
+
+            # 启动心跳任务
+            asyncio.create_task(self.heartbeat_loop())
+
+        except Exception as e:
+            print(f"[WebSocketServer] 启动失败: {e}")
+            raise
+
+    async def stop(self):
+        """停止 WebSocket 服务器"""
+        self.running = False
+
+        # 关闭所有连接
+        for client in list(self.clients):
+            try:
+                await client.close()
+            except Exception as e:
+                self._debug("ws_close", f"关闭连接失败: {e}")
+
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+
+        print("[WebSocketServer] 已停止")
+
+    async def handle_client(self, websocket: WebSocketServerProtocol, path: str):
+        """
+        处理客户端连接
+
+        Args:
+            websocket: WebSocket 连接
+            path: 连接路径
+        """
+        client_addr = websocket.remote_address
+        self.clients.add(websocket)
+        client_info = self._get_or_create_client_info(websocket)
+
+        print(
+            f"[WebSocketServer] 客户端连接: {client_addr}, "
+            f"session={client_info['id']}"
+        )
+
+        try:
+            async for message in websocket:
+                await self._process_client_message(websocket, message)
+
+        except ConnectionClosed:
+            print(f"[WebSocketServer] 客户端断开: {client_addr}")
+        except Exception as e:
+            print(f"[WebSocketServer] 客户端异常: {e}")
+        finally:
+            await self._release_teleop_for_client(websocket)
+            self.clients.discard(websocket)
+            # 清理客户端信息
+            if websocket in self.client_info:
+                del self.client_info[websocket]
+            # 广播更新后的用户列表
+            await self.broadcast_user_list()
+
+    async def _process_client_message(self, websocket: WebSocketServerProtocol,
+                                      message: str):
+        """
+        处理来自客户端的消息
+
+        Args:
+            websocket: WebSocket 连接
+            message: 消息内容
+        """
+        try:
+            self._debug("ws_message", f"收到消息: {message[:100]}...")
+
+            # 解析消息
+            try:
+                data = json.loads(message)
+                msg_type = data.get("type", "").lower()
+
+                # 拦截 register 消息，返回兼容前端的响应
+                if msg_type == "register":
+                    await self._handle_register(websocket, data)
+                    return
+
+                # 拦截发给 ROS2 机器人的私有消息（舵机控制）
+                if msg_type == "private" and data.get("to") == "ros2-robot-device":
+                    await self._handle_private_to_robot(websocket, data)
+                    return
+
+                # 拦截 servo_control 类型的消息
+                if msg_type == "servo_control":
+                    # 直接处理为舵机控制命令
+                    error_response = await self._handle_servo_control_direct(
+                        data,
+                        context=self._build_client_context(websocket),
+                    )
+                    if error_response:
+                        await websocket.send(error_response)
+                        return
+                    # 发送确认响应给客户端
+                    ack = {
+                        "type": "private_ack",
+                        "status": "processed",
+                        "device_id": self.device_id,
+                        "timestamp": int(time.time())
+                    }
+                    await websocket.send(json.dumps(ack, ensure_ascii=False))
+                    return
+
+            except json.JSONDecodeError:
+                pass
+
+            response = await self.handler.handle_message(
+                message,
+                context=self._build_client_context(websocket),
+            )
+
+            if response:
+                self._sync_client_teleop_lease_from_response(websocket, response)
+                await websocket.send(response)
+                self._debug("ws_send", f"发送响应: {response[:100]}...")
+
+        except Exception as e:
+            print(f"[WebSocketServer] 处理消息异常: {e}")
+            try:
+                error_resp = json.dumps({
+                    "type": "error",
+                    "status": "error",
+                    "device_id": self.device_id,
+                    "message": str(e),
+                    "timestamp": int(time.time())
+                }, ensure_ascii=False)
+                await websocket.send(error_resp)
+            except Exception as e2:
+                self._debug("ws_error", f"发送错误响应失败: {e2}")
+
+    async def heartbeat_loop(self):
+        """
+        心跳循环 - 定期向所有客户端发送心跳
+        """
+        while self.running:
+            try:
+                await asyncio.sleep(self.heartbeat_interval)
+
+                if not self.clients:
+                    continue
+
+                heartbeat_msg = json.dumps({
+                    "type": "heartbeat",
+                    "status": "online",
+                    "device_id": self.device_id,
+                    "timestamp": int(time.time())
+                }, ensure_ascii=False)
+
+                # 并发发送心跳到所有客户端
+                tasks = [
+                    client.send(heartbeat_msg)
+                    for client in self.clients
+                ]
+
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                # 移除心跳日志,避免刷屏
+                # if self.debug:
+                #     print(f"[WebSocketServer] 发送心跳到 {len(self.clients)} 个客户端")
+
+            except Exception as e:
+                print(f"[WebSocketServer] 心跳循环异常: {e}")
+
+    async def broadcast_status(self, status_dict: dict):
+        """
+        广播状态更新到所有连接的客户端
+
+        Args:
+            status_dict: 状态字典
+        """
+        if not self.clients:
+            return
+
+        try:
+            tasks = [
+                client.send(
+                    json.dumps(
+                        {
+                            "type": "status_update",
+                            "device_id": self.device_id,
+                            "data": self._build_broadcast_payload(
+                                client,
+                                status_dict,
+                            ),
+                            "timestamp": int(time.time()),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                for client in self.clients
+            ]
+
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+            self._debug("ws_broadcast", f"广播状态到 {len(self.clients)} 个客户端")
+
+        except Exception as e:
+            print(f"[WebSocketServer] 广播状态异常: {e}")
+
+    async def send_to_client(self, websocket: WebSocketServerProtocol,
+                             message: dict):
+        """
+        向特定客户端发送消息
+
+        Args:
+            websocket: 目标连接
+            message: 消息字典
+        """
+        try:
+            msg_str = json.dumps(message, ensure_ascii=False)
+            await websocket.send(msg_str)
+        except Exception as e:
+            print(f"[WebSocketServer] 发送消息失败: {e}")
+
+    def get_client_count(self) -> int:
+        """获取连接的客户端数"""
+        return len(self.clients)
+
+    def update_servo_state(self, servo_id: int, servo_type: str, position: int):
+        """
+        更新舵机状态
+
+        Args:
+            servo_id: 舵机 ID
+            servo_type: 舵机类型 ("bus" 或 "pca")
+            position: 当前位置
+        """
+        self.handler.update_servo_state(servo_id, servo_type, position)
+
+    def update_system_state(self, **kwargs):
+        """更新系统状态"""
+        self.handler.update_system_state(**kwargs)
+
+    def update_execution_state(self, execution_state: dict):
+        """更新执行层状态。"""
+        self.handler.update_execution_state(execution_state)
+
+    def get_status_snapshot(self) -> dict:
+        """获取当前状态快照。"""
+        return self.handler.get_status_snapshot()
+
+    def _build_broadcast_payload(
+        self,
+        websocket: WebSocketServerProtocol,
+        status_dict: dict,
+    ) -> dict:
+        payload = dict(status_dict)
+        if payload.get("type") != "execution_state":
+            return payload
+
+        payload.update(
+            self.handler.get_requester_teleop_status(
+                self._build_client_context(websocket),
+            )
+        )
+        self._sync_client_teleop_lease(websocket, payload)
+        return payload
+
+    async def _handle_register(self, websocket: WebSocketServerProtocol, data: dict):
+        """
+        处理客户端注册（兼容前端协议）
+
+        Args:
+            websocket: 客户端连接
+            data: 注册消息 {"type": "register", "name": "客户端名称"}
+        """
+        client_info = self._get_or_create_client_info(websocket)
+        client_name = data.get("name", client_info["name"])
+        client_info["name"] = client_name
+        client_id = client_info["id"]
+
+        # 获取在线用户列表
+        online_users = self.get_online_users()
+
+        # 返回兼容前端的响应（type: "connected"）
+        response = {
+            "type": "connected",            # 前端期待的类型！
+            "clientName": client_name,
+            "clientId": client_id,
+            "requester_id": client_id,
+            "onlineClients": online_users,  # 在线用户列表
+            "device_id": self.device_id,
+            "timestamp": int(time.time())
+        }
+
+        await websocket.send(json.dumps(response, ensure_ascii=False))
+        print(f"[WebSocketServer] 客户端已注册: {client_name} (ID: {client_id})")
+
+        # 广播更新后的用户列表给所有其他客户端
+        await self.broadcast_user_list()
+
+    def get_online_users(self) -> list:
+        """
+        获取在线用户列表（包括 ROS2 设备本身）
+
+        Returns:
+            list: [{"id": str, "name": str}, ...]
+        """
+        # 始终包含 ROS2 机器人设备
+        users = [self.robot_device]
+
+        # 添加所有连接的客户端
+        users.extend([
+            {"id": info["id"], "name": info["name"]}
+            for info in self.client_info.values()
+        ])
+
+        return users
+
+    async def broadcast_user_list(self):
+        """广播在线用户列表给所有客户端"""
+        if not self.clients:
+            return
+
+        online_users = self.get_online_users()
+
+        message = json.dumps({
+            "type": "broadcast",
+            "content": "用户列表更新",
+            "onlineUsers": online_users,
+            "timestamp": int(time.time())
+        }, ensure_ascii=False)
+
+        tasks = [
+            client.send(message)
+            for client in self.clients
+        ]
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._debug("ws_user_list", f"广播用户列表: {len(online_users)} 个在线用户")
+
+    def _get_or_create_client_info(self, websocket: WebSocketServerProtocol) -> dict:
+        client_info = self.client_info.get(websocket)
+        if client_info is not None:
+            return client_info
+
+        client_info = {
+            "id": str(uuid.uuid4()),
+            "name": f"client_{len(self.client_info) + 1}",
+            "teleop_lease_id": '',
+        }
+        self.client_info[websocket] = client_info
+        return client_info
+
+    def _build_client_context(self, websocket: WebSocketServerProtocol) -> dict:
+        client_info = self._get_or_create_client_info(websocket)
+        return {
+            "requester_id": client_info["id"],
+            "client_name": client_info["name"],
+            "lease_id": str(client_info.get("teleop_lease_id") or ''),
+        }
+
+    def _sync_client_teleop_lease_from_response(
+        self,
+        websocket: WebSocketServerProtocol,
+        response: str,
+    ) -> None:
+        if websocket not in self.client_info:
+            return
+        try:
+            payload = json.loads(response)
+        except json.JSONDecodeError:
+            return
+        self._sync_client_teleop_lease(websocket, payload)
+
+    def _sync_client_teleop_lease(
+        self,
+        websocket: WebSocketServerProtocol,
+        payload: dict,
+    ) -> None:
+        if websocket not in self.client_info or not isinstance(payload, dict):
+            return
+
+        client_info = self._get_or_create_client_info(websocket)
+        lease_id = str(payload.get('teleop_lease_id') or '').strip()
+        holder_matches = bool(payload.get('known_holder_matches'))
+        teleop_active = bool(payload.get('known_teleop_active'))
+
+        if holder_matches and teleop_active and lease_id:
+            client_info['teleop_lease_id'] = lease_id
+            return
+
+        client_info['teleop_lease_id'] = ''
+
+    async def _release_teleop_for_client(
+        self,
+        websocket: WebSocketServerProtocol,
+    ) -> None:
+        callback = getattr(self.handler, 'on_teleop_release', None)
+        if callback is None or websocket not in self.client_info:
+            return
+
+        try:
+            await self.handler._invoke_callback(
+                callback,
+                self._build_client_context(websocket),
+            )
+            self._debug(
+                "ws_teleop_release",
+                f"连接断开，已尝试释放 teleop: {self.client_info[websocket]['id']}",
+            )
+        except Exception as e:
+            self._debug("ws_teleop_release", f"断连释放 teleop 失败: {e}")
+
+    async def _handle_private_to_robot(self, websocket: WebSocketServerProtocol, data: dict):
+        """
+        处理发给 ROS2 机器人的私有消息（舵机控制）
+
+        Args:
+            websocket: 客户端连接
+            data: 消息数据 {"type": "private", "to": "ros2-robot-device", "content": "..."}
+        """
+        content = data.get("content", "")
+
+        self._debug("ws_private", f"收到发给机器人的消息: {content[:100]}")
+
+        # 尝试解析为 JSON（舵机控制命令）
+        try:
+            servo_cmd = json.loads(content) if isinstance(
+                content, str) else content
+            error_response = await self._handle_servo_control_direct(
+                servo_cmd,
+                context=self._build_client_context(websocket),
+            )
+            if error_response:
+                await websocket.send(error_response)
+                return
+
+            # 发送确认响应
+            ack = {
+                "type": "private_ack",
+                "status": "processed",
+                "device_id": self.device_id,
+                "message": "舵机命令已发送",
+                "timestamp": int(time.time())
+            }
+            await websocket.send(json.dumps(ack, ensure_ascii=False))
+
+            self._debug("ws_servo", f"舵机命令已处理: {servo_cmd}")
+
+        except json.JSONDecodeError:
+            # 如果不是 JSON，作为普通消息处理
+            print(f"[WebSocketServer] 收到非 JSON 消息: {content}")
+        except Exception as e:
+            print(f"[WebSocketServer] 处理舵机命令失败: {e}")
+
+    async def _handle_servo_control_direct(
+        self,
+        servo_cmd: dict,
+        context: dict | None = None,
+    ) -> str | None:
+        """
+        直接处理舵机控制命令并转发到 ROS 2
+
+        Args:
+            servo_cmd: 舵机命令字典
+        """
+        parsed_cmd = self.handler.message_handler.parse_servo_control(servo_cmd)
+        if parsed_cmd is None:
+            self._debug("ws_servo", f"无法解析舵机命令: {servo_cmd}")
+            return ErrorResponse.create(
+                error_code=ErrorCode.INVALID_SERVO_COMMAND,
+                message="舵机控制命令格式无效",
+                details={"received_data": servo_cmd},
+                device_id=self.device_id,
+            )
+
+        # 使用 handler 的舵机命令回调
+        if hasattr(self.handler, 'on_servo_command') and self.handler.on_servo_command:
+            try:
+                await self.handler._invoke_callback_with_context(
+                    self.handler.on_servo_command,
+                    parsed_cmd,
+                    context,
+                )
+                self._debug("ws_servo", f"舵机命令已转发到 ROS2: {parsed_cmd}")
+                return None
+            except WebSocketException as e:
+                return e.to_response(self.device_id)
+            except Exception as e:
+                print(f"[WebSocketServer] ROS2 命令处理失败: {e}")
+                return ErrorResponse.create(
+                    error_code=ErrorCode.SERVO_COMMAND_FAILED,
+                    message=f"舵机命令执行失败: {str(e)}",
+                    details={"command": parsed_cmd, "exception": str(e)},
+                    device_id=self.device_id,
+                )
+        else:
+            print(f"[WebSocketServer] 警告：没有注册舵机命令处理器")
+        return None
+
+
+async def run_server(host: str = "0.0.0.0", port: int = 9102,
+                     device_id: str = "default", debug: bool = False):
+    """
+    运行 WebSocket 服务器
+
+    Args:
+        host: 监听地址
+        port: 监听端口
+        device_id: 设备 ID
+        debug: 是否启用调试
+    """
+    server = WebSocketBridgeServer(
+        host=host,
+        port=port,
+        device_id=device_id,
+        debug=debug
+    )
+
+    await server.start()
+
+    try:
+        # 保持运行
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print("\n[WebSocketServer] 收到退出信号")
+    finally:
+        await server.stop()
+
+
+if __name__ == "__main__":
+    # 简单的命令行运行
+    import argparse
+
+    parser = argparse.ArgumentParser(description="WebSocket Bridge Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    parser.add_argument("--port", type=int, default=9102, help="Server port")
+    parser.add_argument("--device-id", default="default", help="Device ID")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable debug mode")
+
+    args = parser.parse_args()
+
+    asyncio.run(run_server(
+        host=args.host,
+        port=args.port,
+        device_id=args.device_id,
+        debug=args.debug
+    ))

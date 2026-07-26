@@ -109,4 +109,4 @@ echo "============================================"
 echo ""
 
 # 使用 exec 替换当前进程，确保信号正确传递
-exec ros2 launch websocket_bridge full_system.launch.py
+exec ros2 launch robot_bringup full_system.launch.py

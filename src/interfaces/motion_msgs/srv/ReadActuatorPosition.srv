@@ -1,0 +1,16 @@
+# 读取操作必须携带当前 task execution 身份与 lease。
+string task_id
+string trace_id
+string session_id
+string lease_id
+string actuator_type
+uint16 actuator_id
+---
+# bus 执行器的 position_raw 必须来自实际位置读取，不能复用命令目标值。
+bool success
+uint16 position_raw
+string value_encoding
+string status
+string reason
+bool recoverable
+builtin_interfaces/Time stamp

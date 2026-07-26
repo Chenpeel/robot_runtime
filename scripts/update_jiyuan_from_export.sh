@@ -11,7 +11,7 @@ This script:
   1) Fixes jiyuqn -> jiyuan naming in the export folder
   2) Mirrors right_*.STL -> left_*.STL
   3) Mirrors URDF in-place (jiyuan.urdf becomes bilateral)
-  4) Syncs export -> src/robot_description
+  4) Syncs export -> src/description/robot_description
   5) Updates robot_description assets (assets.urdf/assets.csv)
 EOF
 }
@@ -24,7 +24,7 @@ fi
 export_dir="${1:-$HOME/Desktop/jiyuan}"
 ros_root="$(cd "$(dirname "$0")/.." && pwd)"
 ros_src="${ros_root}/src"
-robot_desc="${ros_src}/robot_description"
+robot_desc="${ros_src}/description/robot_description"
 rl_root="$(cd "${ros_root}/../rl" && pwd)"
 mirror_tool="${rl_root}/utils/urdf2ros2/mirror_tool.py"
 
@@ -178,7 +178,7 @@ tmp_urdf="${export_dir}/urdf/.jiyuan_bilateral.tmp.urdf"
   -o "${tmp_urdf}"
 mv "${tmp_urdf}" "${export_dir}/urdf/jiyuan.urdf"
 
-echo "[5/5] Sync export -> src/robot_description"
+echo "[5/5] Sync export -> src/description/robot_description"
 rsync -a "${export_dir}/meshes/" "${robot_desc}/meshes/"
 rsync -a "${export_dir}/urdf/" "${robot_desc}/urdf/"
 if [[ -d "${export_dir}/textures" ]]; then
